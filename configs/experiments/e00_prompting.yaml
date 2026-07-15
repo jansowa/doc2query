@@ -1,0 +1,14 @@
+# @package _global_
+defaults:
+  - /data: default
+  - /model: bielik_1_5b
+  - /train@training: qlora_16gb
+  - /generation: default
+  - _self_
+run:
+  experiment_id: E00
+  seed: 42
+  output_dir: runs/E00
+tracking:
+  backend: offline
+  online: false

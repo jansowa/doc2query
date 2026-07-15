@@ -1,0 +1,50 @@
+# Python and tooling
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Data and model artifacts
+data/
+datasets/
+artifacts/
+outputs/
+checkpoints/
+adapters/
+models/
+wandb/
+mlruns/
+*.safetensors
+*.bin
+*.ckpt
+*.pt
+*.pth
+*.parquet
+*.arrow
+
+# Hugging Face and generated caches
+.cache/
+hf_cache/
+huggingface/
+transformers_cache/
+
+# Runtime reports (keep committed templates/docs)
+reports/*.json
+runs/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
