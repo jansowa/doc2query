@@ -1,4 +1,4 @@
-# Task 11 — Opcjonalny naprzemienny rozwój rerankera i generatora
+# Task 11 — Audyt odporności sędziego i ścieżki awaryjne
 
 ## Status
 
@@ -6,7 +6,7 @@
 
 ## Cel
 
-Zbadać, czy iteracyjne ulepszanie rerankera na adwersarialnych query generatora i ponowne ulepszanie generatora daje korzyść ponad zamrożonego sędziego.
+Sprawdzić, czy generator nie optymalizuje się pod przypadkowe słabości jednego gotowego rerankera. Ten task nie obejmuje treningu ani dostrajania rerankera.
 
 ## Zależności
 
@@ -14,70 +14,68 @@ Wszystkie wcześniejsze taski i wyraźna decyzja badawcza.
 
 ## Zakaz
 
-Nie implementuj jednoczesnego end-to-end update’u rerankera i generatora w jednym kroku. Reward staje się wtedy niestacjonarny, a interpretacja wyników bardzo trudna.
+- nie aktualizuj wag rerankera;
+- nie twórz własnego cross-encodera;
+- nie używaj syntetycznych query generatora do uczenia modelu-sędziego;
+- nie uznawaj poprawy na primary rerankerze za wystarczający dowód poprawy jakości.
 
-## Procedura iteracyjna
+## Procedura
 
-### Iteracja 0
-
-- zamrożony reranker R0;
-- generator G0 po najlepszym SFT/DPO;
-- pełny baseline na naturalnym teście.
-
-### Iteracja 1
-
-1. G0 generuje kandydaty na train passages;
-2. wybierz failure cases:
-   - wysoki R0 score, niska ocena człowieka;
-   - query pasujące do wielu hard negative’ów;
-   - halucynowane fakty;
-   - kopiowanie;
-3. zbuduj dane adwersarialne dla rerankera;
-4. trenuj R1 na mieszaninie danych realnych i syntetycznych;
-5. wybierz R1 na osobnym naturalnym dev, nie na syntetykach;
-6. zamroź R1;
-7. przelicz preferencje/rewardy;
-8. trenuj G1 krótkim DPO lub GRPO;
-9. oceń G1 drugim niezależnym rerankerem i człowiekiem.
-
-Maksymalnie 2–3 iteracje.
-
-## Replay i zapobieganie zapominaniu
-
-Reranker zawsze trenuj z dużym udziałem oryginalnych naturalnych par. Monitoruj wyniki na stałych benchmarkach z Iteracji 0.
-
-Generator zachowuje KL/odniesienie do stabilnego SFT albo używa DPO z referencją. Nie pozwól, aby cały model optymalizował się wyłącznie pod najnowszego rerankera.
-
-## Sędziowie niezależni
+### Krok 1 — zamrożeni sędziowie
 
 Utrzymuj:
 
-- primary reward reranker;
-- shadow reranker innej architektury;
-- human panel;
-- source retrieval przez docelowy/probe embedder.
+- primary: preferowany gotowy polski reranker;
+- shadow: model innej rodziny lub wielojęzyczny reranker;
+- source retrieval przez docelowy albo probe embedder;
+- mały panel ręczny z answerability, trafnością, kopiowaniem i stylem.
 
-Poprawa tylko na primary rerankerze jest sygnałem overfittingu.
+Wszystkie modele mają przypięte revision i pozostają zamrożone przez cały eksperyment.
 
-## Eksperyment kontrolny
+### Krok 2 — zbiór disagreement i failure cases
+
+Zbierz przypadki:
+
+- wysoki primary score, niska ocena człowieka;
+- wysoki primary score, niski shadow score;
+- query pasujące również do wielu hard negative’ów;
+- halucynowane fakty lub błędne liczby;
+- zbyt ogólne query;
+- kopiowanie zdania;
+- identyczny szablon z podmienioną encją;
+- preferowanie pierwszego zdania mimo kontrolki focus.
+
+Nie używaj tych przypadków do uczenia rerankera. Służą do zmiany rewardu, progów, filtrów, promptów albo strategii generacji.
+
+### Krok 3 — kontrolowane warianty sędziego
 
 Porównaj:
 
-- frozen R0 + G update;
-- R1 update, ale bez G update;
-- alternating R1/G1;
-- większy statyczny reranker bez iteracji.
+1. tylko primary reranker;
+2. primary + shadow jako veto przy dużej niezgodności;
+3. primary + reguły answerability/overlap;
+4. ensemble znormalizowanych score’ów;
+5. bez rerankera w online RL, z rerankerem tylko do offline best-of-N;
+6. wybór kandydatów przez probe embedder + ręczne filtry.
 
-Może się okazać, że prostszy silniejszy zamrożony reranker jest wystarczający.
+Celem nie jest maksymalizacja jednego automatycznego score’u, lecz stabilność decyzji na różnych sędziach i zgodność z ręcznym panelem.
+
+## Bramka „gotowy reranker nie wystarcza”
+
+Dopiero gdy wszystkie poniższe warunki są spełnione, przygotuj ADR opisujący osobny przyszły projekt adaptacji rerankera:
+
+- co najmniej dwa silne gotowe modele istotnie zawodzą na naturalnym holdoucie domenowym;
+- problem nie wynika z truncation, formatu wejścia, kalibracji ani błędnych hard negative’ów;
+- ensemble i dodatkowe checkery nie rozwiązują problemu;
+- ręczny holdout jest wystarczająco duży, by wykazać powtarzalny błąd;
+- koszt adaptacji jest uzasadniony wpływem na końcowy probe embedder.
+
+Sam ADR nie uruchamia treningu. Wymaga osobnej decyzji użytkownika i osobnego zakresu prac.
 
 ## Kryteria akceptacji
 
-Kontynuuj iteracje wyłącznie, gdy:
-
-- R1 lepiej koreluje z człowiekiem na naturalnym holdoucie;
-- G1 poprawia probe embedder lub human preference;
-- shadow reranker potwierdza kierunek;
-- nie rośnie rozjazd domenowy;
-- koszt procesu jest uzasadniony.
-
-W przeciwnym razie zakończ i zachowaj prostszy pipeline.
+- primary i shadow pozostają bitowo niezmienione;
+- raport zawiera agreement/disagreement oraz przykłady jakościowe;
+- poprawa generatora utrzymuje się dla probe embeddera i panelu ręcznego, nie tylko primary score’u;
+- istnieje decyzja: `single_judge`, `ensemble`, `offline_only` albo `disable_reranker_reward`;
+- jeśli gotowe rerankery są wystarczające, raport wprost zamyka temat ich treningu.

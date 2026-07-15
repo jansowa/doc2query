@@ -65,7 +65,7 @@ Na pojedynczej karcie 16 GB:
 - generowane zapytanie powinno mieć zwykle maksymalnie 64–96 nowych tokenów;
 - najpierw doprowadź SFT do stabilnego i mierzalnego baseline’u.
 
-Nie próbuj od razu jednocześnie trenować generatora, rerankera i mechanizmu nagrody. Niestacjonarna nagroda utrudni interpretację wyników i sprzyja reward hackingowi.
+Nie trenuj własnego rerankera w tym projekcie. Użyj gotowego, zamrożonego modelu jako proxy jakości i osobnego shadow judge do kontroli. Jednoczesne dostrajanie generatora i sędziego tworzyłoby niestacjonarną nagrodę, utrudniało interpretację wyników i sprzyjało reward hackingowi.
 
 ### 3.2. Pozytywny i negatywny dokument nie są bezpośrednią parą DPO
 
@@ -81,7 +81,7 @@ DPO wymaga dla **tego samego promptu** preferowanej i odrzuconej odpowiedzi:
 
 Obecne dane zawierają preferencję między dokumentami dla zapytania, nie między zapytaniami dla dokumentu. Hard negative’y wykorzystaj do:
 
-- treningu rerankera;
+- benchmarku i kalibracji gotowego, zamrożonego rerankera;
 - obliczania marginesu `score(query, positive) - score(query, hard_negative)`;
 - ewaluacji źródłowego pasażu;
 - tworzenia części trudnych, ale niebanalnych odrzuconych zapytań.
@@ -109,9 +109,9 @@ Zamiast tego zastosuj **docelowy przedział pokrycia** skalibrowany na naturalny
 
 W pierwszej wersji wdrożenia użyj taniej normalizacji tekstowej. Pełną lematyzację spaCy/Stanza uruchamiaj na CPU i cachuj. Pasaże lematyzuj offline; online lematyzuj tylko krótkie wygenerowane zapytania.
 
-### 3.4. Reranker jest proxy ugruntowania i możliwości odpowiedzi, nie dowodem logicznego entailmentu
+### 3.4. Reranker jest zamrożonym proxy ugruntowania, nie dowodem logicznego entailmentu
 
-Wytrenuj lub dostrój cross-encoder na istniejących pozytywach i hard negative’ach. Jego główną nagrodą ma być margines rankingowy źródłowego pasażu względem negatywów.
+Użyj gotowego polskiego cross-encodera jako zamrożonego sędziego. Domyślnym kandydatem jest `sdadas/polish-reranker-roberta-v3`; porównaj go z co najmniej jednym niezależnym modelem kontrolnym. Nie aktualizuj wag żadnego z nich na danych projektu. Głównym sygnałem ma być margines rankingowy źródłowego pasażu względem negatywów.
 
 Nie utożsamiaj pojedynczego wysokiego logitu rerankera z gwarancją, że odpowiedź znajduje się w pasażu. W ewaluacji dodaj:
 
@@ -169,8 +169,9 @@ Utwórz projekt o strukturze zbliżonej do:
 │   │   ├── lora.py
 │   │   └── templates.py
 │   ├── reranker/
-│   │   ├── train.py
+│   │   ├── load.py
 │   │   ├── infer.py
+│   │   ├── benchmark.py
 │   │   └── calibrate.py
 │   ├── rewards/
 │   │   ├── lexical.py
@@ -204,7 +205,8 @@ Utwórz projekt o strukturze zbliżonej do:
 │       └── io.py
 ├── scripts/
 │   ├── train_sft.py
-│   ├── train_reranker.py
+│   ├── benchmark_rerankers.py
+│   ├── calibrate_reranker.py
 │   ├── generate_candidates.py
 │   ├── score_candidates.py
 │   ├── build_preferences.py
@@ -304,21 +306,23 @@ Porównaj eksperymentalnie:
 
 ---
 
-## 7. Reranker i proxy jakości
+## 7. Gotowy reranker i proxy jakości
 
-Minimum:
+W tym projekcie nie trenuj własnego rerankera. Minimum:
 
-- baseline gotowego polskiego lub wielojęzycznego rerankera;
-- dostrojenie lekkiego cross-encodera na własnych pozytywach i hard negative’ach;
-- walidacja rankingowa na odseparowanym zbiorze;
-- kalibracja logitów lub co najmniej normalizacja do stabilnej skali nagrody;
-- eksport do wydajnej inferencji CPU, jeżeli będzie używany podczas RL.
+- integracja gotowego polskiego rerankera jako zamrożonego primary judge;
+- co najmniej jeden niezależny shadow judge lub jawne uzasadnienie jego braku;
+- walidacja rankingowa na odseparowanym zbiorze z pozytywem i 10+ hard negative’ami;
+- kalibracja wyjść bez aktualizacji wag, np. robust z-score, percentyle, Platt scaling lub isotonic regression;
+- wydajna inferencja CPU albo osobny offline scoring, jeżeli online reward jest zbyt wolny.
 
-Kandydaci do porównania, bez automatycznego założenia zwycięzcy:
+Kandydaci do porównania:
 
-- `sdadas/polish-reranker-base-ranknet` jako szybki polski baseline;
-- `BAAI/bge-reranker-v2-m3` jako silny wielojęzyczny baseline;
-- własny cross-encoder oparty o mały lub bazowy model polski/wielojęzyczny.
+- `sdadas/polish-reranker-roberta-v3` jako domyślny polski primary judge;
+- `BAAI/bge-reranker-v2-m3` lub inny silny model wielojęzyczny jako shadow judge;
+- opcjonalnie drugi gotowy polski reranker jako dodatkowy punkt odniesienia.
+
+Dla każdego modelu przypnij revision, sprawdź licencję, odnotuj `trust_remote_code`, długość kontekstu, truncation, koszt i throughput. Surowe logity modeli nie są bezpośrednio porównywalne.
 
 Reranker musi zwracać:
 
@@ -326,7 +330,10 @@ Reranker musi zwracać:
 - margines względem najtrudniejszego negatywu;
 - ranking źródłowego pasażu;
 - score najlepszego zdania w pasażu;
-- flagi nietypowych przypadków, np. wszystkie wyniki bliskie sobie.
+- flagi nietypowych przypadków, np. wszystkie wyniki bliskie sobie;
+- disagreement względem shadow judge.
+
+Jeśli gotowy model słabo koreluje z ręcznym holdoutem, najpierw sprawdź format wejścia, truncation, kalibrację, ensemble, dodatkowy answerability checker i ograniczenie rerankera do offline best-of-N. Dostrajanie rerankera nie jest częścią bieżącego zakresu.
 
 ---
 
@@ -661,22 +668,18 @@ Przykłady reward hackingu:
 
 ---
 
-## 15. Opcjonalny trening naprzemienny rerankera i generatora
+## 15. Audyt odporności zamrożonego sędziego
 
-Nie trenuj ich jednocześnie gradientem end-to-end.
+Nie dostrajaj rerankera na outputach generatora. Zamiast tego wykonaj późny eksperyment odporności:
 
-Dopuszczalny eksperyment późnej fazy:
+1. zamroź primary i shadow reranker z przypiętymi revision;
+2. wygeneruj adwersarialne query oraz przypadki o wysokim primary score;
+3. znajdź disagreement między sędziami, retrieval probe i oceną człowieka;
+4. porównaj single judge, ensemble, shadow veto, offline best-of-N i wariant bez online rewardu rerankera;
+5. zmieniaj reward, filtry, prompt lub strategię generacji, ale nie wagi sędziego;
+6. oceń na niezmiennym naturalnym teście i ręcznej próbce.
 
-1. zamroź generator i wygeneruj adwersarialne query;
-2. zbuduj nowe pozytywy/negatywy dla rerankera;
-3. dostrój reranker na mieszaninie realnych i syntetycznych par;
-4. zamroź reranker;
-5. przelicz scoring i preferencje;
-6. wykonaj krótki DPO/GRPO generatora;
-7. oceń na niezmiennym, naturalnym teście i ręcznej próbce;
-8. maksymalnie 2–3 iteracje.
-
-Reranker używany jako reward nie może być oceniany wyłącznie na danych, na których sam został właśnie dostrojony.
+Jeżeli dwa silne gotowe rerankery powtarzalnie zawodzą na domenowym holdoucie, przygotuj jedynie ADR dla osobnego przyszłego projektu adaptacji. Nie uruchamiaj tego treningu bez osobnej decyzji użytkownika.
 
 ---
 
@@ -735,7 +738,7 @@ Testy CI nie mogą pobierać Bielika ani wymagać GPU. Użyj małego publicznego
 9. `tasks/08_grpo_multiobjective_rl.md`
 10. `tasks/09_experiment_campaign.md`
 11. `tasks/10_final_scaleup_inference_release.md`
-12. `tasks/11_optional_alternating_cotraining.md`
+12. `tasks/11_reranker_robustness_and_fallback.md`
 
 Codex może delegować niezależne moduły subagentom, ale integracja, kontrakty danych i ostateczna walidacja należą do głównego agenta. Zadania zależne od wyników eksperymentów nie mogą być „zaliczone” na podstawie założonych rezultatów.
 
@@ -770,6 +773,9 @@ Codex może delegować niezależne moduły subagentom, ale integracja, kontrakty
 - TRL DPOTrainer: https://huggingface.co/docs/trl/dpo_trainer
 - TRL GRPOTrainer: https://huggingface.co/docs/trl/grpo_trainer
 - TRL dataset formats: https://huggingface.co/docs/trl/dataset_formats
+- sdadas Polish reranker RoBERTa v3: https://huggingface.co/sdadas/polish-reranker-roberta-v3
+- sdadas Polish rerankers collection: https://huggingface.co/collections/sdadas/polish-rerankers
+- Polish reranker generalization study: https://arxiv.org/abs/2402.14318
 - Sentence Transformers CrossEncoder: https://sbert.net/docs/cross_encoder/usage/usage.html
 - spaCy Polish models: https://spacy.io/models/pl
 - Doc2Query: https://arxiv.org/abs/1904.08375

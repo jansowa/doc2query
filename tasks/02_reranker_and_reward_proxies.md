@@ -1,4 +1,4 @@
-# Task 02 — Reranker, lematyzacja, focus i proxy ugruntowania
+# Task 02 — Gotowy reranker, lematyzacja, focus i proxy ugruntowania
 
 ## Status
 
@@ -6,55 +6,77 @@
 
 ## Cel
 
-Zbudować niezależne, skalibrowane komponenty oceniające, które będą używane do analizy generatora, budowy preferencji i ewentualnego RL.
+Zintegrować i zwalidować gotowe, zamrożone modele oceniające. Mają one służyć do analizy generatora, budowy preferencji i ewentualnego RL. **Trening własnego rerankera nie należy do zakresu tego projektu.**
 
 ## Zależności
 
 Task 01.
 
-## Część A — baseline rerankerów
+## Zasada nadrzędna
 
-Porównaj na zamrożonym dev/test co najmniej:
+Nie implementuj `train_reranker.py`, nie aktualizuj wag rerankera i nie wykorzystuj danych projektu do uczenia cross-encodera. Dane z pozytywami i hard negative’ami służą tutaj do:
 
-1. `sdadas/polish-reranker-base-ranknet`;
-2. `BAAI/bge-reranker-v2-m3` lub inny silny model wielojęzyczny o zgodnej licencji;
-3. własny lekki cross-encoder dostrojony na danych projektu.
+- wyboru gotowego modelu;
+- pomiaru jakości i zgodności domenowej;
+- kalibracji skali score’ów i progów;
+- budowy marginesów rankingowych;
+- testów adwersarialnych i wykrywania reward hackingu.
 
-Jeżeli model wymaga `trust_remote_code`, odnotuj ryzyko, przypnij revision i zapewnij opcję wyłączenia.
+Ewentualne dostrajanie rerankera może powstać wyłącznie jako osobny projekt po udokumentowaniu, że wszystkie rozsądne gotowe modele zawodzą na ręcznie ocenionym holdoucie. Nie jest to automatyczny kolejny krok.
 
-## Część B — trening własnego rerankera
+## Część A — wybór gotowych rerankerów
 
-Przygotuj:
+Jako domyślnego głównego sędziego przetestuj:
 
-- pozytywy `(query, positive_passage, 1)`;
-- hard negative’y `(query, hard_negative, 0)`;
-- opcjonalnie pary listwise/pairwise;
-- sampling zapobiegający dominacji łatwych negatywów;
-- osobny test niewidzianych query i dokumentów.
+1. `sdadas/polish-reranker-roberta-v3` — preferowany polski baseline, długi kontekst, bez `trust_remote_code`;
+2. jeden niezależny model kontrolny, np. `BAAI/bge-reranker-v2-m3` albo inny silny wielojęzyczny reranker o zgodnej licencji;
+3. opcjonalnie drugi polski model od sdadas tylko jako dodatkowy punkt odniesienia, nie jako jedyne potwierdzenie wyników.
 
-Minimalny wariant ma używać lekkiego modelu, który może później działać na CPU. Silniejszy wariant jest przeznaczony do offline scoringu.
+Dla każdego modelu:
 
-Porównaj loss:
+- przypnij dokładny revision/commit;
+- zapisz licencję i warunki użycia;
+- odnotuj wymaganie `trust_remote_code` i domyślnie je wyłączaj;
+- zmierz RAM, VRAM, throughput, maksymalną długość i zachowanie przy truncation;
+- nie zakładaj, że surowe logity różnych modeli są porównywalne.
 
-- binary cross entropy;
-- RankNet/pairwise margin;
-- opcjonalnie listwise loss, jeżeli implementacja jest stabilna.
+## Część B — benchmark na danych projektu
 
-Raportuj MRR, nDCG@10, Recall@1/5, AUC i kalibrację. Ranking jest ważniejszy niż accuracy na zbalansowanych parach.
+Na zamrożonym dev/test policz dla każdej grupy `query + positive + 10+ hard negatives`:
 
-## Część C — scoring zdaniowy i focus
+- Recall@1 i Recall@5 źródłowego pozytywu;
+- MRR i nDCG@10;
+- margines `score(positive) - max score(hard_negative)`;
+- odsetek przypadków z marginesem ujemnym lub bliskim zera;
+- wyniki według domeny, długości pasażu, typu query i poziomu trudności;
+- korelację kolejności modeli na poziomie przykładów.
+
+Reranker nie musi być perfekcyjny. Musi jednak wystarczająco często odróżniać źródłowy pasaż od hard negative’ów i mieć przewidywalne błędy. Jeśli żaden gotowy model nie spełnia tej bramki, nie przechodź automatycznie do treningu własnego modelu — najpierw sprawdź ensemble, dodatkowy answerability checker lub ograniczenie roli rerankera w rewardzie.
+
+## Część C — kalibracja bez uczenia rerankera
+
+Zaimplementuj kalibrację wyłącznie nad wyjściami zamrożonego modelu:
+
+- robust z-score;
+- mapowanie percentylowe;
+- opcjonalnie Platt scaling lub isotonic regression na małym, odseparowanym zbiorze ręcznych etykiet;
+- osobną kalibrację score’u absolutnego i marginesu rankingowego.
+
+Kalibrator jest małym modułem statystycznym, nie nowym rerankerem. Nie używaj testu do wyboru progów.
+
+## Część D — scoring zdaniowy i focus
 
 Podziel pasaż na zdania. Dla naturalnego query oblicz score query–sentence i przypisz:
 
 - `focus_sentence_id`;
 - `focus_score`;
 - `focus_margin` między pierwszym i drugim zdaniem;
-- `focus_bucket`: beginning/middle/end;
+- `focus_bucket`: `beginning/middle/end`;
 - `focus_is_ambiguous`.
 
-Nie używaj niepewnej etykiety jako twardej prawdy. Dla niskiego marginesu ustaw `ambiguous` i pomiń przykład w eksperymentach wymagających precyzyjnego focusu.
+Nie używaj niepewnej etykiety jako twardej prawdy. Dla niskiego marginesu ustaw `ambiguous` i pomiń przykład w eksperymentach wymagających precyzyjnego focusu. Dla długich pasaży batchuj zdania i cache’uj wyniki.
 
-## Część D — lematyzacja i overlap
+## Część E — lematyzacja i overlap
 
 Zaimplementuj interfejs:
 
@@ -84,7 +106,7 @@ Oblicz:
 - normalized LCS;
 - copy density.
 
-## Część E — kalibracja rewardów
+## Część F — kalibracja rewardów
 
 Na naturalnym dev:
 
@@ -92,11 +114,12 @@ Na naturalnym dev:
 2. wyznacz robust z-score lub percentylową normalizację;
 3. zdefiniuj overlap reward jako funkcję pasmową opartą na percentylach naturalnych query;
 4. sprawdź korelacje między komponentami;
-5. nie dopuszczaj, aby całkowity score był praktycznie kopią jednego komponentu.
+5. nie dopuszczaj, aby całkowity score był praktycznie kopią jednego komponentu;
+6. raportuj osobno wynik głównego i kontrolnego rerankera.
 
-## Część F — test adwersarialny
+## Część G — test adwersarialny i ręczny holdout
 
-Utwórz ręczny zestaw co najmniej 100 przypadków:
+Utwórz ręczny zestaw co najmniej 150 przypadków, w tym:
 
 - query prawidłowe;
 - query będące kopią zdania;
@@ -104,23 +127,27 @@ Utwórz ręczny zestaw co najmniej 100 przypadków:
 - query z błędną liczbą lub encją;
 - query zbyt ogólne;
 - query dotyczące innego zdania;
-- query zdradzające odpowiedź.
+- query zdradzające odpowiedź;
+- query, dla których główny i kontrolny reranker się nie zgadzają.
 
-Każdy reward ma przewidywalnie reagować. Dodaj te przykłady jako testy regresyjne.
+Każdy reward ma przewidywalnie reagować. Dodaj te przypadki jako testy regresyjne. Zmierz korelację score’ów z ręczną oceną answerability i trafności.
 
 ## Wymagane skrypty
 
 - `scripts/benchmark_rerankers.py`
-- `scripts/train_reranker.py`
 - `scripts/calibrate_reranker.py`
+- `scripts/score_query_passages.py`
 - `scripts/assign_focus_labels.py`
 - `scripts/precompute_text_analysis.py`
 - `scripts/calibrate_rewards.py`
 
 ## Kryteria akceptacji
 
-- własny reranker co najmniej nie pogarsza istotnie polskiego baseline’u na zamrożonym teście albo jest znacznie szybszy przy akceptowalnej stracie;
-- scoring źródłowego pozytywu jest raportowany względem 10+ hard negative’ów;
+- żaden skrypt nie trenuje ani nie modyfikuje wag rerankera;
+- wybrany primary reranker ma przypięty revision i udokumentowaną licencję;
+- wyniki źródłowego pozytywu są raportowane względem 10+ hard negative’ów;
+- istnieje co najmniej jeden niezależny shadow judge albo jawne uzasadnienie jego braku;
+- disagreement między sędziami jest raportowany i nie jest ukrywany przez uśrednienie;
 - overlap reward nie nagradza ani pełnej kopii, ani całkowicie niezwiązanego query;
 - lematyzacja działa na CPU i ma cache;
 - wszystkie rewardy mają unit testy i zakresy liczbowe;
