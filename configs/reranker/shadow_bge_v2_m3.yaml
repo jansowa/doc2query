@@ -1,0 +1,7 @@
+name_or_path: BAAI/bge-reranker-v2-m3
+revision: 953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e
+license: apache-2.0
+max_length: 8192
+batch_size: 8
+device: cpu
+trust_remote_code: false

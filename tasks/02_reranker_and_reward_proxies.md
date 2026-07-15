@@ -2,7 +2,7 @@
 
 ## Status
 
-`TODO`
+`IMPLEMENTED — benchmark on project dev/test pending Task 01 artifacts and model inference`
 
 ## Cel
 

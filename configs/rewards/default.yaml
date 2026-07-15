@@ -1,0 +1,8 @@
+calibration_split: dev
+score_calibration: robust_z
+margin_calibration: robust_z
+overlap_band:
+  low_percentile: 0.10
+  high_percentile: 0.90
+dominance_correlation_limit: 0.95
+focus_ambiguity_margin: 0.10

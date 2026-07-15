@@ -1,0 +1,14 @@
+{
+  "status": "measured_lexical_only_no_reranker_weights",
+  "count": 150,
+  "human_answerability_pearson": {
+    "content_jaccard": 0.279117703709286,
+    "copy_density": 0.28140843149228295,
+    "normalized_lcs": 0.29432103518323405,
+    "overlap_reward": 0.019572597691026664,
+    "primary_reranker": null,
+    "shadow_reranker": null
+  },
+  "composite_score": "not_computed_without_grounding_margin",
+  "note": "This regression report is not evidence of frozen-judge quality. Real correlations require Task 01 data, model inference, and independent human review."
+}
