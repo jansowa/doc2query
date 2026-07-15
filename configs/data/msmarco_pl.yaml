@@ -1,0 +1,19 @@
+input_path: null
+input_format: null
+source:
+  repo_id: speakleash/msmarco_pl
+  revision: ffcfc5fbc254bea348a7871133a6a0fa9ca21cb5
+  config_name: pl
+  split: train
+  private: true
+  license_status: missing_requires_review
+columns:
+  example_id: query_id
+  query: query
+  positive_texts: pos
+  positive_ids: pos_id
+  positive_scores: pos_scores
+  positive_is_synthetic: pos_is_synthetic
+  negative_texts: neg
+  negative_ids: neg_id
+  negative_scores: neg_scores

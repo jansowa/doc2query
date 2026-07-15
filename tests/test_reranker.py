@@ -3,7 +3,7 @@ from collections.abc import Sequence
 import pytest
 
 from doc2query.reranker.base import FrozenRerankerConfig
-from doc2query.reranker.benchmark import aggregate, disagreement
+from doc2query.reranker.benchmark import aggregate, aggregate_query_macro, disagreement
 from doc2query.reranker.focus import assign_focus
 from doc2query.reranker.infer import score_group
 
@@ -37,6 +37,60 @@ def test_group_retrieval_metrics() -> None:
     assert result.recall_at_1 == 1
     assert result.ndcg_at_10 == 1
     assert aggregate([result])["mrr"] == 1
+
+
+def test_query_macro_does_not_overweight_multi_positive_queries() -> None:
+    successful = score_group(
+        TokenScorer(),
+        example_id="q1::p1",
+        query_id="q1",
+        query="trafne",
+        positive="trafne",
+        negatives=["inne"],
+    )
+    second_positive = score_group(
+        TokenScorer(),
+        example_id="q1::p2",
+        query_id="q1",
+        query="trafne",
+        positive="trafne także",
+        negatives=["inne"],
+    )
+    failed = score_group(
+        TokenScorer(),
+        example_id="q2::p3",
+        query_id="q2",
+        query="trafne",
+        positive="inne",
+        negatives=["trafne"],
+    )
+    rows = [successful, second_positive, failed]
+    assert aggregate(rows)["recall_at_1"] == pytest.approx(2 / 3)
+    macro = aggregate_query_macro(rows)
+    assert macro["recall_at_1"] == pytest.approx(0.5)
+    assert macro["query_count"] == 2
+    assert macro["pair_count"] == 3
+
+
+def test_score_artifact_keeps_document_provenance() -> None:
+    result = score_group(
+        TokenScorer(),
+        example_id="q::p",
+        query_id="q",
+        query="pompa",
+        positive="pompa ciepła",
+        negatives=["samochód"],
+        positive_doc_id="p",
+        negative_doc_ids=("n",),
+        positive_index=1,
+        positive_is_synthetic=True,
+        source_en_positive_score=25.0,
+        source_en_negative_scores=(17.0,),
+    ).to_dict()
+    assert result["positive_doc_id"] == "p"
+    assert result["negative_doc_ids"] == ["n"]
+    assert result["positive_is_synthetic"] is True
+    assert result["source_en_positive_score"] == 25.0
 
 
 def test_disagreement_is_explicit() -> None:

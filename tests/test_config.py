@@ -19,6 +19,15 @@ def test_hydra_experiment_composes_hierarchical_groups() -> None:
     assert config.training.gradient_accumulation_steps == 16
 
 
+def test_msmarco_config_pins_private_polish_source() -> None:
+    config = load_config(Path("configs/experiments/e00_msmarco_prompting.yaml"))
+    assert config.data.source is not None
+    assert config.data.source.repo_id == "speakleash/msmarco_pl"
+    assert config.data.source.config_name == "pl"
+    assert config.data.source.revision == "ffcfc5fbc254bea348a7871133a6a0fa9ca21cb5"
+    assert config.data.source.license_status == "missing_requires_review"
+
+
 def test_invalid_precision_fails_before_run(tmp_path: Path) -> None:
     path = tmp_path / "invalid.yaml"
     path.write_text(

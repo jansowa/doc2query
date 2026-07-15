@@ -36,6 +36,31 @@ def aggregate(scores: Iterable[GroupScore]) -> dict[str, Any]:
     }
 
 
+def aggregate_query_macro(scores: Iterable[GroupScore]) -> dict[str, Any]:
+    """Give every query equal weight even when it has multiple positive passages."""
+    by_query: dict[str, list[GroupScore]] = {}
+    for row in scores:
+        by_query.setdefault(row.query_id or row.example_id, []).append(row)
+    if not by_query:
+        raise ValueError("cannot aggregate an empty benchmark")
+    per_query = [aggregate(rows) for rows in by_query.values()]
+    metric_names = (
+        "recall_at_1",
+        "recall_at_5",
+        "mrr",
+        "ndcg_at_10",
+        "mean_margin",
+        "negative_margin_rate",
+        "near_zero_margin_rate",
+        "all_scores_close_rate",
+    )
+    return {
+        "query_count": len(by_query),
+        "pair_count": sum(len(rows) for rows in by_query.values()),
+        **{name: fmean(float(row[name]) for row in per_query) for name in metric_names},
+    }
+
+
 def disagreement(primary: Iterable[GroupScore], shadow: Iterable[GroupScore]) -> dict[str, Any]:
     left = {row.example_id: row for row in primary}
     right = {row.example_id: row for row in shadow}

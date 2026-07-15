@@ -1,0 +1,14 @@
+# @package _global_
+defaults:
+  - /data: msmarco_pl
+  - /model: bielik_1_5b
+  - /train@training: qlora_16gb
+  - /generation: default
+  - _self_
+run:
+  experiment_id: E00-msmarco-pl
+  seed: 42
+  output_dir: runs/E00-msmarco-pl
+tracking:
+  backend: offline
+  online: false

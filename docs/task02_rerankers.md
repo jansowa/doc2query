@@ -16,8 +16,13 @@ model and never averaged. The benchmark emits an explicit disagreement report.
 ## Offline workflow
 
 Task 01 must first provide a frozen dev split. Each canonical record needs a query, one or more
-positives, and at least ten hard negatives. The benchmark currently evaluates the first positive;
-multi-positive aggregation is a later explicit experiment.
+positives, and at least ten hard negatives. The benchmark evaluates every positive, reports
+query-macro metrics as primary, and retains pair-micro metrics as a diagnostic. It never gives a
+multi-positive query extra weight in the primary aggregate.
+
+For `speakleash/msmarco_pl`, run the pinned streaming adapter documented in
+`docs/datasets/msmarco_pl.md` before this workflow. Do not pass the raw `pos`/`neg` rows directly to
+the benchmark.
 
 ```bash
 uv run python scripts/benchmark_rerankers.py \

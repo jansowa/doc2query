@@ -24,10 +24,19 @@ class GroupScore:
     near_zero_margin: bool
     all_scores_close: bool
     document_scores: tuple[float, ...]
+    query_id: str = ""
+    positive_doc_id: str = ""
+    negative_doc_ids: tuple[str, ...] = ()
+    positive_index: int = 0
+    positive_is_synthetic: bool = False
+    source_en_positive_score: float | None = None
+    source_en_negative_scores: tuple[float, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         result = asdict(self)
         result["document_scores"] = list(self.document_scores)
+        result["negative_doc_ids"] = list(self.negative_doc_ids)
+        result["source_en_negative_scores"] = list(self.source_en_negative_scores)
         return result
 
 
@@ -39,6 +48,13 @@ def score_group(
     positive: str,
     negatives: list[str],
     near_zero_threshold: float = 0.1,
+    query_id: str = "",
+    positive_doc_id: str = "",
+    negative_doc_ids: tuple[str, ...] = (),
+    positive_index: int = 0,
+    positive_is_synthetic: bool = False,
+    source_en_positive_score: float | None = None,
+    source_en_negative_scores: tuple[float, ...] = (),
 ) -> GroupScore:
     if len(negatives) < 1:
         raise ValueError("at least one hard negative is required")
@@ -63,4 +79,11 @@ def score_group(
         near_zero_margin=positive_score - hardest <= near_zero_threshold,
         all_scores_close=spread <= near_zero_threshold,
         document_scores=tuple(scores),
+        query_id=query_id or example_id,
+        positive_doc_id=positive_doc_id,
+        negative_doc_ids=negative_doc_ids,
+        positive_index=positive_index,
+        positive_is_synthetic=positive_is_synthetic,
+        source_en_positive_score=source_en_positive_score,
+        source_en_negative_scores=source_en_negative_scores,
     )

@@ -17,15 +17,15 @@ htmlcov/
 *.key
 
 # Data and model artifacts
-data/
-datasets/
-artifacts/
-outputs/
-checkpoints/
-adapters/
-models/
-wandb/
-mlruns/
+/data/
+/datasets/
+/artifacts/
+/outputs/
+/checkpoints/
+/adapters/
+/models/
+/wandb/
+/mlruns/
 *.safetensors
 *.bin
 *.ckpt
@@ -35,14 +35,14 @@ mlruns/
 *.arrow
 
 # Hugging Face and generated caches
-.cache/
-hf_cache/
-huggingface/
-transformers_cache/
+/.cache/
+/hf_cache/
+/huggingface/
+/transformers_cache/
 
 # Runtime reports (keep committed templates/docs)
 reports/*.json
-runs/
+/runs/
 
 # Editors and OS
 .idea/

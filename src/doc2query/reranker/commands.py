@@ -6,6 +6,7 @@ import argparse
 import json
 import time
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 from statistics import fmean
 from typing import Any, cast
@@ -13,7 +14,7 @@ from typing import Any, cast
 import yaml
 
 from doc2query.reranker.base import FrozenRerankerConfig, PairScorer
-from doc2query.reranker.benchmark import aggregate, disagreement
+from doc2query.reranker.benchmark import aggregate, aggregate_query_macro, disagreement
 from doc2query.reranker.calibrate import PercentileCalibrator, RobustZCalibrator
 from doc2query.reranker.focus import assign_focus
 from doc2query.reranker.infer import GroupScore, score_group
@@ -45,7 +46,36 @@ def _document_text(value: Any) -> str:
     raise ValueError("document must be a string or object with text")
 
 
-def _groups(record: dict[str, Any]) -> list[tuple[str, str, str, list[str]]]:
+@dataclass(frozen=True)
+class ScoringGroup:
+    example_id: str
+    query_id: str
+    query: str
+    positive: str
+    negatives: list[str]
+    positive_doc_id: str
+    negative_doc_ids: tuple[str, ...]
+    positive_index: int
+    positive_is_synthetic: bool
+    source_en_positive_score: float | None
+    source_en_negative_scores: tuple[float, ...]
+
+
+def _metadata(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict) and isinstance(value.get("metadata"), dict):
+        return cast(dict[str, Any], value["metadata"])
+    return {}
+
+
+def _source_en_negative_scores(negatives: list[Any]) -> tuple[float, ...]:
+    values = [_metadata(value).get("source_en_score") for value in negatives]
+    present = [value is not None for value in values]
+    if any(present) and not all(present):
+        raise ValueError("source_en_score must be present for either all or no hard negatives")
+    return tuple(float(value) for value in values if value is not None) if all(present) else ()
+
+
+def build_scoring_groups(record: dict[str, Any]) -> list[ScoringGroup]:
     positives = record.get("positives")
     negatives = record.get("hard_negatives")
     if not isinstance(positives, list) or not positives:
@@ -55,24 +85,78 @@ def _groups(record: dict[str, Any]) -> list[tuple[str, str, str, list[str]]]:
     base_id = str(record.get("example_id", ""))
     query = str(record["query"])
     negative_texts = [_document_text(value) for value in negatives]
+    negative_ids = tuple(
+        str(value.get("doc_id", index)) if isinstance(value, dict) else str(index)
+        for index, value in enumerate(negatives)
+    )
+    negative_source_scores = _source_en_negative_scores(negatives)
     groups = []
     for index, positive in enumerate(positives):
         doc_id = positive.get("doc_id") if isinstance(positive, dict) else None
         suffix = str(doc_id) if doc_id is not None else str(index)
-        groups.append((f"{base_id}::{suffix}", query, _document_text(positive), negative_texts))
+        metadata = _metadata(positive)
+        source_score = metadata.get("source_en_score")
+        groups.append(
+            ScoringGroup(
+                example_id=f"{base_id}::{suffix}",
+                query_id=base_id,
+                query=query,
+                positive=_document_text(positive),
+                negatives=negative_texts,
+                positive_doc_id=suffix,
+                negative_doc_ids=negative_ids,
+                positive_index=index,
+                positive_is_synthetic=bool(metadata.get("is_synthetic_positive", False)),
+                source_en_positive_score=(
+                    float(source_score) if source_score is not None else None
+                ),
+                source_en_negative_scores=negative_source_scores,
+            )
+        )
     return groups
 
 
-def _slice_values(record: dict[str, Any], positive: str) -> dict[str, str]:
+def _source_difficulty(metadata: dict[str, Any]) -> str:
+    value = metadata.get("source_en_difference_between_max_scores")
+    if not isinstance(value, (int, float)):
+        return "unknown"
+    return "hard" if value <= 0 else "medium" if value <= 5 else "easy"
+
+
+def _slice_values(record: dict[str, Any], group: ScoringGroup) -> dict[str, str]:
     raw_metadata = record.get("metadata")
     metadata = cast(dict[str, Any], raw_metadata) if isinstance(raw_metadata, dict) else {}
-    length = len(positive.split())
+    length = len(group.positive.split())
     return {
         "domain": str(metadata.get("domain", "unknown")),
         "passage_length": "short" if length < 128 else "medium" if length < 512 else "long",
         "query_type": str(record.get("query_style", metadata.get("query_type", "unknown"))),
         "difficulty": str(metadata.get("baseline_difficulty", "unknown")),
+        "source_en_difficulty": _source_difficulty(metadata),
+        "synthetic_positive": str(group.positive_is_synthetic).lower(),
+        "text_quality": (
+            "flagged"
+            if _metadata(record["positives"][group.positive_index]).get("text_quality_flags")
+            else "clean"
+        ),
     }
+
+
+def _score(judge: PairScorer, group: ScoringGroup) -> GroupScore:
+    return score_group(
+        judge,
+        example_id=group.example_id,
+        query=group.query,
+        positive=group.positive,
+        negatives=group.negatives,
+        query_id=group.query_id,
+        positive_doc_id=group.positive_doc_id,
+        negative_doc_ids=group.negative_doc_ids,
+        positive_index=group.positive_index,
+        positive_is_synthetic=group.positive_is_synthetic,
+        source_en_positive_score=group.source_en_positive_score,
+        source_en_negative_scores=group.source_en_negative_scores,
+    )
 
 
 def _load_judges(configs: list[Path]) -> list[PairScorer]:
@@ -100,16 +184,10 @@ def benchmark_main(argv: list[str] | None = None) -> int:
     started = time.perf_counter()
     with JsonlWriter(args.output_dir / "scores.jsonl") as writer:
         for record in read_records(args.input):
-            for example_id, query, positive, negatives in _groups(record):
-                slices = _slice_values(record, positive)
+            for group in build_scoring_groups(record):
+                slices = _slice_values(record, group)
                 for judge in judges:
-                    result = score_group(
-                        judge,
-                        example_id=example_id,
-                        query=query,
-                        positive=positive,
-                        negatives=negatives,
-                    )
+                    result = _score(judge, group)
                     by_judge[judge.name].append(result)
                     for dimension, value in slices.items():
                         by_slice[judge.name][dimension][value].append(result)
@@ -119,10 +197,22 @@ def benchmark_main(argv: list[str] | None = None) -> int:
         "status": "measured",
         "input": str(args.input),
         "elapsed_seconds": time.perf_counter() - started,
-        "judges": {name: aggregate(by_judge[name]) for name in names},
+        "judges": {
+            name: {
+                "query_macro": aggregate_query_macro(by_judge[name]),
+                "pair_micro": aggregate(by_judge[name]),
+            }
+            for name in names
+        },
         "slices": {
             name: {
-                dimension: {value: aggregate(rows) for value, rows in values.items()}
+                dimension: {
+                    value: {
+                        "query_macro": aggregate_query_macro(rows),
+                        "pair_micro": aggregate(rows),
+                    }
+                    for value, rows in values.items()
+                }
                 for dimension, values in by_slice[name].items()
             }
             for name in names
@@ -143,16 +233,8 @@ def score_main(argv: list[str] | None = None) -> int:
     judge = _load_judges([args.judge_config])[0]
     with JsonlWriter(args.output) as writer:
         for record in read_records(args.input):
-            for example_id, query, positive, negatives in _groups(record):
-                writer.write(
-                    score_group(
-                        judge,
-                        example_id=example_id,
-                        query=query,
-                        positive=positive,
-                        negatives=negatives,
-                    ).to_dict()
-                )
+            for group in build_scoring_groups(record):
+                writer.write(_score(judge, group).to_dict())
     return 0
 
 

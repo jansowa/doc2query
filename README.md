@@ -1,9 +1,10 @@
 # Bielik doc2query
 
 Odtwarzalny szkielet programu badawczo-inżynieryjnego do trenowania polskiego
-generatora doc2query. Aktualny zakres obejmuje infrastrukturę z tasku 00:
-konfigurację, publiczne CLI, raport sprzętowy, manifesty runów i testy CPU.
-Pipeline'y danych i treningu są celowo jeszcze niezaimplementowane.
+generatora doc2query. Aktualny zakres obejmuje infrastrukturę z Task 00 oraz
+zamrożone rerankery, reward proxies i adapter `speakleash/msmarco_pl` z Task 02.
+Pełny pipeline splitów z Task 01 oraz pipeline'y treningu pozostają jeszcze
+niezaimplementowane.
 
 ## Wymagania
 
@@ -86,6 +87,10 @@ zamrożone modele primary/shadow oraz implementuje ich benchmark i kalibrację.
 
 Każdy przyszły run powinien utworzyć lokalny `run_manifest.json`, niezależnie od
 trackingu online.
+
+Przypięty kontrakt i sposób bezpiecznego przygotowania przykładowego zbioru
+opisuje [dokumentacja `msmarco_pl`](docs/datasets/msmarco_pl.md). Źródłowe
+score'y tego zbioru pochodzą z angielskich tekstów i nie są polskim rewardem.
 
 Sekrety przechowuj wyłącznie w lokalnym `.env` (wzór: `.env.example`). Nie
 commituj danych, modeli, adapterów ani checkpointów.

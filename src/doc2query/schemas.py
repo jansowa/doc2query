@@ -18,9 +18,42 @@ class RunConfig(StrictModel):
     output_dir: Path
 
 
+class HuggingFaceDatasetSource(StrictModel):
+    repo_id: str = Field(min_length=1)
+    revision: str = Field(min_length=40, max_length=40, pattern=r"^[0-9a-f]{40}$")
+    config_name: str = Field(min_length=1)
+    split: str = Field(min_length=1)
+    private: bool = False
+    license_status: Literal["declared", "missing_requires_review"] = "declared"
+
+
+class DatasetColumnMapping(StrictModel):
+    example_id: str = "query_id"
+    query: str = "query"
+    positive_texts: str = "pos"
+    positive_ids: str = "pos_id"
+    positive_scores: str = "pos_scores"
+    positive_is_synthetic: str = "pos_is_synthetic"
+    negative_texts: str = "neg"
+    negative_ids: str = "neg_id"
+    negative_scores: str = "neg_scores"
+
+
 class DataConfig(StrictModel):
-    input_path: Path
-    input_format: Literal["jsonl", "parquet"]
+    input_path: Path | None = None
+    input_format: Literal["jsonl", "parquet"] | None = None
+    source: HuggingFaceDatasetSource | None = None
+    columns: DatasetColumnMapping = Field(default_factory=DatasetColumnMapping)
+
+    @model_validator(mode="after")
+    def exactly_one_source(self) -> "DataConfig":
+        local = self.input_path is not None and self.input_format is not None
+        remote = self.source is not None
+        if local == remote:
+            raise ValueError("configure exactly one of local input_path/input_format or source")
+        if (self.input_path is None) != (self.input_format is None):
+            raise ValueError("input_path and input_format must be configured together")
+        return self
 
 
 class ModelConfig(StrictModel):
