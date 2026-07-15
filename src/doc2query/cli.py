@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from rich.console import Console
 
 from doc2query.config import load_config
+from doc2query.data.validate import ValidationPolicy, validate_dataset
 from doc2query.utils.hardware import collect_hardware_report, write_hardware_report
 
 app = typer.Typer(help="Bielik doc2query research toolkit.", no_args_is_help=True)
@@ -73,8 +74,22 @@ def validate_config(
 def validate_data(
     config: ConfigPath,
 ) -> None:
-    """Validate data (implemented by task 01)."""
-    _pending(config, "data.validate")
+    """Validate a local canonical dataset and write accepted/rejected audit artifacts."""
+    parsed = load_config(config)
+    if parsed.data.input_path is None:
+        console.print("[red]Data validation requires a materialized local input_path.[/red]")
+        raise typer.Exit(code=2)
+    output_dir = parsed.run.output_dir / "data_validation"
+    report = validate_dataset(
+        parsed.data.input_path,
+        accepted_path=output_dir / "accepted.jsonl",
+        rejected_path=output_dir / "rejected.jsonl",
+        report_path=output_dir / "report.json",
+        policy=ValidationPolicy.defaults(),
+    )
+    console.print_json(json.dumps(report))
+    if report["contains_error_policy_violations"]:
+        raise typer.Exit(code=2)
 
 
 @train_app.command("sft")

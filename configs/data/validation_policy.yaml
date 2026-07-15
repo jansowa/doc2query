@@ -1,0 +1,24 @@
+modes:
+  malformed_json: error
+  missing_id: error
+  duplicate_example_id: drop
+  empty_query: error
+  invalid_documents: error
+  empty_document: error
+  too_few_positives: error
+  too_few_negatives: error
+  duplicate_doc_id: drop
+  positive_negative_overlap: drop
+  same_text_different_ids: warn
+  short_text: warn
+  long_text: warn
+  control_characters: drop
+  html: warn
+  boilerplate: warn
+  possible_mojibake: warn
+  high_query_passage_overlap: warn
+  likely_non_polish: warn
+min_negatives: 10
+min_text_chars: 10
+max_text_chars: 20000
+high_overlap_threshold: 0.85

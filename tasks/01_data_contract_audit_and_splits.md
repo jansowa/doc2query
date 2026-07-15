@@ -2,7 +2,7 @@
 
 ## Status
 
-`TODO`
+`IMPLEMENTED — end-to-end smoke verified; full msmarco_pl processing not yet run`
 
 ## Cel
 

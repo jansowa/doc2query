@@ -1,10 +1,9 @@
 # Bielik doc2query
 
 Odtwarzalny szkielet programu badawczo-inżynieryjnego do trenowania polskiego
-generatora doc2query. Aktualny zakres obejmuje infrastrukturę z Task 00 oraz
-zamrożone rerankery, reward proxies i adapter `speakleash/msmarco_pl` z Task 02.
-Pełny pipeline splitów z Task 01 oraz pipeline'y treningu pozostają jeszcze
-niezaimplementowane.
+generatora doc2query. Aktualny zakres obejmuje infrastrukturę z Task 00, pełny
+pipeline audytu/deduplikacji/splitów z Task 01 oraz zamrożone rerankery i reward
+proxies z Task 02. Pipeline'y treningu pozostają jeszcze niezaimplementowane.
 
 ## Wymagania
 
@@ -78,10 +77,10 @@ uv run doc2query evaluate generator --config configs/base.yaml
 uv run doc2query evaluate embedder --config configs/base.yaml
 ```
 
-Poza `doctor` i `config validate` komendy zachowują już stabilne sygnatury, ale
-kończą się jasnym komunikatem, dopóki odpowiedni późniejszy task nie dostarczy
-implementacji. Wyjątkiem jest wymagana przez kontrakt tasku 00 komenda
-`train reranker`: pozostaje kompatybilnościowym stubem, który waliduje config,
+Komenda `data validate` jest zaimplementowana dla lokalnego materiału
+kanonicznego. Komendy późniejszych etapów zachowują stabilne sygnatury, ale
+kończą się jasnym komunikatem, dopóki odpowiedni task nie dostarczy
+implementacji. Komenda `train reranker` pozostaje kompatybilnościowym stubem, który waliduje config,
 ale zawsze odmawia treningu. Zgodnie z `AGENTS.md` task 02 integruje wyłącznie
 zamrożone modele primary/shadow oraz implementuje ich benchmark i kalibrację.
 
@@ -91,6 +90,8 @@ trackingu online.
 Przypięty kontrakt i sposób bezpiecznego przygotowania przykładowego zbioru
 opisuje [dokumentacja `msmarco_pl`](docs/datasets/msmarco_pl.md). Źródłowe
 score'y tego zbioru pochodzą z angielskich tekstów i nie są polskim rewardem.
+Pełna procedura walidacji, deduplikacji i budowy zamrożonych splitów znajduje się
+w [dokumentacji Task 01](docs/task01_data_pipeline.md).
 
 Sekrety przechowuj wyłącznie w lokalnym `.env` (wzór: `.env.example`). Nie
 commituj danych, modeli, adapterów ani checkpointów.

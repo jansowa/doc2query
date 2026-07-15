@@ -1,0 +1,10 @@
+tokenizers:
+  - label: bielik_1_5b
+    name_or_path: speakleash/Bielik-1.5B-v3
+    revision: 4b25049621bf3952a1fc9314c89773102eda0333
+  - label: bielik_4_5b
+    name_or_path: speakleash/Bielik-4.5B-v3.0-Instruct
+    revision: 4b1220a9d745bdd874c44347075ef25484ef322b
+  - label: bielik_7b
+    name_or_path: speakleash/Bielik-Minitron-7B-v3.0-Instruct
+    revision: 5808ff03c95122d05cb860d11ba75b1efad98380

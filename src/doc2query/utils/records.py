@@ -25,7 +25,14 @@ def read_records(path: Path) -> Iterator[dict[str, Any]]:
             raise RuntimeError("install the data dependency group for Parquet") from exc
         parquet = pq.ParquetFile(path)
         for batch in parquet.iter_batches():
-            yield from batch.to_pylist()
+            for row in batch.to_pylist():
+                if set(row) == {"record_json"}:
+                    value = json.loads(row["record_json"])
+                    if not isinstance(value, dict):
+                        raise ValueError(f"{path}: record_json must contain an object")
+                    yield value
+                else:
+                    yield row
         return
     raise ValueError("input must have .jsonl or .parquet suffix")
 
@@ -43,6 +50,52 @@ class JsonlWriter:
 
     def __exit__(self, *_args: object) -> None:
         self._handle.close()
+
+
+class JsonParquetWriter:
+    """Streaming Parquet container for heterogeneous canonical JSON records."""
+
+    def __init__(self, path: Path, batch_size: int = 1000) -> None:
+        try:
+            import pyarrow as pa
+            import pyarrow.parquet as pq
+        except ImportError as exc:  # pragma: no cover
+            raise RuntimeError("install the data dependency group for Parquet") from exc
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self._pa = pa
+        self._pq = pq
+        self._path = path
+        self._batch_size = batch_size
+        self._buffer: list[str] = []
+        self._writer: Any = None
+
+    def write(self, record: dict[str, Any]) -> None:
+        self._buffer.append(json.dumps(record, ensure_ascii=False, sort_keys=True))
+        if len(self._buffer) >= self._batch_size:
+            self._flush()
+
+    def _flush(self) -> None:
+        if not self._buffer:
+            return
+        table = self._pa.table({"record_json": self._buffer})
+        if self._writer is None:
+            self._writer = self._pq.ParquetWriter(self._path, table.schema, compression="zstd")
+        self._writer.write_table(table)
+        self._buffer = []
+
+    def close(self) -> None:
+        self._flush()
+        if self._writer is None:
+            table = self._pa.table({"record_json": self._pa.array([], type=self._pa.string())})
+            self._pq.write_table(table, self._path, compression="zstd")
+        else:
+            self._writer.close()
+
+    def __enter__(self) -> JsonParquetWriter:
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        self.close()
 
 
 def write_json(path: Path, value: Any) -> None:

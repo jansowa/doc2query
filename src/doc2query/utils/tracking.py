@@ -34,6 +34,20 @@ def _serialize_config(config: BaseModel | Mapping[str, Any]) -> dict[str, Any]:
     return dict(config)
 
 
+def collect_code_provenance() -> dict[str, Any]:
+    """Return the code identity used by data and experiment artifacts."""
+    status = _git_value("status", "--porcelain")
+    try:
+        package_version = importlib.metadata.version("bielik-doc2query")
+    except importlib.metadata.PackageNotFoundError:
+        package_version = None
+    return {
+        "git_commit": _git_value("rev-parse", "HEAD"),
+        "git_dirty": bool(status) if status is not None else None,
+        "package_version": package_version,
+    }
+
+
 def write_run_manifest(
     run_dir: Path,
     *,
