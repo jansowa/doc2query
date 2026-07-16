@@ -1,6 +1,10 @@
 import pytest
 
-from doc2query.data.msmarco_pl import DATASET_REVISION, adapt_msmarco_pl_record
+from doc2query.data.msmarco_pl import (
+    DATASET_REVISION,
+    NoPositiveAfterSourceScoreFilterError,
+    adapt_msmarco_pl_record,
+)
 from doc2query.data.validate import validate_record
 from doc2query.reranker.commands import build_scoring_groups
 
@@ -75,3 +79,27 @@ def test_adapter_preserves_document_id_conflicts_for_validation() -> None:
     assert adapted["metadata"]["positive_negative_overlap_doc_ids"] == ["p1"]
     rules = {issue.rule for issue in validate_record(adapted)}
     assert {"duplicate_doc_id", "positive_negative_overlap"} <= rules
+
+
+def test_adapter_filters_low_source_score_positives() -> None:
+    record = _raw_record()
+    record["pos_scores"] = [23.49, 23.50]
+
+    adapted = adapt_msmarco_pl_record(record, min_positive_score=23.50)
+
+    assert [item["doc_id"] for item in adapted["positives"]] == ["p2"]
+    assert adapted["metadata"]["source_en_positive_score_filter"] == {
+        "minimum_inclusive": 23.50,
+        "removed_count": 1,
+        "removed_doc_ids": ["p1"],
+    }
+
+
+def test_adapter_reports_records_emptied_by_source_score_filter() -> None:
+    record = _raw_record()
+    record["pos_scores"] = [23.49, 20.0]
+
+    with pytest.raises(NoPositiveAfterSourceScoreFilterError) as error:
+        adapt_msmarco_pl_record(record, min_positive_score=23.50)
+
+    assert error.value.removed_count == 2

@@ -21,13 +21,17 @@ hf download speakleash/msmarco_pl train_pl.jsonl \
 
 uv run python scripts/adapt_msmarco_pl.py \
   --input data/raw/msmarco_pl/train_pl.jsonl \
-  --output data/interim/msmarco_pl.canonical.jsonl
+  --output data/interim/msmarco_pl.canonical.jsonl \
+  --report reports/msmarco_pl_adaptation.json \
+  --min-positive-score 23.50
 ```
 
 The adapter streams JSONL and validates all parallel arrays. It maps `query_id`, `pos`, `pos_id`,
 `pos_scores`, `pos_is_synthetic`, `neg`, `neg_id`, and `neg_scores` into the canonical nested
 contract. It also records duplicate negative IDs and possible mojibake without silently repairing
-text.
+text. Positives with the copied source score below `23.50` are removed by an explicit project data
+policy; the boundary value is retained. Rows left without a positive are skipped, and both removed
+positives and skipped rows are counted in `reports/msmarco_pl_adaptation.json`.
 
 ## Score semantics
 

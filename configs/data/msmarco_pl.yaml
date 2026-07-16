@@ -7,6 +7,8 @@ source:
   split: train
   private: true
   license_status: missing_requires_review
+filters:
+  min_source_en_positive_score_inclusive: 23.5
 columns:
   example_id: query_id
   query: query
