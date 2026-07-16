@@ -1,6 +1,7 @@
 import pytest
 
 from doc2query.data.msmarco_pl import DATASET_REVISION, adapt_msmarco_pl_record
+from doc2query.data.validate import validate_record
 from doc2query.reranker.commands import build_scoring_groups
 
 
@@ -57,3 +58,20 @@ def test_adapter_requires_ten_negatives() -> None:
         record[field] = value[:9]
     with pytest.raises(ValueError, match="ten hard negatives"):
         adapt_msmarco_pl_record(record)
+
+
+def test_adapter_preserves_document_id_conflicts_for_validation() -> None:
+    record = _raw_record()
+    positive_ids = record["pos_id"]
+    negative_ids = record["neg_id"]
+    assert isinstance(positive_ids, list)
+    assert isinstance(negative_ids, list)
+    positive_ids[1] = "p1"
+    negative_ids[0] = "p1"
+
+    adapted = adapt_msmarco_pl_record(record)
+
+    assert adapted["metadata"]["duplicate_positive_doc_ids"] == ["p1"]
+    assert adapted["metadata"]["positive_negative_overlap_doc_ids"] == ["p1"]
+    rules = {issue.rule for issue in validate_record(adapted)}
+    assert {"duplicate_doc_id", "positive_negative_overlap"} <= rules

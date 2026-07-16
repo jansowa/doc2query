@@ -119,13 +119,10 @@ def adapt_msmarco_pl_record(
             }
         )
 
-    positive_ids: set[str] = {str(item["doc_id"]) for item in positives}
-    if len(positive_ids) != len(positives):
-        raise ValueError("duplicate positive document IDs are not allowed")
+    positive_id_counts: Counter[str] = Counter(str(item["doc_id"]) for item in positives)
+    positive_ids = set(positive_id_counts)
     negative_id_counts: Counter[str] = Counter(str(item["doc_id"]) for item in hard_negatives)
     overlap = positive_ids & set(negative_id_counts)
-    if overlap:
-        raise ValueError(f"document IDs occur as both positive and negative: {sorted(overlap)}")
 
     source_difficulty = record.get("difference_between_max_scores")
     return {
@@ -142,9 +139,13 @@ def adapt_msmarco_pl_record(
                 float(source_difficulty) if source_difficulty is not None else None
             ),
             "query_text_quality_flags": _quality_flags(query),
+            "duplicate_positive_doc_ids": sorted(
+                doc_id for doc_id, count in positive_id_counts.items() if count > 1
+            ),
             "duplicate_negative_doc_ids": sorted(
                 doc_id for doc_id, count in negative_id_counts.items() if count > 1
             ),
+            "positive_negative_overlap_doc_ids": sorted(overlap),
             "synthetic_positive_count": sum(
                 bool(cast(dict[str, Any], item["metadata"])["is_synthetic_positive"])
                 for item in positives
