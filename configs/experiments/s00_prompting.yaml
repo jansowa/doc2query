@@ -10,7 +10,7 @@ run:
   seed: 42
   output_dir: runs/S00
 data:
-  input_path: data/doc2query/dev.parquet
+  input_path: data/processed/v1/doc2query_dev.parquet
   input_format: parquet
   train_split: train
   eval_split: dev
