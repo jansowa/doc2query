@@ -70,6 +70,22 @@ uv run python scripts/train_sft.py --config configs/experiments/s05_4_5b_balance
 uv run python scripts/train_sft.py --config configs/experiments/s05_4_5b_weighted.yaml --resume-if-available
 ```
 
+Na karcie 8 GB zacznij od osobnych runów technicznych 1.5B. Nie zastępują one
+późniejszego S02/S03 na docelowym budżecie:
+
+```bash
+uv run python scripts/run_memory_probe.py \
+  --config configs/experiments/s01_1_5b_8gb_smoke.yaml \
+  --lengths 512 768 --steps 2 \
+  --output-dir reports/memory_probes/8gb
+uv run python scripts/train_sft.py \
+  --config configs/experiments/s01_1_5b_8gb_smoke.yaml \
+  --resume-if-available
+uv run python scripts/train_sft.py \
+  --config configs/experiments/s02_1_5b_10k_8gb.yaml \
+  --resume-if-available
+```
+
 S04 base/instruct ma ten sam deterministyczny podzbiór, seed, liczbę kroków i
 padding do `max_length`, co utrzymuje ten sam maksymalny budżet tokenów.
 

@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+  - s02_1_5b_10k
+  - _self_
+run: {experiment_id: S02-1.5B-10K-8GB, seed: 42, output_dir: runs/S02-1.5B-10K-8GB}
+lora:
+  r: 8
+  alpha: 16
+training:
+  max_length: 512
+  max_completion_tokens: 64

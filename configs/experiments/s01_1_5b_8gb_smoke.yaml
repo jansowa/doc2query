@@ -1,0 +1,18 @@
+# @package _global_
+defaults:
+  - s02_1_5b_10k
+  - _self_
+run: {experiment_id: S01-1.5B-8GB, seed: 42, output_dir: runs/S01-1.5B-8GB}
+data:
+  max_train_examples: 1000
+  max_eval_examples: 100
+lora:
+  r: 8
+  alpha: 16
+training:
+  max_length: 512
+  max_completion_tokens: 64
+  max_steps: 20
+  logging_steps: 1
+  eval_steps: 10
+  save_steps: 10
