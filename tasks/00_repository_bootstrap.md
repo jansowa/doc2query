@@ -1,5 +1,7 @@
 # Task 00 — Bootstrap repozytorium i odtwarzalność
 
+> [Centralny rejestr zadań i statusów](README.md). Każda zmiana statusu lub zakresu tego zadania musi aktualizować rejestr w tym samym commicie.
+
 ## Status
 
 `DONE`

@@ -1,8 +1,12 @@
 # Task 11 — Audyt odporności sędziego i ścieżki awaryjne
 
+> [Centralny rejestr zadań i statusów](README.md). Każda zmiana statusu lub zakresu tego zadania musi aktualizować rejestr w tym samym commicie.
+
 ## Status
 
-`OPTIONAL / RESEARCH`
+`OPTIONAL`
+
+Jest to późny eksperyment badawczy, a nie element domyślnej ścieżki.
 
 ## Cel
 

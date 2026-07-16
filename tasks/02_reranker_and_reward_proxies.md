@@ -1,8 +1,13 @@
 # Task 02 — Gotowy reranker, lematyzacja, focus i proxy ugruntowania
 
+> [Centralny rejestr zadań i statusów](README.md). Każda zmiana statusu lub zakresu tego zadania musi aktualizować rejestr w tym samym commicie.
+
 ## Status
 
-`IMPLEMENTED — benchmark on project dev/test pending Task 01 artifacts and model inference`
+`IMPLEMENTED`
+
+Benchmark na projektowych splitach dev/test oczekuje na artefakty Task 01 i
+rzeczywiste inference modeli.
 
 ## Cel
 

@@ -1,5 +1,7 @@
 # Task 04 — Kompletny harness ewaluacyjny
 
+> [Centralny rejestr zadań i statusów](README.md). Każda zmiana statusu lub zakresu tego zadania musi aktualizować rejestr w tym samym commicie.
+
 ## Status
 
 `TODO`

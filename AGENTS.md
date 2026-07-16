@@ -4,6 +4,8 @@
 
 Ten plik jest nadrzędną instrukcją dla systemu agentowego Codex. Codex ma przeczytać go przed rozpoczęciem pracy, a następnie wykonywać zadania z katalogu `tasks/` w kolejności wynikającej z zależności.
 
+Przed rozpoczęciem zadania Codex ma przeczytać również `tasks/README.md`. Jest to centralny rejestr postępu. Każda zmiana stanu zadania musi w tym samym commicie aktualizować tabelę w `tasks/README.md`, sekcję `Status` w pliku zadania oraz krótko wskazywać pozostałe runy, pomiary i bramki. Root `README.md` ma jedynie linkować do tego rejestru i nie powinien duplikować szczegółowych statusów.
+
 Nie traktuj tego projektu jako pojedynczego treningu. To program eksperymentalny, którego celem jest ustalenie, **jaka procedura generowania zapytań rzeczywiście poprawia końcowy embedder**, a nie tylko daje dobrze wyglądające pytania.
 
 Codex ma:
@@ -727,6 +729,8 @@ Testy CI nie mogą pobierać Bielika ani wymagać GPU. Użyj małego publicznego
 
 ## 18. Kolejność zadań
 
+Aktualny stan, następne kroki i reguły aktualizacji są utrzymywane w `tasks/README.md`. Poniższa lista określa kolejność i musi pozostać zgodna z tamtym rejestrem:
+
 1. `tasks/00_repository_bootstrap.md`
 2. `tasks/01_data_contract_audit_and_splits.md`
 3. `tasks/02_reranker_and_reward_proxies.md`
@@ -738,9 +742,11 @@ Testy CI nie mogą pobierać Bielika ani wymagać GPU. Użyj małego publicznego
 9. `tasks/08_grpo_multiobjective_rl.md`
 10. `tasks/09_experiment_campaign.md`
 11. `tasks/10_final_scaleup_inference_release.md`
-12. `tasks/11_reranker_robustness_and_fallback.md`
+12. `tasks/11_optional_alternating_cotraining.md`
 
 Codex może delegować niezależne moduły subagentom, ale integracja, kontrakty danych i ostateczna walidacja należą do głównego agenta. Zadania zależne od wyników eksperymentów nie mogą być „zaliczone” na podstawie założonych rezultatów.
+
+Przy rozpoczęciu pracy ustaw status zadania na `IN PROGRESS`. Przy zakończeniu odróżniaj gotową implementację (`IMPLEMENTED`) od pełnego spełnienia kryteriów wraz z wymaganymi eksperymentami (`DONE`). Aktualizacja `tasks/README.md` jest częścią definicji ukończenia każdego zadania.
 
 ---
 

@@ -1,8 +1,12 @@
 # Task 08 — Wielokryterialny GRPO/RL
 
+> [Centralny rejestr zadań i statusów](README.md). Każda zmiana statusu lub zakresu tego zadania musi aktualizować rejestr w tym samym commicie.
+
 ## Status
 
-`OPTIONAL / BLOCKED UNTIL GATE`
+`OPTIONAL / BLOCKED`
+
+Zadanie pozostaje zablokowane do spełnienia bramki opisanej poniżej.
 
 ## Cel
 

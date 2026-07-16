@@ -1,5 +1,7 @@
 # Task 07 — DPO i kontrola continued SFT
 
+> [Centralny rejestr zadań i statusów](README.md). Każda zmiana statusu lub zakresu tego zadania musi aktualizować rejestr w tym samym commicie.
+
 ## Status
 
 `TODO`

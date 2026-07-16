@@ -1,8 +1,13 @@
 # Task 01 — Kontrakt danych, audyt, deduplikacja i splity
 
+> [Centralny rejestr zadań i statusów](README.md). Każda zmiana statusu lub zakresu tego zadania musi aktualizować rejestr w tym samym commicie.
+
 ## Status
 
-`IMPLEMENTED — end-to-end smoke verified; full msmarco_pl processing not yet run`
+`IMPLEMENTED`
+
+End-to-end smoke test jest zweryfikowany; pełne przetworzenie `msmarco_pl` nie
+zostało jeszcze uruchomione.
 
 ## Cel
 

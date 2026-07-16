@@ -1,9 +1,9 @@
 # Bielik doc2query
 
-Odtwarzalny szkielet programu badawczo-inżynieryjnego do trenowania polskiego
-generatora doc2query. Aktualny zakres obejmuje infrastrukturę z Task 00, pełny
-pipeline audytu/deduplikacji/splitów z Task 01 oraz zamrożone rerankery i reward
-proxies z Task 02. Pipeline'y treningu pozostają jeszcze niezaimplementowane.
+Odtwarzalny program badawczo-inżynieryjny do trenowania polskiego generatora
+doc2query. Aktualny stan realizacji, kolejność prac i nierozstrzygnięte bramki
+znajdują się w centralnym [rejestrze zadań](tasks/README.md). Szczegółowego
+postępu nie duplikujemy w tym pliku, aby nie powstawały sprzeczne źródła prawdy.
 
 ## Wymagania
 

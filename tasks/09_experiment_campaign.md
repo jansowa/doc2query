@@ -1,8 +1,13 @@
 # Task 09 — Kampania eksperymentalna i wybór strategii
 
+> [Centralny rejestr zadań i statusów](README.md). Każda zmiana statusu lub zakresu tego zadania musi aktualizować rejestr w tym samym commicie.
+
 ## Status
 
-`TODO AFTER IMPLEMENTATION`
+`BLOCKED`
+
+Zadanie oczekuje na implementację wcześniejszych etapów w zakresie
+dopuszczonym przez bramki.
 
 ## Cel
 

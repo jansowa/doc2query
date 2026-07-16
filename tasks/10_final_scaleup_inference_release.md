@@ -1,8 +1,12 @@
 # Task 10 — Finalny trening, generacja korpusu i release
 
+> [Centralny rejestr zadań i statusów](README.md). Każda zmiana statusu lub zakresu tego zadania musi aktualizować rejestr w tym samym commicie.
+
 ## Status
 
-`BLOCKED UNTIL FINAL ADR`
+`BLOCKED`
+
+Zadanie oczekuje na wyniki Task 09 i zatwierdzony finalny ADR.
 
 ## Cel
 
