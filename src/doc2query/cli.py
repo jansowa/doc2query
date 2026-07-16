@@ -10,6 +10,7 @@ from rich.console import Console
 
 from doc2query.config import load_config
 from doc2query.data.validate import ValidationPolicy, validate_dataset
+from doc2query.training.sft import run_sft
 from doc2query.utils.hardware import collect_hardware_report, write_hardware_report
 
 app = typer.Typer(help="Bielik doc2query research toolkit.", no_args_is_help=True)
@@ -93,9 +94,20 @@ def validate_data(
 
 
 @train_app.command("sft")
-def train_sft(config: ConfigPath) -> None:
-    """Train an SFT adapter (implemented by task 03)."""
-    _pending(config, "training.sft")
+def train_sft(
+    config: ConfigPath,
+    resume_if_available: Annotated[
+        bool,
+        typer.Option(
+            "--resume-if-available",
+            help="Start fresh or resume the newest compatible complete checkpoint.",
+        ),
+    ] = False,
+) -> None:
+    """Train an ordinary, balanced, or weighted completion-only SFT adapter."""
+    parsed = load_config(config)
+    summary = run_sft(parsed, resume_if_available=resume_if_available)
+    console.print_json(json.dumps(summary))
 
 
 @train_app.command("reranker")

@@ -4,7 +4,21 @@
 
 ## Status
 
-`TODO`
+`IMPLEMENTED`
+
+Implementacja pipeline'u, konfiguracji S00–S05, skryptów, testów i lokalnego
+20-krokowego tiny-model smoke testu jest gotowa. Smoke zakończył 20/20 kroków,
+zapisał adapter, checkpointy, panel i manifest; loss spadł z 3.6278 do 3.5736,
+a eval loss wyniósł 3.5735. Jest to wyłącznie test mechaniki na losowym małym
+modelu, nie wynik jakościowy Bielika. Trening wspiera `--resume-if-available`,
+automatyczny wybór ostatniego kompletnego checkpointu oraz walidację podpisu
+modelu, danych i ustawień runu przed wznowieniem.
+
+Pozostały wymagane runy badawcze: S00 na 5k z intrinsic evaluation z Task 04,
+S01–S03 na Bieliku 1.5B, memory probe 512/768/1024 i potwierdzenie użytecznego
+configu 4.5B poniżej 16 GB, porównanie base/instruct S04, ordinary/balanced/
+weighted S05 oraz tabela z metrykami intrinsic i probe-embeddera. Do czasu ich
+wykonania zadanie nie spełnia statusu `DONE` i nie otwiera bramki DPO.
 
 ## Cel
 

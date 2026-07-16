@@ -36,7 +36,7 @@ uruchomiono.
 | [00](00_repository_bootstrap.md) | Bootstrap repozytorium i odtwarzalność | `DONE` | Szkielet projektu, środowisko, CLI, testy i rejestrowanie są gotowe. |
 | [01](01_data_contract_audit_and_splits.md) | Kontrakt danych, audyt, deduplikacja i splity | `IMPLEMENTED` | Pipeline i end-to-end smoke test są gotowe. Pozostało pełne przetworzenie `msmarco_pl` oraz zapis wynikowego raportu i artefaktów splitu. |
 | [02](02_reranker_and_reward_proxies.md) | Zamrożone rerankery i proxy nagrody | `IMPLEMENTED` | Integracja, kalibracja, reward proxies i testy są gotowe. Pozostał benchmark primary/shadow na artefaktach dev/test z Task 01 z rzeczywistym inference modeli. |
-| [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `TODO` | Następne zadanie implementacyjne po domknięciu wymaganych artefaktów fazy A. |
+| [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | Pipeline, konfiguracje, testy i lokalny 20-krokowy tiny smoke są gotowe. Pozostały S00–S05 na Bielikach, memory probe 4.5B/16 GB, porównania intrinsic/probe z Task 04 i bramka stabilnego SFT przed DPO. |
 | [04](04_evaluation_harness.md) | Harness ewaluacyjny | `TODO` | Część infrastrukturalna może powstawać równolegle z Task 03. |
 | [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `TODO` | Wymaga Task 02–04. |
 | [06](06_candidate_scoring_and_preference_data.md) | Scoring kandydatów i dane preferencyjne | `TODO` | Wymaga stabilnego checkpointu SFT oraz Task 02, 04 i 05. |

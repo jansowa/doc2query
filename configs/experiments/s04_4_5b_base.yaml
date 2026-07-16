@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+  - s02_1_5b_10k
+  - override /model: bielik_4_5b_base
+  - _self_
+run: {experiment_id: S04-base, seed: 42, output_dir: runs/S04-base}
+data:
+  max_train_examples: 50000
+training:
+  max_steps: 3125
+  pad_to_max_length: true

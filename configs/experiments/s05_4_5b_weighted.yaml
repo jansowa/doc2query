@@ -1,0 +1,6 @@
+# @package _global_
+defaults:
+  - s04_4_5b_instruct
+  - override /train@training: qlora_weighted_16gb
+  - _self_
+run: {experiment_id: S05-weighted, seed: 42, output_dir: runs/S05-weighted}

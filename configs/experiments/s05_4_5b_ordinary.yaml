@@ -1,0 +1,5 @@
+# @package _global_
+defaults:
+  - s04_4_5b_instruct
+  - _self_
+run: {experiment_id: S05-ordinary, seed: 42, output_dir: runs/S05-ordinary}

@@ -30,10 +30,32 @@ def test_config_validate_cli() -> None:
     assert "Configuration valid" in result.stdout
 
 
-def test_pending_command_validates_then_explains_scope() -> None:
-    result = runner.invoke(app, ["train", "sft", "--config", "configs/base.yaml"])
-    assert result.exit_code == 3
-    assert "not implemented in task 00" in result.stdout
+def test_sft_command_invokes_task03_pipeline(monkeypatch: object) -> None:
+    from pytest import MonkeyPatch
+
+    assert isinstance(monkeypatch, MonkeyPatch)
+    monkeypatch.setattr(
+        "doc2query.cli.run_sft",
+        lambda _config, **_kwargs: {"experiment_id": "bootstrap-smoke", "global_step": 1},
+    )
+    result = runner.invoke(
+        app,
+        [
+            "train",
+            "sft",
+            "--config",
+            "configs/base.yaml",
+            "--resume-if-available",
+        ],
+    )
+    assert result.exit_code == 0
+    assert '"global_step": 1' in result.stdout
+
+
+def test_sft_help_documents_automatic_resume() -> None:
+    result = runner.invoke(app, ["train", "sft", "--help"])
+    assert result.exit_code == 0
+    assert "--resume-if-available" in result.stdout
 
 
 def test_data_validate_cli_runs_task01_pipeline(tmp_path: Path) -> None:

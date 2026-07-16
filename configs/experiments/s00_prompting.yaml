@@ -1,0 +1,20 @@
+# @package _global_
+defaults:
+  - /data: default
+  - /model: bielik_1_5b_base_or_instruct
+  - /train@training: qlora_16gb
+  - /generation: default
+  - _self_
+run:
+  experiment_id: S00
+  seed: 42
+  output_dir: runs/S00
+data:
+  input_path: data/doc2query/dev.parquet
+  input_format: parquet
+  train_split: train
+  eval_split: dev
+  max_eval_examples: 5000
+training:
+  baseline: b0
+tracking: {backend: offline, online: false}

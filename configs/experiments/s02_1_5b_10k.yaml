@@ -1,0 +1,12 @@
+# @package _global_
+defaults:
+  - /data: default
+  - /model: bielik_1_5b_base_or_instruct
+  - /train@training: qlora_16gb
+  - /generation: default
+  - _self_
+run: {experiment_id: S02, seed: 42, output_dir: runs/S02}
+data: {input_path: data/doc2query/pairs.parquet, input_format: parquet, train_split: train, eval_split: dev, max_train_examples: 10000, max_eval_examples: 5000}
+quantization: {load_in_4bit: true, bnb_4bit_quant_type: nf4, bnb_4bit_use_double_quant: true, compute_dtype: auto}
+lora: {r: 16, alpha: 32, dropout: 0.05, target_modules: auto, minimum_target_modules: 4, expected_layer_patterns: [attn, "mlp|proj|fc"]}
+tracking: {backend: offline, online: false}

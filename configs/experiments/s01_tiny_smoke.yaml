@@ -1,0 +1,39 @@
+# @package _global_
+defaults:
+  - /data: default
+  - /train@training: qlora_16gb
+  - /generation: default
+  - _self_
+run:
+  experiment_id: S01
+  seed: 42
+  output_dir: runs/S01
+data:
+  input_path: data/doc2query/tiny.jsonl
+  input_format: jsonl
+  train_split: train
+  eval_split: dev
+  max_train_examples: 1000
+  max_eval_examples: 100
+model:
+  name_or_path: hf-internal-testing/tiny-random-LlamaForCausalLM
+  revision: 9fb191250dd56d0ba7ec9785a025ed29c03d5998
+  trust_remote_code: false
+quantization:
+  load_in_4bit: false
+  bnb_4bit_quant_type: nf4
+  bnb_4bit_use_double_quant: true
+  compute_dtype: auto
+lora:
+  r: 8
+  alpha: 16
+  dropout: 0.0
+  target_modules: auto
+  minimum_target_modules: 4
+  expected_layer_patterns: [attn, "mlp|proj|fc"]
+training:
+  max_steps: 20
+  gradient_accumulation_steps: 1
+  logging_steps: 1
+  save_steps: 10
+tracking: {backend: offline, online: false}

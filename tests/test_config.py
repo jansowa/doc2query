@@ -59,3 +59,23 @@ generation: {}
     )
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         load_config(path)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "s00_prompting.yaml",
+        "s01_tiny_smoke.yaml",
+        "s02_1_5b_10k.yaml",
+        "s03_1_5b_50k.yaml",
+        "s04_4_5b_base.yaml",
+        "s04_4_5b_instruct.yaml",
+        "s05_4_5b_balanced.yaml",
+        "s05_4_5b_weighted.yaml",
+    ],
+)
+def test_task03_experiment_configs_compose(name: str) -> None:
+    config = load_config(Path("configs/experiments") / name)
+    assert config.model.revision != "main"
+    assert config.training.packing is False
+    assert config.model.trust_remote_code is False
