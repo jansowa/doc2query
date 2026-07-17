@@ -1,8 +1,10 @@
+import sqlite3
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from doc2query.data import deduplicate as deduplicate_module
 from doc2query.data.deduplicate import deduplicate_documents, load_dedup_map
 from doc2query.data.index import build_document_index
 from doc2query.data.invert import invert_doc2query_pairs
@@ -158,6 +160,91 @@ def test_document_index_reports_conflicting_text_for_same_id(tmp_path: Path) -> 
             output_path=tmp_path / "dedup.parquet",
             report_path=tmp_path / "dedup.json",
         )
+
+
+def test_deduplication_resumes_a_committed_checkpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    input_path = tmp_path / "input.jsonl"
+    index_path = tmp_path / "documents.sqlite"
+    _write(input_path, _records(6))
+    build_document_index(
+        input_path,
+        sqlite_path=index_path,
+        documents_path=tmp_path / "documents.parquet",
+        report_path=tmp_path / "index.json",
+    )
+
+    original_simhash = deduplicate_module.simhash64
+    calls = 0
+
+    def interrupt_after_checkpoint(text: str) -> int:
+        nonlocal calls
+        calls += 1
+        if calls == 5:
+            raise RuntimeError("simulated interruption")
+        return original_simhash(text)
+
+    monkeypatch.setattr(deduplicate_module, "_COMMIT_INTERVAL", 2)
+    monkeypatch.setattr(deduplicate_module, "simhash64", interrupt_after_checkpoint)
+    with pytest.raises(RuntimeError, match="simulated interruption"):
+        deduplicate_documents(
+            index_path,
+            output_path=tmp_path / "interrupted.parquet",
+            report_path=tmp_path / "interrupted.json",
+            bands=16,
+            max_hamming_distance=12,
+            resume_if_available=True,
+        )
+    monkeypatch.setattr(deduplicate_module, "simhash64", original_simhash)
+
+    with sqlite3.connect(index_path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM simhash").fetchone()[0] == 4
+
+    report = deduplicate_documents(
+        index_path,
+        output_path=tmp_path / "resumed.parquet",
+        report_path=tmp_path / "resumed.json",
+        bands=16,
+        max_hamming_distance=12,
+        resume_if_available=True,
+    )
+    assert report["resume"]["resumed_from_representatives"] == 4
+    assert report["resume"]["legacy_checkpoint"] is False
+    assert report["resume"]["prefix_metrics_complete"] is True
+    assert isinstance(report["near_duplicate_edges"], int)
+
+
+def test_deduplication_adopts_a_legacy_checkpoint(tmp_path: Path) -> None:
+    input_path = tmp_path / "input.jsonl"
+    index_path = tmp_path / "documents.sqlite"
+    _write(input_path, _records(4))
+    build_document_index(
+        input_path,
+        sqlite_path=index_path,
+        documents_path=tmp_path / "documents.parquet",
+        report_path=tmp_path / "index.json",
+    )
+    deduplicate_documents(
+        index_path,
+        output_path=tmp_path / "first.parquet",
+        report_path=tmp_path / "first.json",
+    )
+    with sqlite3.connect(index_path) as connection:
+        processed = int(connection.execute("SELECT COUNT(*) FROM simhash").fetchone()[0])
+        connection.execute("DROP TABLE dedup_state")
+
+    resumed = deduplicate_documents(
+        index_path,
+        output_path=tmp_path / "resumed.parquet",
+        report_path=tmp_path / "resumed.json",
+        resume_if_available=True,
+    )
+    assert resumed["resume"]["resumed_from_representatives"] == processed
+    assert resumed["resume"]["legacy_checkpoint"] is True
+    assert resumed["resume"]["prefix_metrics_complete"] is False
+    assert resumed["near_duplicate_edges"] is None
+    assert resumed["candidate_cap_hits"] is None
 
 
 def test_full_data_pipeline_is_deterministic_and_leakage_safe(tmp_path: Path) -> None:

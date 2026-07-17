@@ -27,7 +27,8 @@ uv run python scripts/build_document_index.py \
 uv run python scripts/deduplicate_documents.py \
   --index data/interim/documents.sqlite \
   --output data/processed/v1/dedup_map.parquet \
-  --report reports/deduplication.json
+  --report reports/deduplication.json \
+  --resume-if-available
 
 uv run python scripts/build_splits.py \
   --input data/interim/msmarco_pl.accepted.jsonl \
@@ -66,6 +67,8 @@ used to choose `max_length`.
   its issues; an `error` policy violation makes the CLI exit non-zero after producing the report.
 - Exact deduplication uses normalized SHA-256. Near-deduplication uses banded SimHash with bounded
   candidate sets persisted in SQLite; candidate-cap hits are reported.
+- `--resume-if-available` starts from zero when no deduplication checkpoint exists and otherwise
+  validates and resumes compatible `parents`, `simhash`, and LSH tables in the document index.
 - Query nodes, positive-document nodes, and near-duplicate canonical IDs form indivisible split
   components. Assignment is deterministic for the seed and balances global/domain deficits.
 - Cross-split hard negatives pointing at a positive in another split are removed by default.

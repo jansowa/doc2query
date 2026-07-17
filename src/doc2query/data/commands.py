@@ -70,6 +70,11 @@ def deduplicate_main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-hamming-distance", type=int, default=3)
     parser.add_argument("--bands", type=int, default=4)
     parser.add_argument("--candidate-cap", type=int, default=500)
+    parser.add_argument(
+        "--resume-if-available",
+        action="store_true",
+        help="resume a compatible SQLite checkpoint, or start from zero when none exists",
+    )
     args = parser.parse_args(argv)
     deduplicate_documents(
         args.index,
@@ -78,6 +83,7 @@ def deduplicate_main(argv: list[str] | None = None) -> int:
         max_hamming_distance=args.max_hamming_distance,
         bands=args.bands,
         candidate_cap=args.candidate_cap,
+        resume_if_available=args.resume_if_available,
     )
     return 0
 
