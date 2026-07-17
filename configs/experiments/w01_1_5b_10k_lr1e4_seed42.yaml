@@ -1,0 +1,8 @@
+# @package _global_
+defaults:
+  - s02_1_5b_10k_8gb
+  - _self_
+run: {experiment_id: W01-1.5B-10K-LR1E4-S42, seed: 42, output_dir: runs/W01-1.5B-10K-LR1E4-S42}
+data:
+  max_eval_examples: 500
+

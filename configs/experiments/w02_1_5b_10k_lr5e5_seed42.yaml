@@ -1,0 +1,8 @@
+# @package _global_
+defaults:
+  - w01_1_5b_10k_lr1e4_seed42
+  - _self_
+run: {experiment_id: W02-1.5B-10K-LR5E5-S42, seed: 42, output_dir: runs/W02-1.5B-10K-LR5E5-S42}
+training:
+  learning_rate: 0.00005
+

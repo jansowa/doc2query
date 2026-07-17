@@ -1,0 +1,14 @@
+# @package _global_
+defaults:
+  - s03_1_5b_50k
+  - _self_
+run: {experiment_id: W05-1.5B-50K-8GB, seed: 42, output_dir: runs/W05-1.5B-50K-8GB}
+data:
+  max_eval_examples: 1000
+lora:
+  r: 8
+  alpha: 16
+training:
+  max_length: 512
+  max_completion_tokens: 64
+

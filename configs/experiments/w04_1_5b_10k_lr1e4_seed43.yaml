@@ -1,0 +1,6 @@
+# @package _global_
+defaults:
+  - w01_1_5b_10k_lr1e4_seed42
+  - _self_
+run: {experiment_id: W04-1.5B-10K-LR1E4-S43, seed: 43, output_dir: runs/W04-1.5B-10K-LR1E4-S43}
+
