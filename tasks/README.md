@@ -35,7 +35,7 @@ uruchomiono.
 |---|---|---|---|
 | [00](00_repository_bootstrap.md) | Bootstrap repozytorium i odtwarzalność | `DONE` | Szkielet projektu, środowisko, CLI, testy i rejestrowanie są gotowe. |
 | [01](01_data_contract_audit_and_splits.md) | Kontrakt danych, audyt, deduplikacja i splity | `IMPLEMENTED` | Pełny `msmarco_pl` przetworzono do zamrożonych splitów v1 i par doc2query bez leakage pozytywów. Pozostały raport tokenowych percentyli/HTML oraz decyzja dotycząca rekordów z <10 negatywami po cleanupie. |
-| [02](02_reranker_and_reward_proxies.md) | Zamrożone rerankery i proxy nagrody | `IMPLEMENTED` | Integracja, kalibracja, reward proxies i testy są gotowe. Pozostał benchmark primary/shadow na artefaktach dev/test z Task 01 z rzeczywistym inference modeli. |
+| [02](02_reranker_and_reward_proxies.md) | Zamrożone rerankery i proxy nagrody | `IMPLEMENTED` | Integracja, kalibracja, reward proxies i testy są gotowe; szybki base-ranknet zmierzył panel 100 generacji W05. Pozostał benchmark primary/shadow na dev/test z rzeczywistym inference modeli. |
 | [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | Smoke, cztery runy Bielika 1.5B/10k i run 1.5B/50k wykonano na 8 GB; zachowane są adaptery i pełne checkpointy. Pozostały S00, intrinsic/probe z Task 04 oraz porównania 4.5B base/instruct i ordinary/balanced/weighted. |
 | [04](04_evaluation_harness.md) | Harness ewaluacyjny | `TODO` | Część infrastrukturalna może powstawać równolegle z Task 03. |
 | [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `TODO` | Wymaga Task 02–04. |

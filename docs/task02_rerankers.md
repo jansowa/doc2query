@@ -5,6 +5,12 @@ The primary judge is `sdadas/polish-reranker-roberta-v3`, pinned to commit
 Gemma license, 443M parameters, and an 8192-token context. Review the Gemma terms before use:
 <https://huggingface.co/sdadas/polish-reranker-roberta-v3>.
 
+The optional fast Polish diagnostic is `sdadas/polish-reranker-base-ranknet`, pinned to commit
+`a7c66d41a8097ca02e75616d0951c941d94ff6a1`. Its model card declares Apache-2.0, about
+0.1B parameters, and a 512-token context:
+<https://huggingface.co/sdadas/polish-reranker-base-ranknet>. It is useful for cheap panel
+inspection, but it does not replace the stronger primary judge or an independent shadow judge.
+
 The independent shadow judge is `BAAI/bge-reranker-v2-m3`, pinned to commit
 `953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e`. Its model card declares Apache-2.0 and an
 8192-token context: <https://huggingface.co/BAAI/bge-reranker-v2-m3>.

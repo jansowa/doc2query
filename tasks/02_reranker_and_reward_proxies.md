@@ -6,8 +6,9 @@
 
 `IMPLEMENTED`
 
-Benchmark na projektowych splitach dev/test oczekuje na artefakty Task 01 i
-rzeczywiste inference modeli.
+Szybki `sdadas/polish-reranker-base-ranknet` został przypięty i użyty do
+diagnostycznego scoringu panelu 100 generacji W05. Pełny benchmark primary/shadow
+na projektowych splitach dev/test nadal oczekuje na rzeczywiste inference modeli.
 
 ## Cel
 
@@ -35,7 +36,8 @@ Jako domyślnego głównego sędziego przetestuj:
 
 1. `sdadas/polish-reranker-roberta-v3` — preferowany polski baseline, długi kontekst, bez `trust_remote_code`;
 2. jeden niezależny model kontrolny, np. `BAAI/bge-reranker-v2-m3` albo inny silny wielojęzyczny reranker o zgodnej licencji;
-3. opcjonalnie drugi polski model od sdadas tylko jako dodatkowy punkt odniesienia, nie jako jedyne potwierdzenie wyników.
+3. opcjonalnie `sdadas/polish-reranker-base-ranknet` jako szybki polski model
+   diagnostyczny, nie jako zamiennik primary/shadow.
 
 Dla każdego modelu:
 

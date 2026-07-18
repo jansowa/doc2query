@@ -67,3 +67,26 @@ Artefakty są lokalne i celowo ignorowane przez Git. Minimum do zachowania:
 
 W03 fingerprint: `95736afcbd7de4e143865bc3355f869789538cee0cd94f46f0d380f97054ff56`.
 W05 fingerprint: `017a26ebcf6c5811d5c84498d44881d943c919680e9eed482a649409dfc06b73`.
+
+## Diagnostyczny scoring panelu W05
+
+Panel 100 query–pasaż oceniono modelem
+`sdadas/polish-reranker-base-ranknet` w revision
+`a7c66d41a8097ca02e75616d0951c941d94ff6a1`, z limitem 512 tokenów i
+surowym logitem (`Identity`). Wyniki nie są skalibrowanym
+prawdopodobieństwem i nie wolno ich porównywać bezpośrednio z logitami
+`sdadas/polish-reranker-roberta-v3`.
+
+- minimum: `-0.8532`;
+- mediana: `3.7889`;
+- średnia: `3.8961`;
+- maksimum: `7.9319`.
+
+Pełne, rosnąco posortowane wyniki lokalne:
+
+- `reports/W05-1.5B-50K-8GB.test-100.greedy.polish-reranker-base-ranknet.scored.jsonl`;
+- `reports/W05-1.5B-50K-8GB.test-100.greedy.polish-reranker-base-ranknet.scored.md`;
+- `reports/W05-1.5B-50K-8GB.test-100.greedy.polish-reranker-base-ranknet.report.json`.
+
+To jest szybka diagnostyka trafności źródłowego pasażu, nie pełna ewaluacja
+retrieval: nie obejmuje hard negative'ów, marginesów ani shadow judge.

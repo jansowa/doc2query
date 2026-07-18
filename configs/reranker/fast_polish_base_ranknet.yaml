@@ -1,0 +1,7 @@
+name_or_path: sdadas/polish-reranker-base-ranknet
+revision: a7c66d41a8097ca02e75616d0951c941d94ff6a1
+license: apache-2.0
+max_length: 512
+batch_size: 16
+device: cpu
+trust_remote_code: false
