@@ -61,6 +61,9 @@ def generate_panel(
                     {
                         "pair_id": record.get("pair_id"),
                         "doc_id": record.get("doc_id"),
+                        "split": record.get("split"),
+                        "passage": record.get("passage"),
+                        "prompt": prompt,
                         "reference": record.get("query"),
                         "candidate_index": candidate_index,
                         "decoding": "sampling" if config.generation.do_sample else "greedy",
