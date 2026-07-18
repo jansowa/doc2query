@@ -90,3 +90,26 @@ Pełne, rosnąco posortowane wyniki lokalne:
 
 To jest szybka diagnostyka trafności źródłowego pasażu, nie pełna ewaluacja
 retrieval: nie obejmuje hard negative'ów, marginesów ani shadow judge.
+
+Ten sam panel oceniono następnie primary judge
+`sdadas/polish-reranker-roberta-v3` w revision
+`e6471da541f4e7be33845b6d57248a8d8bde27e8`, z limitem 8192 tokenów:
+
+- minimum: `7.2237`;
+- mediana: `12.1936`;
+- średnia: `12.0387`;
+- maksimum: `16.3261`.
+
+Rozrzut obu modeli jest podobny (odchylenie standardowe `1.9730` dla base i
+`2.0690` dla v3), ale poziom bezwzględny logitów jest przesunięty i nie jest
+wspólną skalą. Korelacja Pearsona score'ów wynosi `0.6154`, a Spearmana
+rankingów `0.6298`. Dolne dziesiątki mają tylko trzy wspólne pary. V3 poprawił
+pozycje oczywiście trafnych par: marchewka/Safeway z 2. na 72., SMS Export z
+3. na 51., a CCIM z 10. na 33. pozycję rosnącą.
+
+Pełne lokalne artefakty v3 i porównania:
+
+- `reports/W05-1.5B-50K-8GB.test-100.greedy.polish-reranker-roberta-v3.scored.jsonl`;
+- `reports/W05-1.5B-50K-8GB.test-100.greedy.polish-reranker-roberta-v3.scored.md`;
+- `reports/W05-1.5B-50K-8GB.test-100.greedy.polish-reranker-roberta-v3.report.json`;
+- `reports/W05-1.5B-50K-8GB.test-100.greedy.reranker-comparison.json`.

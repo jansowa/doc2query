@@ -61,9 +61,10 @@ configuration. Passage analysis should be precomputed offline.
 
 ## Measurement status
 
-No Bielik or reranker weights were downloaded and no project benchmark was run in Task 02 because
-Task 01 data artifacts are absent. `reports/task02_status.json` records this local gate. The tracked
-`tests/fixtures/task02_holdout_lexical_report.json` records only the lexical smoke correlation. The
-regression holdout validates behavior and plumbing; it is not evidence of real judge quality. Do not
-move past the Phase A gate until both frozen judges are measured on natural dev/test and a
-human-labeled sample.
+The fast Polish diagnostic and primary judge weights were downloaded after Task 03 and used to
+score the same panel of 100 W05 generated-query/source-passage pairs. This only measures raw
+positive-pair logits; it is not the Task 02 retrieval benchmark because it has no hard-negative
+margins and no independent shadow judge. The tracked
+`tests/fixtures/task02_holdout_lexical_report.json` still records only the lexical smoke
+correlation. Do not move past the Phase A gate until both frozen primary/shadow judges are measured
+on natural dev/test and a human-labeled sample.

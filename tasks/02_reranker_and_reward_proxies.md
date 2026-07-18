@@ -6,9 +6,10 @@
 
 `IMPLEMENTED`
 
-Szybki `sdadas/polish-reranker-base-ranknet` został przypięty i użyty do
-diagnostycznego scoringu panelu 100 generacji W05. Pełny benchmark primary/shadow
-na projektowych splitach dev/test nadal oczekuje na rzeczywiste inference modeli.
+Szybki `sdadas/polish-reranker-base-ranknet` oraz primary
+`sdadas/polish-reranker-roberta-v3` zostały użyte do diagnostycznego scoringu
+panelu 100 generacji W05. Pełny benchmark primary/shadow na projektowych
+splitach dev/test nadal oczekuje na inference z hard negative'ami.
 
 ## Cel
 
