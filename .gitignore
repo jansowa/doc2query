@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
+.uv-cache/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
@@ -40,8 +41,9 @@ htmlcov/
 /huggingface/
 /transformers_cache/
 
-# Runtime reports (keep committed templates/docs)
-reports/*.json
+# Runtime reports and logs (keep committed templates/docs with git add -f)
+/logs/
+/reports/
 /runs/
 
 # Editors and OS

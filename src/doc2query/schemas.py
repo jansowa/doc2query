@@ -39,11 +39,16 @@ class DatasetColumnMapping(StrictModel):
     negative_scores: str = "neg_scores"
 
 
+class DataFilters(StrictModel):
+    min_source_en_positive_score_inclusive: float | None = None
+
+
 class DataConfig(StrictModel):
     input_path: Path | None = None
     input_format: Literal["jsonl", "parquet"] | None = None
     source: HuggingFaceDatasetSource | None = None
     columns: DatasetColumnMapping = Field(default_factory=DatasetColumnMapping)
+    filters: DataFilters = Field(default_factory=DataFilters)
     eval_path: Path | None = None
     train_split: str = "train"
     eval_split: str = "dev"

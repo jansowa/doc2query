@@ -26,6 +26,7 @@ def test_msmarco_config_pins_private_polish_source() -> None:
     assert config.data.source.config_name == "pl"
     assert config.data.source.revision == "ffcfc5fbc254bea348a7871133a6a0fa9ca21cb5"
     assert config.data.source.license_status == "missing_requires_review"
+    assert config.data.filters.min_source_en_positive_score_inclusive == 23.5
 
 
 def test_invalid_precision_fails_before_run(tmp_path: Path) -> None:
