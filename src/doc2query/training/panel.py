@@ -33,12 +33,15 @@ def generate_panel(
     with JsonlWriter(output_path) as writer, torch.inference_mode():
         for record in panel:
             prompt = render_prompt(str(record["passage"]), config.training.baseline)
-            encoded = tokenizer(
-                prompt,
-                return_tensors="pt",
-                truncation=True,
-                max_length=config.training.max_length,
-            )
+            prompt_ids = list(tokenizer.encode(prompt, add_special_tokens=False))
+            if len(prompt_ids) > config.training.max_length:
+                prefix = min(config.training.min_prompt_tokens, config.training.max_length)
+                suffix = config.training.max_length - prefix
+                prompt_ids = prompt_ids[:prefix] + (prompt_ids[-suffix:] if suffix else [])
+            encoded = {
+                "input_ids": torch.tensor([prompt_ids], dtype=torch.long),
+                "attention_mask": torch.ones((1, len(prompt_ids)), dtype=torch.long),
+            }
             device = next(model.parameters()).device
             encoded = {key: value.to(device) for key, value in encoded.items()}
             generation_kwargs: dict[str, Any] = {
