@@ -6,8 +6,19 @@
 
 `IMPLEMENTED`
 
-End-to-end smoke test jest zweryfikowany; pełne przetworzenie `msmarco_pl` nie
-zostało jeszcze uruchomione.
+End-to-end smoke test i pełne przetworzenie `msmarco_pl` są zweryfikowane.
+Z 388 699 rekordów źródłowych adapter po jawnym filtrze
+`pos_score >= 23.50` zapisał 325 811 rekordów, a walidacja zaakceptowała
+325 451. Zamrożone splity v1 zawierają 292 907/16 272/16 272 rekordów
+train/dev/test, mają zero leakage pozytywnych dokumentów i zostały odwrócone
+do 384 576/21 241/21 276 par doc2query.
+
+Zadanie pozostaje `IMPLEMENTED`, a nie `DONE`, ponieważ nie wykonano jeszcze
+raportu `data_audit.json/html` z percentylami trzech tokenizerów. Cleanup
+cross-split negative'ów pozostawił mniej niż dziesięć negatywów w
+29 048/9 674/9 640 rekordach train/dev/test; przed benchmarkami wymagającymi
+10+ negatywów trzeba je odfiltrować lub jawnie uzupełnić. Artefakty danych są
+lokalne i nie należą do Git.
 
 ## Cel
 

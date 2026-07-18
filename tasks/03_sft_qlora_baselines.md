@@ -6,19 +6,18 @@
 
 `IMPLEMENTED`
 
-Implementacja pipeline'u, konfiguracji S00–S05, skryptów, testów i lokalnego
-20-krokowego tiny-model smoke testu jest gotowa. Smoke zakończył 20/20 kroków,
-zapisał adapter, checkpointy, panel i manifest; loss spadł z 3.6278 do 3.5736,
-a eval loss wyniósł 3.5735. Jest to wyłącznie test mechaniki na losowym małym
-modelu, nie wynik jakościowy Bielika. Trening wspiera `--resume-if-available`,
-automatyczny wybór ostatniego kompletnego checkpointu oraz walidację podpisu
-modelu, danych i ustawień runu przed wznowieniem.
+Implementacja pipeline'u, konfiguracji S00–S05, skryptów, testów i wznowienia
+jest gotowa. Na RTX 3060 Ti 8 GB wykonano memory probe 512, 20-krokowy smoke,
+cztery runy Bielika 1.5B na 10 tys. par oraz jeden run na 50 tys. par. Wszystkie
+zakończyły się bez OOM i zachowały końcowy adapter oraz dwa pełne checkpointy.
+Wśród runów 10k najniższy eval loss uzyskał LR `2e-4` (1.2505); run 50k z LR
+`1e-4` uzyskał 1.1457. Pełny raport i ograniczenia znajdują się w
+[`docs/experiments/task03_8gb_weekend_2026-07-17.md`](../docs/experiments/task03_8gb_weekend_2026-07-17.md).
 
-Pozostały wymagane runy badawcze: S00 na 5k z intrinsic evaluation z Task 04,
-S01–S03 na Bieliku 1.5B, memory probe 512/768/1024 i potwierdzenie użytecznego
-configu 4.5B poniżej 16 GB, porównanie base/instruct S04, ordinary/balanced/
-weighted S05 oraz tabela z metrykami intrinsic i probe-embeddera. Do czasu ich
-wykonania zadanie nie spełnia statusu `DONE` i nie otwiera bramki DPO.
+Zadanie pozostaje `IMPLEMENTED`, ponieważ loss i panel nie otwierają bramki
+jakościowej. Pozostały: S00, memory probe 768/1024, intrinsic i probe embedder
+z Task 04, 4.5B base vs instruct oraz ordinary/balanced/weighted. Do czasu tych
+pomiarów nie ma podstaw do przejścia do DPO.
 
 ## Cel
 

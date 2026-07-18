@@ -12,6 +12,7 @@ def set_seed(seed: int, *, deterministic: bool = True) -> None:
     if not 0 <= seed <= 2**32 - 1:
         raise ValueError("seed must be between 0 and 2**32 - 1")
     os.environ["PYTHONHASHSEED"] = str(seed)
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
