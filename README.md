@@ -86,6 +86,10 @@ kompatybilnościowym stubem, który waliduje config,
 ale zawsze odmawia treningu. Zgodnie z `AGENTS.md` task 02 integruje wyłącznie
 zamrożone modele primary/shadow oraz implementuje ich benchmark i kalibrację.
 
+Harness Task 04, zamrażanie fingerprintów testu, jedno-komendową ewaluację
+generatora, probe embedder, bootstrap i ślepy panel A/B opisuje
+[dokumentacja ewaluacji](docs/task04_evaluation.md).
+
 Każdy przyszły run powinien utworzyć lokalny `run_manifest.json`, niezależnie od
 trackingu online.
 

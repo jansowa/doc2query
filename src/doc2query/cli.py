@@ -10,6 +10,8 @@ from rich.console import Console
 
 from doc2query.config import load_config
 from doc2query.data.validate import ValidationPolicy, validate_dataset
+from doc2query.evaluation.embedder_probe import ProbeRecipe, run_probe_experiment
+from doc2query.evaluation.generator import run_checkpoint_evaluation
 from doc2query.training.sft import run_sft
 from doc2query.utils.hardware import collect_hardware_report, write_hardware_report
 
@@ -152,17 +154,79 @@ def train_grpo(config: ConfigPath) -> None:
 @evaluate_app.command("generator")
 def evaluate_generator(
     config: ConfigPath,
+    frozen_manifest: Annotated[
+        Path, typer.Option("--frozen-manifest", exists=True, dir_okay=False)
+    ],
+    output_dir: Annotated[Path, typer.Option("--output-dir")],
+    subset: Annotated[str, typer.Option("--subset")] = "test_generator_panel_rank10",
+    adapter: Annotated[Path | None, typer.Option("--adapter", exists=True)] = None,
+    primary_judge: Annotated[
+        Path | None, typer.Option("--primary-judge", exists=True, dir_okay=False)
+    ] = None,
+    shadow_judge: Annotated[
+        Path | None, typer.Option("--shadow-judge", exists=True, dir_okay=False)
+    ] = None,
+    judge_device: Annotated[str | None, typer.Option("--judge-device")] = None,
+    max_examples: Annotated[int | None, typer.Option("--max-examples", min=1)] = None,
+    generations: Annotated[
+        Path | None, typer.Option("--generations", exists=True, dir_okay=False)
+    ] = None,
+    generation_only: Annotated[bool, typer.Option("--generation-only")] = False,
 ) -> None:
-    """Evaluate a generator (implemented by task 04)."""
-    _pending(config, "evaluation.generator")
+    """Generate deterministic/diverse queries, score, slice and report a checkpoint."""
+    result = run_checkpoint_evaluation(
+        config,
+        frozen_manifest=frozen_manifest,
+        subset=subset,
+        output_dir=output_dir,
+        adapter_path=adapter,
+        primary_config=primary_judge,
+        shadow_config=shadow_judge,
+        judge_device=judge_device,
+        max_examples=max_examples,
+        generations_path=generations,
+        generation_only=generation_only,
+    )
+    console.print_json(json.dumps(result))
 
 
 @evaluate_app.command("embedder")
 def evaluate_embedder(
     config: ConfigPath,
+    frozen_manifest: Annotated[
+        Path, typer.Option("--frozen-manifest", exists=True, dir_okay=False)
+    ],
+    recipe_path: Annotated[Path, typer.Option("--recipe", exists=True, dir_okay=False)],
+    output_dir: Annotated[Path, typer.Option("--output-dir")],
+    query_source: Annotated[str, typer.Option("--query-source")] = "natural",
+    test_subset: Annotated[str, typer.Option("--test-subset")] = "test_embedder_rank10",
+    synthetic_generations: Annotated[
+        Path | None, typer.Option("--synthetic-generations", exists=True, dir_okay=False)
+    ] = None,
+    train_limit: Annotated[int | None, typer.Option("--train-limit", min=1)] = None,
 ) -> None:
-    """Evaluate a probe embedder (implemented by task 04)."""
-    _pending(config, "evaluation.embedder")
+    """Train the frozen-budget probe and evaluate natural-query retrieval."""
+    import yaml
+
+    parsed = load_config(config)
+    if parsed.data.input_path is None:
+        raise typer.BadParameter("probe training requires a local data.input_path")
+    raw = yaml.safe_load(recipe_path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise typer.BadParameter("probe recipe must be a YAML mapping")
+    if query_source not in {"natural", "copy_control", "synthetic"}:
+        raise typer.BadParameter("query-source must be natural, copy_control, or synthetic")
+    result = run_probe_experiment(
+        train_path=parsed.data.input_path,
+        frozen_manifest=frozen_manifest,
+        test_subset=test_subset,
+        output_dir=output_dir,
+        recipe=ProbeRecipe(**raw),
+        query_source=query_source,  # type: ignore[arg-type]
+        synthetic_generations=synthetic_generations,
+        train_limit=train_limit,
+    )
+    console.print_json(json.dumps(result))
 
 
 if __name__ == "__main__":

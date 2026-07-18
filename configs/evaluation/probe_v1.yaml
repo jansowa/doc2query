@@ -1,0 +1,12 @@
+# Frozen comparison recipe. Smoke runs must use a separate output and be labelled non-comparable.
+model_name_or_path: sdadas/polish-reranker-base-ranknet
+revision: a7c66d41a8097ca02e75616d0951c941d94ff6a1
+max_length: 192
+batch_size: 8
+max_steps: 1000
+learning_rate: 0.00002
+warmup_ratio: 0.05
+seed: 42
+negatives_per_example: 1
+normalize_embeddings: true
+loss: in_batch_cross_entropy_with_paired_hard_negative

@@ -4,7 +4,21 @@
 
 ## Status
 
-`TODO`
+`IMPLEMENTED`
+
+Centralny harness, zamrożone manifesty/ID, metryki i slice’y, raporty
+HTML/Markdown, ślepy eksport A/B, bootstrap oraz zamrożona recepta probe
+embeddera są zaimplementowane i przetestowane. Na lokalnej karcie 8 GB
+rzeczywiście oceniono W03 i W05 w trybie deterministic oraz diverse na tym samym
+zamrożonym panelu 100 rekordów z co najmniej 10 hard negative’ami; wykonano też
+nieporównywalny 2-step smoke probe’a.
+
+Pozostają pełne, porównywalne runy probe natural/copy/W03/W05, niezależny BGE
+shadow judge, embeddingowe miary diversity, oceny ludzi dla co najmniej 300
+przypadków, pełny test rank10/embedder i S00 prompting baseline. Bez tych
+pomiarów bramka Fazy B i główny ranking generatorów nie są zamknięte. Rzeczywisty
+zakres, fingerprinty, wyniki i 95% CI opisuje
+`docs/experiments/task04_8gb_evaluation_2026-07-18.md`.
 
 ## Cel
 

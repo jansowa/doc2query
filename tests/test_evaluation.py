@@ -1,0 +1,240 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from doc2query.evaluation.bootstrap import assert_same_test_fingerprint, paired_bootstrap
+from doc2query.evaluation.comparison import rank_variants
+from doc2query.evaluation.datasets import (
+    evaluation_fingerprint,
+    freeze_evaluation_sets,
+    load_frozen_records,
+    verify_frozen_manifest,
+)
+from doc2query.evaluation.diversity import diversity_metrics
+from doc2query.evaluation.embedder_probe import prepare_probe_pairs
+from doc2query.evaluation.format import format_metrics
+from doc2query.evaluation.human import cohen_kappa, fleiss_kappa
+from doc2query.evaluation.intrinsic import evaluate_intrinsic_records
+from doc2query.evaluation.retrieval import (
+    distribution,
+    metrics_from_positive_ranks,
+    metrics_from_rank,
+    ndcg,
+)
+from doc2query.evaluation.slices import aggregate_slices
+from doc2query.utils.records import JsonlWriter
+
+
+def _canonical(identifier: str, negative_count: int = 10) -> dict[str, Any]:
+    return {
+        "example_id": identifier,
+        "query": "Gdzie leży Warszawa?",
+        "positives": [
+            {
+                "doc_id": f"p-{identifier}",
+                "text": "Warszawa jest stolicą Polski. Miasto leży nad Wisłą.",
+                "metadata": {},
+            }
+        ],
+        "hard_negatives": [
+            {
+                "doc_id": f"n-{identifier}-{index}",
+                "text": f"Kraków ma zabytek numer {index}.",
+                "metadata": {},
+            }
+            for index in range(negative_count)
+        ],
+        "metadata": {"source": "fixture", "split": "test"},
+    }
+
+
+def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+    with JsonlWriter(path) as writer:
+        for row in rows:
+            writer.write(row)
+
+
+def test_freeze_and_verify_rank10_subset(tmp_path: Path) -> None:
+    dev, test, adversarial = tmp_path / "dev.jsonl", tmp_path / "test.jsonl", tmp_path / "adv.jsonl"
+    _write_jsonl(dev, [_canonical("d1"), _canonical("d2", 9)])
+    _write_jsonl(test, [_canonical("t1"), _canonical("t2", 9)])
+    _write_jsonl(adversarial, [{"case_id": "a1", "passage": "A", "query": "Q"}])
+    (tmp_path / "split_manifest.json").write_text("{}\n", encoding="utf-8")
+    output = tmp_path / "frozen"
+    manifest = freeze_evaluation_sets(
+        dev_path=dev,
+        test_path=test,
+        adversarial_path=adversarial,
+        output_dir=output,
+        human_panel_size=1,
+        generation_panel_size=1,
+    )
+    rank10 = manifest["sets"]["test_intrinsic_rank10"]
+    assert rank10["id_count"] == 1
+    assert rank10["excluded_count"] == 1
+    assert len(load_frozen_records(output / "manifest.json", "test_intrinsic_rank10")) == 1
+    assert verify_frozen_manifest(output / "manifest.json")["verified"]["test_embedder"] == 2
+    assert len(evaluation_fingerprint(output / "manifest.json", "test_intrinsic")) == 64
+    with pytest.raises(FileExistsError):
+        freeze_evaluation_sets(
+            dev_path=dev,
+            test_path=test,
+            adversarial_path=adversarial,
+            output_dir=output,
+        )
+
+
+def test_frozen_set_detects_id_tampering(tmp_path: Path) -> None:
+    source = tmp_path / "test.jsonl"
+    _write_jsonl(source, [_canonical("x")])
+    _write_jsonl(tmp_path / "adv.jsonl", [{"case_id": "a", "passage": "a", "query": "q"}])
+    (tmp_path / "split_manifest.json").write_text("{}\n", encoding="utf-8")
+    output = tmp_path / "frozen"
+    freeze_evaluation_sets(
+        dev_path=source,
+        test_path=source,
+        adversarial_path=tmp_path / "adv.jsonl",
+        output_dir=output,
+        human_panel_size=1,
+        generation_panel_size=1,
+    )
+    (output / "test_intrinsic.ids.jsonl").write_text('{"id":"changed"}\n', encoding="utf-8")
+    with pytest.raises(RuntimeError, match="ID-list"):
+        load_frozen_records(output / "manifest.json", "test_intrinsic")
+
+
+def test_known_retrieval_rankings() -> None:
+    first = metrics_from_rank(1, 11)
+    third = metrics_from_rank(3, 11)
+    assert first["mrr"] == 1.0
+    assert third["mrr"] == pytest.approx(1 / 3)
+    assert third["recall_at_1"] == 0.0
+    assert third["recall_at_5"] == 1.0
+    assert third["ndcg_at_10"] == pytest.approx(1 / 2)
+    assert ndcg([0, 1, 0], 10) == pytest.approx(1 / 1.584962500721156)
+    multi = metrics_from_positive_ranks([1, 3], candidate_count=1000, hard_negative_win_rate=0.75)
+    assert multi["recall_at_1"] == 0.5
+    assert multi["recall_at_5"] == 1.0
+    assert multi["map"] == pytest.approx((1 + 2 / 3) / 2)
+    assert multi["hard_negative_win_rate"] == 0.75
+
+
+def test_duplicates_have_expected_diversity_penalty() -> None:
+    duplicate = diversity_metrics(["pompa ciepła", "pompa ciepła"])
+    diverse = diversity_metrics(["pompa ciepła", "stolica Polski"])
+    assert duplicate["duplicate_rate"] == 0.5
+    assert duplicate["distinct_1"] < diverse["distinct_1"]
+    assert duplicate["mean_pairwise_lemma_jaccard"] == 1.0
+    assert duplicate["mean_pairwise_embedding_cosine"] is None
+
+
+def test_bootstrap_is_seeded_and_fingerprint_safe() -> None:
+    left = {"a": 0.0, "b": 1.0, "c": 0.0}
+    right = {"a": 1.0, "b": 1.0, "c": 1.0}
+    first = paired_bootstrap(left, right, samples=100, seed=7)
+    assert first == paired_bootstrap(left, right, samples=100, seed=7)
+    assert first["difference"] == pytest.approx(2 / 3)
+    assert_same_test_fingerprint({"test_fingerprint": "x"}, {"test_fingerprint": "x"})
+    with pytest.raises(ValueError, match="fingerprint"):
+        assert_same_test_fingerprint({"test_fingerprint": "x"}, {"test_fingerprint": "y"})
+
+
+def test_slices_sum_and_missing_is_not_zero() -> None:
+    rows = [
+        {"score": 1.0, "missing": None, "slices": {"domain": "a"}},
+        {"score": 0.0, "missing": None, "slices": {"domain": "b"}},
+    ]
+    result = aggregate_slices(rows, slice_fields=["domain"], metric_fields=["score", "missing"])
+    assert sum(value["count"] for value in result["domain"].values()) == len(rows)
+    assert result["domain"]["a"]["metrics"]["missing"] is None
+    assert distribution([]) is None
+
+
+def test_format_and_agreement_metrics() -> None:
+    assert format_metrics("Jak działa pompa ciepła?")["format_valid"]
+    assert not format_metrics("Zapytanie: Jak działa pompa?")["format_valid"]
+    assert format_metrics('["a", "b"]', multi_query_json=True)["json_valid"]
+    assert cohen_kappa(["a", "b"], ["a", "b"]) == 1.0
+    assert fleiss_kappa([["a", "a"], ["b", "b"]]) == 1.0
+
+
+def test_probe_controls_keep_sampling_identical(tmp_path: Path) -> None:
+    records = [_canonical("1"), _canonical("2")]
+    natural, natural_hash = prepare_probe_pairs(records, query_source="natural")
+    copied, copied_hash = prepare_probe_pairs(records, query_source="copy_control")
+    assert natural_hash != copied_hash
+    assert [row["positive"] for row in natural] == [row["positive"] for row in copied]
+    assert [row["negative"] for row in natural] == [row["negative"] for row in copied]
+    generations = tmp_path / "generated.jsonl"
+    _write_jsonl(
+        generations,
+        [
+            {
+                "example_id": "1",
+                "mode": "deterministic",
+                "candidate_index": 0,
+                "generated": "syntetyczne pytanie",
+            }
+        ],
+    )
+    synthetic, _ = prepare_probe_pairs(
+        records, query_source="synthetic", synthetic_generations=generations
+    )
+    assert len(synthetic) == 1
+    assert synthetic[0]["positive"] == natural[0]["positive"]
+    assert synthetic[0]["negative"] == natural[0]["negative"]
+
+
+def test_ranking_requires_probe_metric() -> None:
+    intrinsic_only = {"experiment_id": "reward-winner", "reward": 100.0}
+    probe = {
+        "experiment_id": "probe",
+        "probe_embedder": {"ndcg_at_10": 0.4, "mrr_at_10": 0.5},
+    }
+    assert rank_variants([intrinsic_only, probe]) == [probe]
+
+
+class _OverlapScorer:
+    name = "fixture-overlap"
+
+    def score_pairs(self, pairs: Any) -> list[float]:
+        result = []
+        for query, passage in pairs:
+            query_tokens = set(str(query).lower().split())
+            passage_tokens = set(str(passage).lower().split())
+            result.append(float(len(query_tokens & passage_tokens)))
+        return result
+
+
+def test_intrinsic_smoke_writes_null_for_unmeasured(tmp_path: Path) -> None:
+    source = _canonical("1")
+    generation = {
+        "evaluation_id": "1::deterministic::0",
+        "experiment_id": "fixture",
+        "example_id": "1",
+        "mode": "deterministic",
+        "candidate_index": 0,
+        "generated": "Gdzie leży Warszawa?",
+        "reference": source["query"],
+        "positive": source["positives"][0],
+        "hard_negatives": source["hard_negatives"],
+        "positive_count": 1,
+        "metadata": source["metadata"],
+    }
+    summary = evaluate_intrinsic_records(
+        [generation],
+        primary=_OverlapScorer(),
+        shadow=None,
+        output_dir=tmp_path,
+        test_fingerprint="f" * 64,
+        experiment_id="fixture",
+    )
+    assert summary["generation_count"] == 1
+    assert summary["judges"]["shadow_status"] == "not_measured"
+    assert summary["focus"]["control_accuracy"] is None
+    assert summary["diversity"]["semantic_cluster_count"] is None
+    assert json.loads((tmp_path / "summary.json").read_text())["test_fingerprint"] == "f" * 64
