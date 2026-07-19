@@ -61,6 +61,10 @@ Kolejka, konfiguracje i testy wznowienia są gotowe, ale nowych runów nie
 uruchomiono w tej sesji. Nie wybiera ona finalisty ani nie zastępuje P-04
 i porównywalnego probe. Plan:
 [`task03_base_1_5b_campaign_queue.md`](../docs/experiments/task03_base_1_5b_campaign_queue.md).
+Runner nie używa CPU-only `.venv`: automatycznie tworzy lub naprawia
+projektowe `.venv-gpu` z przypiętym, odtworzonym z udanych runów stosem
+CUDA 12.4. Można też jawnie podać `DOC2QUERY_PYTHON`. Preflight raportuje
+osobno CPU build Torch i brak CUDA w wybranym procesie.
 
 ## Cel
 

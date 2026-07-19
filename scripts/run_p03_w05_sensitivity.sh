@@ -28,6 +28,7 @@ esac
 mkdir -p "$TMPDIR" "$ROOT/logs"
 
 MODE=()
+PYTHON="${DOC2QUERY_PYTHON:-}"
 case "${1:-}" in
   "")
     ;;
@@ -40,7 +41,8 @@ case "${1:-}" in
     shift
     ;;
   --help|-h)
-    exec "$ROOT/.venv/bin/python" scripts/p03_w05_sensitivity.py --help
+    PYTHON="${PYTHON:-$ROOT/.venv/bin/python}"
+    exec "$PYTHON" scripts/p03_w05_sensitivity.py --help
     ;;
   *)
     echo "usage: $0 [--dry-run|--smoke|--help]" >&2
@@ -52,7 +54,19 @@ if (($#)); then
   exit 2
 fi
 
-exec "$ROOT/.venv/bin/python" scripts/p03_w05_sensitivity.py \
+if [[ -z "$PYTHON" ]]; then
+  if bash scripts/bootstrap_gpu_env.sh --check >/dev/null 2>&1; then
+    PYTHON="$ROOT/.venv-gpu/bin/python"
+  else
+    PYTHON="$ROOT/.venv/bin/python"
+  fi
+fi
+if [[ ! -x "$PYTHON" ]]; then
+  echo "P-03 BLOCKED: selected Python is not executable: $PYTHON" >&2
+  exit 2
+fi
+
+exec "$PYTHON" scripts/p03_w05_sensitivity.py \
   --root "$ROOT" \
   --config configs/evaluation/p03_w05_sensitivity.yaml \
   "${MODE[@]}"

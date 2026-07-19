@@ -59,7 +59,7 @@ case "${1:-}" in
     exit 0
     ;;
   --dry-run)
-    .venv/bin/python - "${configs[@]}" <<'PY'
+    "${DOC2QUERY_PYTHON:-.venv/bin/python}" - "${configs[@]}" <<'PY'
 import sys
 from pathlib import Path
 from doc2query.config import load_config
@@ -109,6 +109,26 @@ record_step() {
   return "$rc"
 }
 
+if [[ -n "${DOC2QUERY_PYTHON:-}" ]]; then
+  PYTHON="$DOC2QUERY_PYTHON"
+  if [[ ! -x "$PYTHON" ]]; then
+    echo "Campaign blocked: DOC2QUERY_PYTHON is not executable: $PYTHON" >&2
+    exit 2
+  fi
+else
+  if ! record_step gpu-environment bash scripts/bootstrap_gpu_env.sh; then
+    tail -n 20 "$LOG" >&2
+    exit 2
+  fi
+  PYTHON="$ROOT/.venv-gpu/bin/python"
+fi
+export DOC2QUERY_PYTHON="$PYTHON"
+HF_CLI="$(dirname "$PYTHON")/hf"
+if [[ ! -x "$HF_CLI" ]]; then
+  echo "Campaign blocked: Hugging Face CLI is absent next to $PYTHON." >&2
+  exit 2
+fi
+
 ensure_snapshot() {
   local repo="$1"
   local revision="$2"
@@ -129,7 +149,7 @@ ensure_snapshot() {
     printf '[%s] DOWNLOAD %s@%s into project cache\n' \
       "$(date --iso-8601=seconds)" "$repo" "$revision" | tee -a "$LOG"
     HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 \
-      .venv/bin/hf download "$repo" \
+      "$HF_CLI" download "$repo" \
       --revision "$revision" \
       --cache-dir "$HF_HUB_CACHE" \
       --quiet >>"$LOG" 2>&1
@@ -141,8 +161,14 @@ ensure_snapshot() {
 }
 
 if ! record_step gpu-preflight \
-  .venv/bin/python -c \
-  'import torch; assert torch.cuda.is_available(); print(torch.__version__, torch.cuda.get_device_name(0), torch.cuda.get_device_properties(0).total_memory)'; then
+  "$PYTHON" -c \
+  'import torch
+if torch.version.cuda is None:
+    raise SystemExit("GPU preflight blocked: selected Python has a CPU-only Torch build.")
+if not torch.cuda.is_available():
+    raise SystemExit("GPU preflight blocked: CUDA Torch is installed, but CUDA is unavailable in this process.")
+print(torch.__version__, torch.cuda.get_device_name(0), torch.cuda.get_device_properties(0).total_memory)'; then
+  tail -n 20 "$LOG" >&2
   exit 2
 fi
 
@@ -169,7 +195,7 @@ record_step p03-w05-sensitivity \
 
 # Required technical memory measurements, safe to repeat after interruption.
 record_step memory-probe-768-1024 \
-  .venv/bin/python scripts/run_memory_probe.py \
+  "$PYTHON" scripts/run_memory_probe.py \
   --config configs/experiments/s01_1_5b_8gb_smoke.yaml \
   --lengths 768 1024 \
   --steps 2 \
@@ -180,7 +206,7 @@ record_step memory-probe-768-1024 \
 # ablations against W03. They are not ranked here and do not open final tests.
 for config in "${configs[@]}"; do
   record_step "train-$(basename "$config" .yaml)" \
-    .venv/bin/python scripts/train_sft.py \
+    "$PYTHON" scripts/train_sft.py \
     --config "$config" \
     --resume-if-available
 done

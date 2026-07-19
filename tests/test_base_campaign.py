@@ -70,9 +70,13 @@ def test_base_campaign_configs_are_pinned_single_factor_runs() -> None:
 
 
 def test_base_campaign_help_dry_run_and_order() -> None:
-    for argument in ("--help", "--dry-run"):
+    for script, argument in (
+        ("scripts/run_base_1_5b_campaign.sh", "--help"),
+        ("scripts/run_base_1_5b_campaign.sh", "--dry-run"),
+        ("scripts/bootstrap_gpu_env.sh", "--help"),
+    ):
         result = subprocess.run(
-            ["bash", "scripts/run_base_1_5b_campaign.sh", argument],
+            ["bash", script, argument],
             check=False,
             capture_output=True,
             text=True,
@@ -83,6 +87,25 @@ def test_base_campaign_help_dry_run_and_order() -> None:
     memory = source.index("record_step memory-probe-768-1024")
     first_training = source.index('for config in "${configs[@]}"')
     assert p03 < memory < first_training
+
+
+def test_base_campaign_uses_pinned_project_gpu_environment() -> None:
+    constraints = Path("configs/environment/gpu-cu124.constraints.txt").read_text(encoding="utf-8")
+    assert constraints.splitlines()[1:] == [
+        "torch==2.6.0",
+        "transformers==5.13.1",
+        "peft==0.19.1",
+        "trl==0.29.1",
+        "bitsandbytes==0.49.2",
+    ]
+    bootstrap = Path("scripts/bootstrap_gpu_env.sh").read_text(encoding="utf-8")
+    assert 'GPU_VENV="${DOC2QUERY_GPU_VENV:-$ROOT/.venv-gpu}"' in bootstrap
+    assert "--torch-backend cu124" in bootstrap
+    assert "--no-sources" in bootstrap
+    campaign = Path("scripts/run_base_1_5b_campaign.sh").read_text(encoding="utf-8")
+    assert "record_step gpu-environment bash scripts/bootstrap_gpu_env.sh" in campaign
+    assert 'export DOC2QUERY_PYTHON="$PYTHON"' in campaign
+    assert ".venv/bin/python scripts/train_sft.py" not in campaign
 
 
 def test_memory_probe_reuses_completed_measurement(tmp_path: Path) -> None:

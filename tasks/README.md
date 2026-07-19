@@ -73,9 +73,12 @@ backlogiem. Zakres P-xx został przeniesiony do wskazanych plików zadań.
 Najbliższy jednoznaczny punkt wejścia dla kolejnej sesji to legalne
 uzupełnienie projektowego cache o przypięte modele, a następnie uruchomienie
 `HF_HOME="$PWD/.cache/huggingface" UV_CACHE_DIR="$PWD/.uv-cache"
-CUDA_VISIBLE_DEVICES=0 bash scripts/run_p03_w05_sensitivity.sh`. Runner
-materializuje train-query W05 i wykonuje wyłącznie diagnostyczny
-HN0/HN0+filter/HN1. Szczegóły i warunki są w
+CUDA_VISIBLE_DEVICES=0 bash scripts/run_base_1_5b_campaign.sh`. Kolejka
+automatycznie tworzy projektowe `.venv-gpu` z przypiętym CUDA Torch, pobiera
+legalnie dostępne przypięte snapshoty, materializuje train-query W05 i
+wykonuje wyłącznie diagnostyczny HN0/HN0+filter/HN1 przed technicznymi runami
+base 1.5B. CPU-only `.venv` pozostaje środowiskiem testowym. Szczegóły i
+warunki są w
 [`Task 04`](04_evaluation_harness.md) oraz blockerze
 `reports/blockers/task04_p03_w05_sensitivity.md`. P-04 i porównawcze probe
 pozostają po tej bramce.

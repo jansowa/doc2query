@@ -1,0 +1,6 @@
+# Reproduce the GPU stack recorded by the completed W03/W05/W06 runs.
+torch==2.6.0
+transformers==5.13.1
+peft==0.19.1
+trl==0.29.1
+bitsandbytes==0.49.2

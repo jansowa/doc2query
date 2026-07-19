@@ -59,6 +59,18 @@ CUDA_VISIBLE_DEVICES=0 \
 bash scripts/run_base_1_5b_campaign.sh
 ```
 
+The first real invocation creates or repairs `.venv-gpu` on the project
+partition. It pins the same CUDA stack recorded by the completed W03/W05/W06
+runs (`torch 2.6.0+cu124`, Transformers 5.13.1, PEFT 0.19.1, TRL 0.29.1 and
+bitsandbytes 0.49.2). The regular `.venv` intentionally remains CPU-only for
+tests and must not be used for campaign training. Package downloads and the
+environment stay under the project through `UV_CACHE_DIR` and `.venv-gpu`.
+
+An already prepared CUDA interpreter can be selected explicitly with
+`DOC2QUERY_PYTHON=/absolute/path/to/python`. The GPU preflight distinguishes a
+CPU-only Torch build from a CUDA runtime unavailable to the selected process
+and prints the diagnostic tail immediately on failure.
+
 Interrupting the foreground command is safe. Re-running the same command
 resumes P-03 generation/probe training, completed memory probes and the latest
 compatible SFT checkpoint. The queue lock prevents two concurrent owners.
