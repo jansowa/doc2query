@@ -1,0 +1,13 @@
+{
+  "artifact_fingerprint": "26e435e1d0413dc92e151a02e46f752747ecbdb0df20399318fc2c03223b0abd",
+  "artifact_id": "train-corpus-v1",
+  "document_count": 2211463,
+  "document_index_sha256": "9b80fbe336ff7254f0fa38d3dcac4271371673f43bb73c50b43731d17eecb13b",
+  "documents_sha256": "d22f734a860c833f05104f005fb0061d732e17fa40e9debd11e61ef1f17b658f",
+  "ordered_doc_ids_sha256": "53c4c68bd130e979471defeecc82e3b56065d6b47038d59a30a27ddb9f7c1f2e",
+  "query_count": 292907,
+  "schema_version": 1,
+  "split": "train",
+  "tests_included": [],
+  "train_input_sha256": "154a490b471b6641bc25479d9ab0a57f68ea4e7b07d5d056cbaf94361ccb1be5"
+}

@@ -1,0 +1,26 @@
+{
+  "average_document_length": 33.90394548767038,
+  "backend": "bm25_sqlite",
+  "candidate_count": 2211463,
+  "config": {
+    "ambiguity_candidate_threshold": 20,
+    "b": 0.75,
+    "k1": 1.2,
+    "relevance_score_threshold": 1.0
+  },
+  "database_file": "index.sqlite",
+  "database_sha256": "4f52f2140187360b42345cd112c19bdc09a6067d7414c8236c546d2a6299b27b",
+  "document_fingerprint": "9511a1a948a06a9fc41121be87bd4a6d11238c9960eb55dd72c027bf6944c1f6",
+  "documents_path": "/media/jsowa/6aaaf1ac-2d6f-44c6-9a39-a59761abdadf/work/doc2query/artifacts/task04/p03/train_corpus/documents.parquet",
+  "documents_sha256": "d22f734a860c833f05104f005fb0061d732e17fa40e9debd11e61ef1f17b658f",
+  "implementation_license": "project-internal",
+  "index_fingerprint": "e5df243227e8e877550c283e2f7c882fa931ee38d849d39e8f2e2a51dc182119",
+  "normalizer": {
+    "backend": "spacy_pl",
+    "model_name": "pl_core_news_lg",
+    "namespace": "spacy_pl:pl_core_news_lg:3.8.0:v1"
+  },
+  "normalizer_namespace": "spacy_pl:pl_core_news_lg:3.8.0:v1",
+  "protocol": "corpus_retrieval",
+  "schema_version": 1
+}

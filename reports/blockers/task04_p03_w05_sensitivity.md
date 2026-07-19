@@ -1,6 +1,6 @@
 # Task 04 P-03 — blocker W05 sensitivity check
 
-Status: `BLOCKED` (diagnostic run not started)
+Status: `BLOCKED` (calibration and BM25 ready; W05 train generations absent)
 
 Date of audit: 2026-07-19
 
@@ -10,7 +10,58 @@ This blocker applies only to the one-time diagnostic comparison
 `W05: HN0 vs HN0+filter vs HN1 BM25`. It is not a generator comparison,
 final result, P-04 run, or full HN0–HN3 campaign.
 
-## Evidence found in the repository
+## Resolved prerequisites
+
+The two original artifact blockers are resolved without opening any final test:
+
+- frozen-dev calibration:
+  - artifact ID `pfn-dev-v1-b455711ec36526b2`;
+  - fingerprint
+    `9ee4280f18e684b0dc3bb7fd885801b5ae8821af758e2845ab349c559613b3f4`;
+  - threshold `8.617486953735352`, selected by the query-macro Youden-J maximum
+    with a conservative highest-threshold tie break;
+  - 16,272 dev queries, 21,241 known-positive pairs and 145,441 inherited
+    hard-negative pairs;
+  - final tests used for tuning: none.
+- frozen train corpus:
+  - artifact ID `train-corpus-v1`;
+  - fingerprint
+    `26e435e1d0413dc92e151a02e46f752747ecbdb0df20399318fc2c03223b0abd`;
+  - 2,211,463 unique documents referenced by canonical train records.
+- P-01 BM25 over that train corpus:
+  - index fingerprint
+    `e5df243227e8e877550c283e2f7c882fa931ee38d849d39e8f2e2a51dc182119`;
+  - SQLite integrity check: `ok`;
+  - normalizer `pl_core_news_lg==3.8.0`;
+  - 2,211,463 documents and 1,129,538 terms.
+
+The calibration and BM25 fingerprints are pinned in
+`configs/evaluation/probe_v1.yaml`.
+
+## Remaining blocker found by W05 preflight
+
+The diagnostic run still cannot start:
+
+- `reports/evaluation/W05-1.5B-50K-8GB/generations.jsonl` contains 100 unique
+  example IDs from the frozen test panel and has zero intersection with
+  canonical train IDs;
+- `runs/W05-1.5B-50K-8GB/panel_generations.jsonl` likewise has zero train-ID
+  coverage;
+- `train_probe_embedder.py --query-source synthetic` requires generated
+  queries keyed by train `example_id`; supplying either existing file would
+  produce zero training pairs;
+- the W05 adapter and checkpoint are present, but the pinned
+  `speakleash/Bielik-1.5B-v3` base weights are not present in the project-local
+  Hugging Face cache, so the missing train generations cannot be recreated
+  offline in this session.
+
+Using `test_native_pl`, the translated final test panel, the W05 test
+generations, or natural queries as a substitute would invalidate the
+sensitivity check. No such substitution was made.
+The file hashes and intersection counts are frozen in
+`reports/measurements/task04_p03_w05_preflight.json`.
+
+## Historical evidence
 
 - `configs/evaluation/probe_v1.yaml` previously selected one inherited
   negative by a deterministic hash but had no false-negative policy,
@@ -28,7 +79,7 @@ final result, P-04 run, or full HN0–HN3 campaign.
 - The W05 generator checkpoint/generations and frozen data splits are present,
   but they do not remove the two blockers above.
 
-## Why no threshold was created
+## Historical reason no threshold was created
 
 A raw score percentile cannot be selected without an approved operating rule
 or labelled development calibration target. Choosing one in P-03 would be an
@@ -50,15 +101,14 @@ comparison compatibility checks.
 
 ## Conditions to unblock W05
 
-1. Task 02 must produce and approve a reproducible
-   `possible_false_negative_threshold` artifact using only frozen development
-   data, then pin its ID and fingerprint in `probe_v1.yaml`.
-2. Build the P-01 BM25 index for the train corpus on the project partition and
-   pin its index fingerprint for HN1.
-3. Confirm one W05 checkpoint, identical train records, example/token/step
+1. Materialize deterministic W05 synthetic queries for one frozen train-ID
+   list using checkpoint `runs/W05-1.5B-50K-8GB/checkpoint-3125`, the pinned
+   base revision, and a recorded generation config/fingerprint. Do not use
+   final-test records.
+2. Confirm identical train records, example/token/step
    budget and seed for all three diagnostic arms.
-4. Run only the three P-03 arms and report uncertainty. If the difference is
+3. Run only the three P-03 arms and report uncertainty. If the difference is
    material, or the result remains inconclusive pending the P-04 statistical
    contract, create an ADR before any generator comparison.
 
-No sensitivity result or recipe choice is claimed in this blocker.
+No sensitivity result or recipe choice is claimed. P-04 was not started.

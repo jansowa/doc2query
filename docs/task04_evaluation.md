@@ -110,14 +110,13 @@ substitutes for them.
 
 ### P-03 hard-negative contract and fail-closed calibration
 
-The comparison recipe now declares `recipe_version: probe-v1.1-p03` and the
+The comparison recipe declares `recipe_version: probe-v1.1-p03` and the
 versioned `probe-negatives-v1` contract. Its comparison path defaults to
-`hn0_filter` plus `drop`. No numeric `possible_false_negative` threshold is
-stored in the repository: Task 02 has not yet produced the required dev-only
-calibration artifact. The three calibration fields in
-`configs/evaluation/probe_v1.yaml` are deliberately `null`; a probe command
-therefore exits before loading a model and writes `p03_preflight.json` with
-status `blocked`.
+`hn0_filter` plus `drop`. Task 02 measured and pinned the numeric
+`possible_false_negative` threshold exclusively on frozen dev by maximizing
+query-macro Youden J; no final test was used. The recipe also pins the
+train-corpus BM25 fingerprint. A missing or mismatched artifact still exits
+before loading a model and writes `p03_preflight.json` with status `blocked`.
 
 The accepted calibration JSON contract pins all of the following:
 
@@ -151,9 +150,9 @@ each synthetic `generator_id`. Probe summaries repeat the recipe version,
 strategy, policy, threshold, calibration ID/fingerprint and BM25 fingerprint.
 The comparison helper refuses any drift in those fields.
 
-After Task 02 creates the approved artifact exclusively on dev, pin its path,
-ID and fingerprint in the recipe. HN1 additionally requires a project-local
-BM25 index and its fingerprint. Use project-local caches:
+The approved dev artifact path, ID and fingerprint are pinned in the recipe.
+HN1 additionally requires the pinned project-local BM25 index. Use
+project-local caches:
 
 ```bash
 UV_CACHE_DIR="$PWD/.uv-cache" \
@@ -171,11 +170,11 @@ uv run python scripts/train_probe_embedder.py \
   --output-dir runs/probe-w05-hn0-filter-v1
 ```
 
-The W05 HN0/HN0+filter/HN1 sensitivity run is diagnostic only. It has not been
-run because neither the calibration threshold artifact nor a frozen BM25
-index exists. Its blocker is recorded in
-`reports/blockers/task04_p03_w05_sensitivity.md`; no final test was opened to
-select a threshold or negative recipe.
+The W05 HN0/HN0+filter/HN1 sensitivity run is diagnostic only. The threshold
+and BM25 are ready, but the run has not started because the existing W05
+generations cover only the frozen test panel and have zero train-ID overlap.
+Its blocker is recorded in `reports/blockers/task04_p03_w05_sensitivity.md`;
+no final test was opened to remove it.
 
 ## Native Polish holdout (P-02)
 

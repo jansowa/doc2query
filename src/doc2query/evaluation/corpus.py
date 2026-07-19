@@ -218,29 +218,47 @@ def build_bm25_index(
     document_count = 0
     total_tokens = 0
     cache = AnalysisCache(analysis_cache_path, normalizer) if analysis_cache_path else None
-    try:
-        for ordinal, record in enumerate(read_records(documents_path)):
-            doc_id, text = _document_payload(record)
+
+    def index_batch(records: Sequence[Mapping[str, Any]]) -> None:
+        nonlocal document_count, previous_id, total_tokens
+        payloads = [_document_payload(record) for record in records]
+        texts = [text for _doc_id, text in payloads]
+        analyses = (
+            cache.analyze_many_uncommitted(texts)
+            if cache
+            else [normalizer.analyze(text) for text in texts]
+        )
+        for (doc_id, text), analysis in zip(payloads, analyses, strict=True):
             if previous_id is not None and doc_id <= previous_id:
                 raise ValueError("frozen corpus must be sorted by unique doc_id")
             previous_id = doc_id
-            analysis = cache.analyze(text) if cache else normalizer.analyze(text)
             counts = Counter(analysis.content_lemmas)
             token_count = sum(counts.values())
             text_digest = hashlib.sha256(text.encode()).hexdigest()
             connection.execute(
                 "INSERT INTO documents VALUES (?, ?, ?, ?)",
-                (ordinal, doc_id, token_count, text_digest),
+                (document_count, doc_id, token_count, text_digest),
             )
             connection.executemany(
                 "INSERT INTO postings VALUES (?, ?, ?)",
-                ((term, ordinal, frequency) for term, frequency in counts.items()),
+                ((term, document_count, frequency) for term, frequency in counts.items()),
             )
             _corpus_digest_update(corpus_digest, doc_id, text)
             document_count += 1
             total_tokens += token_count
-            if document_count % 1000 == 0:
-                connection.commit()
+        connection.commit()
+        if cache:
+            cache.commit()
+
+    try:
+        batch: list[Mapping[str, Any]] = []
+        for record in read_records(documents_path):
+            batch.append(record)
+            if len(batch) == 10_000:
+                index_batch(batch)
+                batch = []
+        if batch:
+            index_batch(batch)
         if document_count == 0:
             raise ValueError("cannot build a corpus index from zero documents")
         connection.executescript(
@@ -253,6 +271,8 @@ def build_bm25_index(
             """
         )
         connection.commit()
+        if cache:
+            cache.commit()
     finally:
         if cache:
             cache.close()

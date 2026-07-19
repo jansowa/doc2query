@@ -9,8 +9,10 @@
 Centralny harness, zamrożone manifesty/ID, metryki i slice’y, raporty
 HTML/Markdown, ślepy eksport A/B, bootstrap oraz zamrożona recepta probe
 embeddera są zaimplementowane i przetestowane. P-03 ma gotowy kod i testy
-kontraktu negatywów, ale jego W05 jest jawnie zablokowany przez brak
-kalibracyjnego artefaktu progu z dev Task 02 i brak zbudowanego indeksu BM25.
+kontraktu negatywów. Dev-only kalibracja progu i train-corpus BM25 są już
+zmierzone, zweryfikowane i przypięte. W05 pozostaje jawnie zablokowany przez
+brak syntetycznych generacji W05 dla train (istniejące generacje mają zero
+wspólnych train ID), a lokalny cache nie zawiera bazowych wag Bielik 1.5B.
 Na lokalnej karcie 8 GB rzeczywiście oceniono W03, W05 i W06 w trybie
 deterministic oraz diverse na tym samym zamrożonym panelu 100 rekordów z co
 najmniej 10 hard negative’ami; wykonano też nieporównywalny 2-step smoke
@@ -81,14 +83,17 @@ Porównania odrzucają różne wersje recepty, strategie, polityki, progi,
 identyfikatory/fingerprinty kalibracji i fingerprinty BM25. Testy jednostkowe
 i smoke korzystają wyłącznie z mockowanego rerankera, bez modeli i GPU.
 
-Audyt nie znalazł legalnego progu: istniejące artefakty W05 zawierają tylko
-surowe score query–positive, a pełny benchmark i kalibracja Task 02 na dev
-pozostają niewykonane. Nie znaleziono też materializowanego indeksu BM25 P-01.
-Konfiguracja ma celowo puste pola kalibracji i blokuje probe przed ładowaniem
-modelu; nie użyto `test_native_pl` ani innego testu do progu. Dlatego W05
-HN0/HN0+filter/HN1 nie został uruchomiony i nie ma deklarowanego rozstrzygnięcia.
-Blocker: `reports/blockers/task04_p03_w05_sensitivity.md`. P-04 nie został
-rozpoczęty.
+19 lipca domknięto oba pierwotne artefakty P-03. Pełny frozen dev (16 272
+query) scored primary dał query-macro próg Youdena `8.617486953735352`;
+artefakt ma fingerprint `9ee4280f…3b3f4` i nie używa żadnego testu. Zamrożony
+`train-corpus-v1` zawiera 2 211 463 dokumenty; BM25 spaCy ma integrity check
+`ok` i fingerprint `e5df2432…2119`. Oba są przypięte w recepcie.
+
+Preflight ujawnił kolejny brak: W05 ma tylko generacje panelu testowego, z
+zerowym pokryciem train ID, zaś bazowych wag Bielik 1.5B nie ma w lokalnym
+cache. Nie użyto testu ani naturalnych query jako substytutu, więc
+HN0/HN0+filter/HN1 nie uruchomiono i nie ma rozstrzygnięcia. Blocker:
+`reports/blockers/task04_p03_w05_sensitivity.md`. P-04 nie został rozpoczęty.
 
 ## Harness v1.1 — blokery po audycie
 
@@ -112,9 +117,10 @@ operacyjny zakres i status są utrzymywane tutaj oraz w `tasks/README.md`.
 - raportuje `corpus_round_trip@1/5/20/100` i jego korelację z marginesem
   rerankera.
 
-Implementacja i testy jednostkowe/smoke są gotowe. Pełnoskalowe indeksy BM25
-i pomocniczego bi-encodera, ich throughput oraz round-trip W03/W05/W06 nie
-zostały uruchomione i nie są tu deklarowane jako wynik eksperymentalny.
+Implementacja i testy jednostkowe/smoke są gotowe. Zbudowano diagnostyczny
+train-corpus BM25 wymagany przez P-03. Nadal nie zbudowano pełnego indeksu
+porównawczego nad całym korpusem ani pomocniczego bi-encodera; ich throughput
+oraz round-trip W03/W05/W06 nie zostały zmierzone.
 
 ### P-02 — natywny polski holdout — `IMPLEMENTED`
 
@@ -141,7 +147,7 @@ near-duplicate pozostaje jawnie niezmierzony i nie jest zastępowany założenie
 Nie uruchomiono probe, benchmarku PIRB, pełnego indeksu ani żadnego wyniku
 eksperymentalnego. Kolejną bramką Harness v1.1 jest P-03.
 
-### P-03 — probe recipe v1 i false negatives — `IMPLEMENTED / W05 BLOCKED`
+### P-03 — probe recipe v1 i false negatives — `IMPLEMENTED / W05 INPUT BLOCKED`
 
 - dla naturalnych i syntetycznych query primary reranker flaguje odziedziczony
   negatyw jako `possible_false_negative` według progu kalibracyjnego z Task 02;
@@ -159,12 +165,13 @@ wyłącznie na dev i weryfikuje jego ID, fingerprint, fingerprint danych,
 SHA-256 score’ów, rewizję primary, przestrzeń score’u, operator, próg oraz
 metodę jego wyboru. HN1 dodatkowo wymaga przypiętego fingerprintu indeksu BM25.
 
-Jednorazowy sensitivity check W05 nie został uruchomiony, ponieważ oba
-wymagane artefakty są nieobecne. Po ich utworzeniu na partycji projektu należy
-uruchomić wyłącznie trzy identycznie zabudżetowane ramiona diagnostyczne.
+Dev-only kalibracja oraz train-corpus BM25 są gotowe i przypięte. Jednorazowy
+sensitivity check W05 nie został jednak uruchomiony, bo nie istnieje syntetyczny
+artefakt train-query W05 zgodny z wejściem probe. Należy najpierw wygenerować
+go z przypiętego checkpointu/base revision na zamrożonej liście train ID, a
+potem uruchomić wyłącznie trzy identycznie zabudżetowane ramiona diagnostyczne.
 Istotna lub nierozstrzygalna przed P-04 różnica wymaga ADR. Nie wolno uznać
-P-03 za pomiarowo zamknięte ani przejść do porównań generatorów na podstawie
-samej implementacji.
+P-03 za pomiarowo zamknięte ani przejść do porównań generatorów.
 
 ### P-04 — kontrakt statystyczny i budżetowy
 

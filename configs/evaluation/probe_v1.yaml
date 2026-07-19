@@ -1,5 +1,5 @@
-# Frozen Harness v1.1 comparison recipe. P-03 intentionally fails closed until
-# Task 02 produces and pins a dev-only possible-false-negative calibration artifact.
+# Frozen Harness v1.1 comparison recipe. P-03 pins the measured dev-only
+# false-negative calibration and train-corpus BM25 provenance.
 recipe_version: probe-v1.1-p03
 model_name_or_path: sdadas/polish-reranker-base-ranknet
 revision: a7c66d41a8097ca02e75616d0951c941d94ff6a1
@@ -17,11 +17,8 @@ negative_recipe:
   version: probe-negatives-v1
   strategy: hn0_filter
   false_negative_policy: drop
-  # These three fields must be filled together from one reproducible Task 02
-  # artifact fitted exclusively on dev. Null is a deliberate P-03 blocker,
-  # not permission to choose a threshold ad hoc.
-  calibration_artifact_path: null
-  calibration_artifact_id: null
-  calibration_artifact_fingerprint: null
-  bm25_index_fingerprint: null
+  calibration_artifact_path: artifacts/task02/pfn_dev_v1/calibration.json
+  calibration_artifact_id: pfn-dev-v1-b455711ec36526b2
+  calibration_artifact_fingerprint: 9ee4280f18e684b0dc3bb7fd885801b5ae8821af758e2845ab349c559613b3f4
+  bm25_index_fingerprint: e5df243227e8e877550c283e2f7c882fa931ee38d849d39e8f2e2a51dc182119
   bm25_candidates: 32

@@ -11,6 +11,13 @@ Szybki `sdadas/polish-reranker-base-ranknet` oraz primary
 panelu 100 generacji W05. Pełny benchmark primary/shadow na projektowych
 splitach dev/test nadal oczekuje na inference z hard negative'ami.
 
+Na pełnym frozen dev zmierzono primary dla 21 241 pozytywnych i 145 441
+odziedziczonych negatywnych par. Próg `possible_false_negative` wyznaczono bez
+ręcznego wyboru jako query-macro maksimum Youdena J, wyłącznie na dev:
+`8.617486953735352`, artefakt `pfn-dev-v1-b455711ec36526b2`, fingerprint
+`9ee4280f…3b3f4`. Nie użyto żadnego testu. Raport:
+`reports/measurements/task02_pfn_dev_calibration.md`.
+
 ## Cel
 
 Zintegrować i zwalidować gotowe, zamrożone modele oceniające. Mają one służyć do analizy generatora, budowy preferencji i ewentualnego RL. **Trening własnego rerankera nie należy do zakresu tego projektu.**

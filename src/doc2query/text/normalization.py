@@ -103,6 +103,16 @@ class SpacyPolishNormalizer:
 
     def analyze(self, text: str) -> AnalyzedText:
         doc = self._nlp(unicodedata.normalize("NFKC", text))
+        return self._from_doc(doc)
+
+    def analyze_many(self, texts: list[str]) -> list[AnalyzedText]:
+        """Use spaCy's native batching while preserving analyze() semantics."""
+        normalized = (unicodedata.normalize("NFKC", text) for text in texts)
+        return [
+            self._from_doc(doc) for doc in self._nlp.pipe(normalized, batch_size=64, n_process=8)
+        ]
+
+    def _from_doc(self, doc: Any) -> AnalyzedText:
         tokens = tuple(
             token.text.lower() for token in doc if not token.is_space and not token.is_punct
         )

@@ -35,9 +35,9 @@ uruchomiono.
 |---|---|---|---|
 | [00](00_repository_bootstrap.md) | Bootstrap repozytorium i odtwarzalność | `DONE` | Szkielet projektu, środowisko, CLI, testy i rejestrowanie są gotowe. |
 | [01](01_data_contract_audit_and_splits.md) | Kontrakt danych, audyt, deduplikacja i splity | `IMPLEMENTED` | Pełny `msmarco_pl` przetworzono do zamrożonych splitów v1 i par doc2query bez leakage pozytywów. Dla rekordów z <10 negatywami przyjęto corpus retrieval oraz oznaczone, deterministyczne backfillowanie tylko w diagnostycznej puli. Pozostał raport tokenowych percentyli/HTML. |
-| [02](02_reranker_and_reward_proxies.md) | Zamrożone rerankery i proxy nagrody | `IMPLEMENTED` | Integracja, kalibracja, reward proxies i testy są gotowe; base-ranknet i primary v3 zmierzyły panel 100 generacji W05. Pozostał benchmark primary/shadow na dev/test z hard negative'ami. |
+| [02](02_reranker_and_reward_proxies.md) | Zamrożone rerankery i proxy nagrody | `IMPLEMENTED` | Integracja, reward proxies i testy są gotowe; primary zmierzył pełny frozen dev, a query-macro próg Youdena `possible_false_negative` jest przypięty bez użycia testu. Pozostał pełny benchmark primary/shadow na dev/test z hard negative'ami. |
 | [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | Run W06 4.5B Instruct/50k zakończył 3125 kroków w 8 h 14 min. Jego wyniki są diagnostyczne, nie selekcyjne, dopóki Task 04 nie dostarczy Harness v1.1. Po v1.1 wykonać P-05: S00 zero/few-shot, S07 plT5/mT5 i małą macierz probe, następnie P-06: czyszczenie/ważenie par na 1.5B. Nie rozpoczynać kolejnej kampanii 4.5B przed tą bramką. |
-| [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IN PROGRESS` | P-01/P-02 oraz kod P-03 są zaimplementowane. `probe-negatives-v1` ma HN0/HN0+filter/HN1, `drop/demote/keep+log`, mockowane testy, provenance i twardą zgodność porównań. Audyt nie znalazł dev-only artefaktu progu Task 02 ani zbudowanego indeksu BM25, więc konfiguracja blokuje się przed ładowaniem modelu, a diagnostyczny W05 nie został uruchomiony. Nie użyto finalnych testów do strojenia. Następnie: utworzyć i przypiąć oba artefakty, wykonać wyłącznie W05 sensitivity, zapisać ADR przy istotnym lub nierozstrzygalnym wyniku, potem P-04. Do tego czasu zakaz porównawczych probe, eksperymentów D i Task 06. |
+| [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IN PROGRESS` | P-01/P-02 i kod P-03 są zaimplementowane. Dev-only próg (`9ee4280f…3b3f4`) oraz train-corpus BM25 (`e5df2432…2119`) są zmierzone, zweryfikowane i przypięte bez użycia testów. W05 nadal nie ruszył: istniejące generacje W05 mają 0 train ID, a brak lokalnych bazowych wag uniemożliwia ich offline odtworzenie. Następnie: materializacja przypiętych train-query W05, wyłącznie HN0/HN0+filter/HN1 i ADR przy istotnym/nierozstrzygalnym wyniku; P-04 pozostaje nierozpoczęte. |
 | [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `TODO` | Kod taksonomii i kontrolek może powstawać równolegle, ale eksperymenty D00–D12 wymagają ukończonego Harness v1.1 z Task 04. |
 | [06](06_candidate_scoring_and_preference_data.md) | Scoring kandydatów i dane preferencyjne | `TODO` | Wymaga stabilnego checkpointu SFT, ukończonego Harness v1.1 oraz Task 02 i 05. |
 | [07](07_dpo_training.md) | DPO i continued-SFT control | `TODO` | Wymaga danych preferencyjnych z Task 06. |
@@ -54,8 +54,9 @@ pozostaje zapisem przesłanek i identyfikatorów P-xx, ale nie jest równoległy
 backlogiem. Zakres P-xx został przeniesiony do wskazanych plików zadań.
 
 1. **Teraz — Task 04 / Harness v1.1:** P-01/P-02 i implementacja P-03 są
-   gotowe. P-03 pozostaje pomiarowo zablokowane do czasu dev-only kalibracji
-   Task 02, indeksu BM25 i diagnostycznego W05. Następnie P-04. Niedomknięte
+   gotowe. P-03 ma przypiętą dev-only kalibrację i train-corpus BM25, ale
+   pozostaje pomiarowo zablokowane przez brak train-query W05. Następnie
+   diagnostyczny W05 i P-04. Niedomknięte
    W05/P-04 są blokerami pierwszego porównawczego probe.
 2. **Brama tanich baseline'ów — Task 03:** P-05 i P-06 na 1.5B. W06 pozostaje
    eksploracyjnym dowodem wykonalności 4.5B/8 GB, a nie zgodą na dalszą
@@ -68,8 +69,9 @@ backlogiem. Zakres P-xx został przeniesiony do wskazanych plików zadań.
 6. **Opcjonalne:** Task 08, P-09 i Task 11 wyłącznie po własnych bramkach.
 
 Najbliższy jednoznaczny punkt wejścia dla kolejnej sesji to odblokowanie
-pomiarowej części P-03: dev-only artefakt progu Task 02, projektowy indeks BM25
-i wyłącznie diagnostyczny W05 HN0/HN0+filter/HN1. Szczegóły i warunki są w
+pomiarowej części P-03: materializacja train-query W05 z przypiętego
+checkpointu, a następnie wyłącznie diagnostyczny W05
+HN0/HN0+filter/HN1. Szczegóły i warunki są w
 [`Task 04`](04_evaluation_harness.md) oraz blockerze
 `reports/blockers/task04_p03_w05_sensitivity.md`. P-04 i porównawcze probe
 pozostają po tej bramce.

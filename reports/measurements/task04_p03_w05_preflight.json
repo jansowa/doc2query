@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "scope": "Task 04 P-03 W05 diagnostic preflight",
+  "status": "blocked_missing_train_generations",
+  "train": {
+    "path": "data/processed/v1/train.parquet",
+    "sha256": "154a490b471b6641bc25479d9ab0a57f68ea4e7b07d5d056cbaf94361ccb1be5",
+    "unique_example_ids": 292907
+  },
+  "generation_artifacts": [
+    {
+      "path": "reports/evaluation/W05-1.5B-50K-8GB/generations.jsonl",
+      "sha256": "60b929d2031e54b2a0496b74ca273f68553594030f60492e21cd6be1c514dc38",
+      "rows": 500,
+      "unique_nonempty_example_ids": 100,
+      "train_id_intersection": 0
+    },
+    {
+      "path": "runs/W05-1.5B-50K-8GB/panel_generations.jsonl",
+      "sha256": "ec87cf7ebd069e5ae0f4c9ce68973fcd381cc2be3a4bbed9f25710ae06ba63e9",
+      "rows": 100,
+      "unique_nonempty_example_ids": 0,
+      "train_id_intersection": 0
+    }
+  ],
+  "checkpoint": {
+    "path": "runs/W05-1.5B-50K-8GB/checkpoint-3125",
+    "adapter_model_sha256": "ce19c561f9275a02f0df1d7c6ff0127e73b325933b25c1f9ab341d179cb4f15a",
+    "base_model": "speakleash/Bielik-1.5B-v3",
+    "base_revision": "4b25049621bf3952a1fc9314c89773102eda0333",
+    "base_weights_in_project_cache": false
+  },
+  "final_tests_used": [],
+  "substitutions_attempted": []
+}
