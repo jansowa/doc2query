@@ -71,11 +71,18 @@ def build_generator_report(
 ) -> dict[str, Any]:
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     examples = list(read_records(per_generation_path))[:max_examples]
+    protocols = summary.get("protocols", {})
+    pool = protocols.get("candidate_pool_ranking", {})
+    corpus = protocols.get("corpus_retrieval", {})
+    pool_metrics = pool.get("metrics", {})
+    corpus_metrics = corpus.get("metrics", {})
     headline = [
-        ("Recall@1", summary.get("retrieval", {}).get("recall_at_1")),
-        ("Recall@5", summary.get("retrieval", {}).get("recall_at_5")),
-        ("MRR", summary.get("retrieval", {}).get("mrr")),
-        ("nDCG@10", summary.get("retrieval", {}).get("ndcg_at_10")),
+        ("Pool Recall@1", pool_metrics.get("pool_recall_at_1")),
+        ("Pool Recall@5", pool_metrics.get("pool_recall_at_5")),
+        ("Pool MRR", pool_metrics.get("pool_mrr")),
+        ("Pool nDCG@10", pool_metrics.get("pool_ndcg_at_10")),
+        ("Corpus round-trip@1", corpus_metrics.get("corpus_round_trip_at_1")),
+        ("Corpus round-trip@100", corpus_metrics.get("corpus_round_trip_at_100")),
         ("Format valid", summary.get("format", {}).get("valid_rate")),
         (
             "Probe embedder",
@@ -87,7 +94,8 @@ def build_generator_report(
     copy_mean = summary.get("lexical", {}).get("copy_density", {}).get("mean")
     duplicate_mean = summary.get("diversity", {}).get("duplicate_rate", {}).get("mean")
     pareto = [
-        ("Grounding (R@1)", summary.get("retrieval", {}).get("recall_at_1")),
+        ("Pool grounding (R@1)", pool_metrics.get("pool_recall_at_1")),
+        ("Corpus round-trip@20", corpus_metrics.get("corpus_round_trip_at_20")),
         (
             "Non-copying (1-copy density)",
             1 - float(copy_mean) if isinstance(copy_mean, (int, float)) else None,
@@ -108,6 +116,11 @@ def build_generator_report(
         f"- Generations: {summary.get('generation_count', 0)}",
         f"- Primary judge: `{summary.get('judges', {}).get('primary', 'NOT MEASURED')}`",
         f"- Shadow judge: `{summary.get('judges', {}).get('shadow') or 'NOT MEASURED'}`",
+        "- Generator comparison retrieval basis: `corpus_retrieval`",
+        f"- Candidate-pool size: `{_display(pool.get('candidate_count'))}`",
+        f"- Corpus size: `{_display(corpus.get('candidate_count'))}`",
+        f"- Corpus index fingerprint: "
+        f"`{_display((corpus.get('index') or {}).get('index_fingerprint'))}`",
         "",
         "## Key metrics",
         "",
@@ -146,8 +159,9 @@ def build_generator_report(
         "",
         "## Side-by-side examples",
         "",
-        "| # | Passage | Natural query | Generated query | Mode | Rank | Margin |",
-        "|---:|---|---|---|---|---:|---:|",
+        "| # | Passage | Natural query | Generated query | Mode | Pool rank/size | "
+        "Pool margin | Corpus RT@20 |",
+        "|---:|---|---|---|---|---:|---:|---:|",
     ]
     for index, row in enumerate(examples, 1):
         passage = str(row.get("positive", {}).get("text", "")).replace("|", "\\|")
@@ -155,8 +169,10 @@ def build_generator_report(
         generated = str(row.get("generated", "")).replace("|", "\\|")
         lines.append(
             f"| {index} | {passage[:500]} | {reference} | {generated} | "
-            f"{row.get('mode', '')} | {_display(row.get('positive_rank'))} | "
-            f"{_display(row.get('primary_margin'))} |"
+            f"{row.get('mode', '')} | {_display(row.get('pool_rank'))}/"
+            f"{_display(row.get('pool_candidate_count'))} | "
+            f"{_display(row.get('pool_margin'))} | "
+            f"{_display(row.get('corpus_round_trip_at_20'))} |"
         )
     markdown_path.parent.mkdir(parents=True, exist_ok=True)
     markdown_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -176,7 +192,9 @@ def build_generator_report(
         f"<td>{html.escape(str(row.get('reference', '')))}</td>"
         f"<td>{html.escape(str(row.get('generated', '')))}</td>"
         f"<td>{html.escape(str(row.get('mode', '')))}</td>"
-        f"<td>{html.escape(_display(row.get('positive_rank')))}</td>"
+        f"<td>{html.escape(_display(row.get('pool_rank')))}/"
+        f"{html.escape(_display(row.get('pool_candidate_count')))}</td>"
+        f"<td>{html.escape(_display(row.get('corpus_round_trip_at_20')))}</td>"
         "</tr>"
         for index, row in enumerate(examples, 1)
     )
@@ -203,7 +221,8 @@ alt="p05 p50 p95 distribution plot">
 <p>Review generic, copied, answer-leaking, negative-margin and first-sentence-only outputs.
 Reranker scores are proxies and do not establish logical answerability.</p>
 <h2>Side-by-side examples</h2>
-<table><tr><th>#</th><th>Passage</th><th>Natural</th><th>Generated</th><th>Mode</th><th>Rank</th></tr>
+<table><tr><th>#</th><th>Passage</th><th>Natural</th><th>Generated</th><th>Mode</th>
+<th>Pool rank/size</th><th>Corpus RT@20</th></tr>
 {example_rows}</table></body></html>
 """
     html_path.write_text(html_text, encoding="utf-8")

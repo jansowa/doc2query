@@ -14,6 +14,7 @@ import torch
 import yaml
 
 from doc2query.config import load_config
+from doc2query.evaluation.corpus import backfill_candidate_pools, load_corpus_index
 from doc2query.evaluation.datasets import evaluation_fingerprint, load_frozen_records
 from doc2query.evaluation.intrinsic import evaluate_intrinsic_records
 from doc2query.evaluation.report import build_generator_report
@@ -213,6 +214,7 @@ def score_generation_artifact(
     output_dir: Path,
     test_fingerprint: str,
     experiment_id: str,
+    corpus_index_path: Path | None = None,
 ) -> dict[str, Any]:
     generation_records = list(read_records(generations_path))
     dedup_map = Path("data/processed/v1/dedup_map.parquet")
@@ -228,14 +230,20 @@ def score_generation_artifact(
     shadow: PairScorer | None = (
         load_frozen_reranker(_judge_config(shadow_config, judge_device)) if shadow_config else None
     )
-    return evaluate_intrinsic_records(
-        generation_records,
-        primary=primary,
-        shadow=shadow,
-        output_dir=output_dir,
-        test_fingerprint=test_fingerprint,
-        experiment_id=experiment_id,
-    )
+    corpus_index = load_corpus_index(corpus_index_path) if corpus_index_path is not None else None
+    try:
+        return evaluate_intrinsic_records(
+            generation_records,
+            primary=primary,
+            shadow=shadow,
+            output_dir=output_dir,
+            test_fingerprint=test_fingerprint,
+            experiment_id=experiment_id,
+            corpus_index=corpus_index,
+        )
+    finally:
+        if corpus_index is not None:
+            corpus_index.close()
 
 
 def run_checkpoint_evaluation(
@@ -251,6 +259,7 @@ def run_checkpoint_evaluation(
     max_examples: int | None = None,
     generations_path: Path | None = None,
     generation_only: bool = False,
+    corpus_index_path: Path | None = None,
 ) -> dict[str, Any]:
     """Generate two decoding modes, score them, and build all cheap report artifacts."""
     config = load_config(config_path)
@@ -259,6 +268,19 @@ def run_checkpoint_evaluation(
     selected = load_frozen_records(frozen_manifest, subset)
     if max_examples is not None:
         selected = selected[:max_examples]
+    if any(len(record.get("hard_negatives", [])) < 10 for record in selected):
+        if corpus_index_path is None:
+            raise ValueError(
+                "short candidate pools require --corpus-index for deterministic backfill"
+            )
+        corpus_manifest = json.loads(
+            (corpus_index_path / "manifest.json").read_text(encoding="utf-8")
+        )
+        selected = backfill_candidate_pools(
+            selected,
+            documents_path=Path(str(corpus_manifest["documents_path"])),
+            corpus_fingerprint=str(corpus_manifest["document_fingerprint"]),
+        )
     local_generations = generations_path or output_dir / "generations.jsonl"
     generation_report_path = output_dir / "generation_report.json"
     if generations_path is None and not local_generations.exists():
@@ -292,6 +314,7 @@ def run_checkpoint_evaluation(
         "generation": generation_report,
         "primary_judge_config": str(primary_config) if primary_config else None,
         "shadow_judge_config": str(shadow_config) if shadow_config else None,
+        "corpus_index": str(corpus_index_path) if corpus_index_path else None,
         "code": collect_code_provenance(),
     }
     write_json(output_dir / "evaluation_manifest.json", run_manifest)
@@ -307,6 +330,7 @@ def run_checkpoint_evaluation(
         output_dir=output_dir,
         test_fingerprint=test_fingerprint,
         experiment_id=config.run.experiment_id,
+        corpus_index_path=corpus_index_path,
     )
     report = build_generator_report(
         output_dir / "summary.json",

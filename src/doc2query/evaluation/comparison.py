@@ -9,6 +9,7 @@ from statistics import fmean
 from typing import Any
 
 from doc2query.evaluation.bootstrap import assert_same_test_fingerprint, paired_bootstrap
+from doc2query.evaluation.retrieval import CORPUS_RETRIEVAL
 from doc2query.utils.records import read_records, write_json
 
 
@@ -34,15 +35,18 @@ def compare_retrieval_runs(
     left = json.loads(left_summary_path.read_text(encoding="utf-8"))
     right = json.loads(right_summary_path.read_text(encoding="utf-8"))
     fingerprint = assert_same_test_fingerprint(left, right)
+    if left.get("protocol") != CORPUS_RETRIEVAL or right.get("protocol") != CORPUS_RETRIEVAL:
+        raise ValueError("probe comparison requires corpus_retrieval summaries")
+    if left.get("corpus_sha256") != right.get("corpus_sha256"):
+        raise ValueError("probe comparison requires the same frozen corpus fingerprint")
     metrics = (
-        "recall_at_1",
-        "recall_at_5",
-        "recall_at_10",
-        "recall_at_100",
-        "mrr_at_10",
-        "ndcg_at_10",
-        "map",
-        "hard_negative_win_rate",
+        "corpus_recall_at_1",
+        "corpus_recall_at_5",
+        "corpus_recall_at_10",
+        "corpus_recall_at_100",
+        "corpus_mrr_at_10",
+        "corpus_ndcg_at_10",
+        "corpus_map",
     )
     report = {
         "test_fingerprint": fingerprint,
@@ -85,18 +89,31 @@ def compare_generator_runs(
     left = json.loads(left_summary_path.read_text(encoding="utf-8"))
     right = json.loads(right_summary_path.read_text(encoding="utf-8"))
     fingerprint = assert_same_test_fingerprint(left, right)
+    left_corpus = left.get("protocols", {}).get(CORPUS_RETRIEVAL, {})
+    right_corpus = right.get("protocols", {}).get(CORPUS_RETRIEVAL, {})
+    if left_corpus.get("status") != "measured" or right_corpus.get("status") != "measured":
+        raise ValueError("generator comparison requires measured corpus_retrieval round-trip")
+    left_index = (left_corpus.get("index") or {}).get("index_fingerprint")
+    right_index = (right_corpus.get("index") or {}).get("index_fingerprint")
+    if not left_index or left_index != right_index:
+        raise ValueError("generator comparison requires the same frozen corpus index fingerprint")
     metrics = (
-        "recall_at_1",
-        "recall_at_5",
-        "mrr",
-        "ndcg_at_10",
-        "primary_margin",
+        "pool_recall_at_1",
+        "pool_recall_at_5",
+        "pool_mrr",
+        "pool_ndcg_at_10",
+        "pool_margin",
+        "corpus_round_trip_at_1",
+        "corpus_round_trip_at_5",
+        "corpus_round_trip_at_20",
+        "corpus_round_trip_at_100",
         "content_jaccard",
         "copy_density",
         "sentence_level_source_hit",
     )
     report = {
         "test_fingerprint": fingerprint,
+        "corpus_index_fingerprint": left_index,
         "unit": "frozen natural-query record; diverse candidates averaged within query",
         "difference": "right_minus_left",
         "modes": {
@@ -121,13 +138,13 @@ def rank_variants(summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     measured = [
         summary
         for summary in summaries
-        if isinstance(summary.get("probe_embedder", {}).get("ndcg_at_10"), (int, float))
+        if isinstance(summary.get("probe_embedder", {}).get("corpus_ndcg_at_10"), (int, float))
     ]
     return sorted(
         measured,
         key=lambda value: (
-            -float(value["probe_embedder"]["ndcg_at_10"]),
-            -float(value["probe_embedder"].get("mrr_at_10", 0.0)),
+            -float(value["probe_embedder"]["corpus_ndcg_at_10"]),
+            -float(value["probe_embedder"].get("corpus_mrr_at_10", 0.0)),
             str(value.get("experiment_id", "")),
         ),
     )

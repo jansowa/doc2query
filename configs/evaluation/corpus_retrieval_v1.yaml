@@ -1,0 +1,26 @@
+# Harness v1.1 full-corpus retrieval contract. Build each backend into a separate directory.
+schema_version: 1
+protocol: corpus_retrieval
+comparison_basis: true
+round_trip_cutoffs: [1, 5, 20, 100]
+
+bm25_normalizer:
+  backend: spacy_pl
+  model_name: pl_core_news_lg
+
+bm25:
+  k1: 1.2
+  b: 0.75
+  # Operational threshold; calibrate on dev before freezing a comparison index.
+  relevance_score_threshold: 1.0
+  ambiguity_candidate_threshold: 20
+
+auxiliary_biencoder:
+  model_name_or_path: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  revision: e62509716f15c5fd03a6fd3156a4bc5e43f83f26
+  license: apache-2.0
+  trust_remote_code: false
+  normalize_embeddings: true
+  batch_size: 64
+  relevance_score_threshold: 0.5
+  ambiguity_candidate_threshold: 20

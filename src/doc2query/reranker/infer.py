@@ -6,6 +6,7 @@ import math
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from doc2query.evaluation.retrieval import CANDIDATE_POOL_RANKING
 from doc2query.reranker.base import PairScorer
 
 
@@ -15,14 +16,15 @@ class GroupScore:
     judge: str
     positive_score: float
     hardest_negative_score: float
-    margin: float
-    positive_rank: int
-    recall_at_1: float
-    recall_at_5: float
-    reciprocal_rank: float
-    ndcg_at_10: float
-    near_zero_margin: bool
-    all_scores_close: bool
+    pool_margin: float
+    pool_rank: int
+    pool_candidate_count: int
+    pool_recall_at_1: float
+    pool_recall_at_5: float | None
+    pool_mrr: float
+    pool_ndcg_at_10: float
+    pool_near_zero_margin: bool
+    pool_all_scores_close: bool
     document_scores: tuple[float, ...]
     query_id: str = ""
     positive_doc_id: str = ""
@@ -34,6 +36,7 @@ class GroupScore:
 
     def to_dict(self) -> dict[str, Any]:
         result = asdict(self)
+        result["protocol"] = CANDIDATE_POOL_RANKING
         result["document_scores"] = list(self.document_scores)
         result["negative_doc_ids"] = list(self.negative_doc_ids)
         result["source_en_negative_scores"] = list(self.source_en_negative_scores)
@@ -63,21 +66,22 @@ def score_group(
         raise ValueError("scorer returned invalid scores")
     positive_score = scores[0]
     hardest = max(scores[1:])
-    rank = 1 + sum(score > positive_score for score in scores[1:])
+    rank = 1 + sum(score >= positive_score for score in scores[1:])
     spread = max(scores) - min(scores)
     return GroupScore(
         example_id=example_id,
         judge=scorer.name,
         positive_score=positive_score,
         hardest_negative_score=hardest,
-        margin=positive_score - hardest,
-        positive_rank=rank,
-        recall_at_1=float(rank <= 1),
-        recall_at_5=float(rank <= 5),
-        reciprocal_rank=1.0 / rank,
-        ndcg_at_10=(1.0 / math.log2(rank + 1)) if rank <= 10 else 0.0,
-        near_zero_margin=positive_score - hardest <= near_zero_threshold,
-        all_scores_close=spread <= near_zero_threshold,
+        pool_margin=positive_score - hardest,
+        pool_rank=rank,
+        pool_candidate_count=len(scores),
+        pool_recall_at_1=float(rank <= 1),
+        pool_recall_at_5=float(rank <= 5) if len(scores) >= 5 else None,
+        pool_mrr=1.0 / rank,
+        pool_ndcg_at_10=(1.0 / math.log2(rank + 1)) if rank <= 10 else 0.0,
+        pool_near_zero_margin=positive_score - hardest <= near_zero_threshold,
+        pool_all_scores_close=spread <= near_zero_threshold,
         document_scores=tuple(scores),
         query_id=query_id or example_id,
         positive_doc_id=positive_doc_id,

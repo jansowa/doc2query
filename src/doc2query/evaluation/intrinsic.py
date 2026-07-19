@@ -10,9 +10,17 @@ from statistics import fmean
 from typing import Any
 
 from doc2query.data.invert import query_style
+from doc2query.evaluation.corpus import CorpusIndex, evaluate_round_trip_query
 from doc2query.evaluation.diversity import diversity_metrics
 from doc2query.evaluation.format import format_metrics
-from doc2query.evaluation.retrieval import distribution, metrics_from_rank
+from doc2query.evaluation.retrieval import (
+    CANDIDATE_POOL_RANKING,
+    CORPUS_RETRIEVAL,
+    CORPUS_ROUND_TRIP_CUTOFFS,
+    candidate_pool_metrics_from_rank,
+    distribution,
+    pearson_correlation,
+)
 from doc2query.evaluation.slices import aggregate_slices, rank_buckets
 from doc2query.reranker.base import PairScorer
 from doc2query.reranker.focus import assign_focus, split_sentences
@@ -35,11 +43,11 @@ SLICE_FIELDS = [
 ]
 
 KEY_METRICS = [
-    "recall_at_1",
-    "recall_at_5",
-    "mrr",
-    "ndcg_at_10",
-    "primary_margin",
+    "pool_recall_at_1",
+    "pool_recall_at_5",
+    "pool_mrr",
+    "pool_ndcg_at_10",
+    "pool_margin",
     "content_jaccard",
     "normalized_lcs",
     "copy_density",
@@ -47,6 +55,15 @@ KEY_METRICS = [
     "sentence_level_source_hit",
     "reference_focus_agreement",
 ]
+
+POOL_METRICS = (
+    "pool_recall_at_1",
+    "pool_recall_at_5",
+    "pool_mrr",
+    "pool_ndcg_at_10",
+    "pool_hard_negative_win_rate",
+)
+ROUND_TRIP_METRICS = tuple(f"corpus_round_trip_at_{cutoff}" for cutoff in CORPUS_ROUND_TRIP_CUTOFFS)
 
 
 def _document_texts(record: dict[str, Any]) -> tuple[str, str, list[str], list[str]]:
@@ -148,13 +165,6 @@ def _mode_summary(rows: list[dict[str, Any]], group_rows: list[dict[str, Any]]) 
     )
     focus_buckets = [str(row["predicted_focus_bucket"]) for row in rows]
     sentence_counts = Counter(int(row["predicted_sentence_index"]) for row in rows)
-    retrieval_fields = (
-        "recall_at_1",
-        "recall_at_5",
-        "mrr",
-        "ndcg_at_10",
-        "hard_negative_win_rate",
-    )
     diversity_fields = (
         "distinct_1",
         "distinct_2",
@@ -168,8 +178,28 @@ def _mode_summary(rows: list[dict[str, Any]], group_rows: list[dict[str, Any]]) 
     return {
         "generation_count": len(rows),
         "example_count": len({str(row["example_id"]) for row in rows}),
-        "retrieval": {field: _mean_rate(rows, field) for field in retrieval_fields},
-        "reranker_margin": distribution([float(row["primary_margin"]) for row in rows]),
+        "candidate_pool_ranking": {
+            "protocol": CANDIDATE_POOL_RANKING,
+            "candidate_count": distribution([float(row["pool_candidate_count"]) for row in rows]),
+            "metrics": {field: _mean_rate(rows, field) for field in POOL_METRICS},
+        },
+        "corpus_retrieval": {
+            "protocol": CORPUS_RETRIEVAL,
+            "status": (
+                "measured"
+                if any(isinstance(row.get(ROUND_TRIP_METRICS[0]), (int, float)) for row in rows)
+                else "not_measured"
+            ),
+            "candidate_count": distribution(
+                [
+                    float(row["corpus_candidate_count"])
+                    for row in rows
+                    if isinstance(row.get("corpus_candidate_count"), (int, float))
+                ]
+            ),
+            "metrics": {field: _mean_rate(rows, field) for field in ROUND_TRIP_METRICS},
+        },
+        "reranker_margin": distribution([float(row["pool_margin"]) for row in rows]),
         "lexical": {
             **{
                 field: distribution(
@@ -235,6 +265,7 @@ def evaluate_intrinsic_records(
     output_dir: Path,
     test_fingerprint: str,
     experiment_id: str,
+    corpus_index: CorpusIndex | None = None,
 ) -> dict[str, Any]:
     if not records:
         raise ValueError("intrinsic evaluation requires generations")
@@ -270,7 +301,7 @@ def evaluate_intrinsic_records(
                 reference_focus = assign_focus(
                     primary, str(record.get("reference", "")), passage
                 ).focus_sentence_id
-                reference_cache[example_id] = (reference.positive_rank, reference_focus)
+                reference_cache[example_id] = (reference.pool_rank, reference_focus)
             reference_rank, reference_focus = reference_cache[example_id]
             focus = assign_focus(primary, generated, passage)
             source_sentences = split_sentences(passage)
@@ -283,8 +314,18 @@ def evaluate_intrinsic_records(
             format_result = format_metrics(
                 generated, multi_query_json=bool(record.get("multi_query_json", False))
             )
-            retrieval = metrics_from_rank(
-                primary_score.positive_rank, len(primary_score.document_scores)
+            pool_metrics = candidate_pool_metrics_from_rank(
+                primary_score.pool_rank,
+                candidate_count=len(primary_score.document_scores),
+            )
+            corpus_metrics = (
+                evaluate_round_trip_query(
+                    corpus_index,
+                    query=generated,
+                    positive_doc_ids=(positive_doc_id,),
+                )
+                if corpus_index is not None
+                else {}
             )
             shadow_result = None
             if shadow is not None:
@@ -297,20 +338,18 @@ def evaluate_intrinsic_records(
                 )
             row: dict[str, Any] = {
                 **record,
-                **retrieval,
+                **pool_metrics,
+                **corpus_metrics,
                 **lexical.to_dict(),
                 **format_result,
                 "primary_judge": primary.name,
-                "primary_score": primary_score.positive_score,
-                "primary_margin": primary_score.margin,
-                "positive_rank": primary_score.positive_rank,
+                "pool_positive_score": primary_score.positive_score,
+                "pool_margin": primary_score.pool_margin,
                 "shadow_judge": shadow.name if shadow else None,
                 "shadow_score": shadow_result.positive_score if shadow_result else None,
-                "shadow_margin": shadow_result.margin if shadow_result else None,
+                "shadow_pool_margin": shadow_result.pool_margin if shadow_result else None,
                 "judge_rank_disagreement": (
-                    primary_score.positive_rank != shadow_result.positive_rank
-                    if shadow_result
-                    else None
+                    primary_score.pool_rank != shadow_result.pool_rank if shadow_result else None
                 ),
                 "predicted_sentence_index": focus.focus_sentence_id,
                 "predicted_focus_bucket": focus.focus_bucket,
@@ -354,7 +393,7 @@ def evaluate_intrinsic_records(
             writer.write(row)
             group_rows.append(row)
 
-    margin_values = [float(row["primary_margin"]) for row in measured]
+    margin_values = [float(row["pool_margin"]) for row in measured]
     lexical_fields = (
         "content_jaccard",
         "query_precision",
@@ -367,7 +406,7 @@ def evaluate_intrinsic_records(
         "entity_preservation",
     )
     summary = {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "measured",
         "experiment_id": experiment_id,
         "test_fingerprint": test_fingerprint,
@@ -379,7 +418,68 @@ def evaluate_intrinsic_records(
             "shadow": shadow.name if shadow else None,
             "shadow_status": "measured" if shadow else "not_measured",
         },
-        "retrieval": {field: _mean_rate(measured, field) for field in retrieval},
+        "protocols": {
+            CANDIDATE_POOL_RANKING: {
+                "protocol": CANDIDATE_POOL_RANKING,
+                "role": "generator_grounding_diagnostic",
+                "metric_prefix": "pool_",
+                "candidate_count": distribution(
+                    [float(row["pool_candidate_count"]) for row in measured]
+                ),
+                "metrics": {field: _mean_rate(measured, field) for field in POOL_METRICS},
+                "metric_candidate_count": {
+                    field: distribution([float(row["pool_candidate_count"]) for row in measured])
+                    for field in POOL_METRICS
+                },
+            },
+            CORPUS_RETRIEVAL: {
+                "protocol": CORPUS_RETRIEVAL,
+                "role": "generator_comparison_basis_and_round_trip",
+                "metric_prefix": "corpus_",
+                "status": "measured" if corpus_index is not None else "not_measured",
+                "index": dict(corpus_index.metadata) if corpus_index is not None else None,
+                "candidate_count": (
+                    corpus_index.candidate_count if corpus_index is not None else None
+                ),
+                "metrics": {field: _mean_rate(measured, field) for field in ROUND_TRIP_METRICS},
+                "metric_candidate_count": {
+                    field: corpus_index.candidate_count if corpus_index is not None else None
+                    for field in ROUND_TRIP_METRICS
+                },
+                "effective_candidate_count": distribution(
+                    [
+                        float(row["corpus_effective_candidate_count"])
+                        for row in measured
+                        if isinstance(row.get("corpus_effective_candidate_count"), (int, float))
+                    ]
+                ),
+                "margin_to_best_nonpositive": distribution(
+                    [
+                        float(row["corpus_margin_to_best_nonpositive"])
+                        for row in measured
+                        if isinstance(row.get("corpus_margin_to_best_nonpositive"), (int, float))
+                    ]
+                ),
+                "possibly_ambiguous_query_rate": _mean_rate(
+                    measured, "corpus_possibly_ambiguous_query"
+                ),
+                "round_trip_pool_margin_correlation": {
+                    field: pearson_correlation(
+                        [
+                            float(row["pool_margin"])
+                            for row in measured
+                            if isinstance(row.get(field), (int, float))
+                        ],
+                        [
+                            float(row[field])
+                            for row in measured
+                            if isinstance(row.get(field), (int, float))
+                        ],
+                    )
+                    for field in ROUND_TRIP_METRICS
+                },
+            },
+        },
         "reranker_margin": distribution(margin_values),
         "lexical": {
             **{
@@ -452,6 +552,7 @@ def evaluate_intrinsic_records(
             "semantic_cluster_count_without_embedding_backend",
             "human_answerability",
             "probe_embedder",
+            *(["corpus_retrieval"] if corpus_index is None else []),
         ],
     }
     write_json(output_dir / "summary.json", summary)

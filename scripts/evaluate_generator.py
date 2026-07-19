@@ -22,6 +22,11 @@ def main() -> None:
     parser.add_argument("--judge-device", choices=("cpu", "cuda"))
     parser.add_argument("--max-examples", type=int)
     parser.add_argument("--generations", type=Path)
+    parser.add_argument(
+        "--corpus-index",
+        type=Path,
+        help="Frozen BM25 or auxiliary bi-encoder index directory for corpus round-trip.",
+    )
     parser.add_argument("--generation-only", action="store_true")
     args = parser.parse_args()
     result = run_checkpoint_evaluation(
@@ -36,6 +41,7 @@ def main() -> None:
         max_examples=args.max_examples,
         generations_path=args.generations,
         generation_only=args.generation_only,
+        corpus_index_path=args.corpus_index,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
 

@@ -172,6 +172,9 @@ def evaluate_generator(
         Path | None, typer.Option("--generations", exists=True, dir_okay=False)
     ] = None,
     generation_only: Annotated[bool, typer.Option("--generation-only")] = False,
+    corpus_index: Annotated[
+        Path | None, typer.Option("--corpus-index", exists=True, file_okay=False)
+    ] = None,
 ) -> None:
     """Generate deterministic/diverse queries, score, slice and report a checkpoint."""
     result = run_checkpoint_evaluation(
@@ -186,6 +189,7 @@ def evaluate_generator(
         max_examples=max_examples,
         generations_path=generations,
         generation_only=generation_only,
+        corpus_index_path=corpus_index,
     )
     console.print_json(json.dumps(result))
 
@@ -198,8 +202,9 @@ def evaluate_embedder(
     ],
     recipe_path: Annotated[Path, typer.Option("--recipe", exists=True, dir_okay=False)],
     output_dir: Annotated[Path, typer.Option("--output-dir")],
+    corpus: Annotated[Path, typer.Option("--corpus", exists=True, dir_okay=False)],
     query_source: Annotated[str, typer.Option("--query-source")] = "natural",
-    test_subset: Annotated[str, typer.Option("--test-subset")] = "test_embedder_rank10",
+    test_subset: Annotated[str, typer.Option("--test-subset")] = "test_embedder",
     synthetic_generations: Annotated[
         Path | None, typer.Option("--synthetic-generations", exists=True, dir_okay=False)
     ] = None,
@@ -225,6 +230,7 @@ def evaluate_embedder(
         query_source=query_source,  # type: ignore[arg-type]
         synthetic_generations=synthetic_generations,
         train_limit=train_limit,
+        documents_path=corpus,
     )
     console.print_json(json.dumps(result))
 

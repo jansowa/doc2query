@@ -31,12 +31,31 @@ def test_group_retrieval_metrics() -> None:
         example_id="x",
         query="pompa ciepła",
         positive="pompa ciepła ogrzewa dom",
-        negatives=["samochód elektryczny", "pompa wodna"],
+        negatives=[
+            "samochód elektryczny",
+            "pompa wodna",
+            "piec gazowy",
+            "wiatrak",
+        ],
     )
-    assert result.positive_rank == 1
-    assert result.recall_at_1 == 1
-    assert result.ndcg_at_10 == 1
-    assert aggregate([result])["mrr"] == 1
+    assert result.pool_rank == 1
+    assert result.pool_recall_at_1 == 1
+    assert result.pool_ndcg_at_10 == 1
+    assert result.pool_candidate_count == 5
+    assert aggregate([result])["pool_mrr"] == 1
+
+
+def test_reranker_benchmark_rejects_recall_above_pool_size() -> None:
+    short_pool = score_group(
+        TokenScorer(),
+        example_id="short",
+        query="pompa",
+        positive="pompa",
+        negatives=["samochód"],
+    )
+    assert short_pool.pool_recall_at_5 is None
+    with pytest.raises(ValueError, match="recall@5"):
+        aggregate([short_pool])
 
 
 def test_query_macro_does_not_overweight_multi_positive_queries() -> None:
@@ -46,7 +65,7 @@ def test_query_macro_does_not_overweight_multi_positive_queries() -> None:
         query_id="q1",
         query="trafne",
         positive="trafne",
-        negatives=["inne"],
+        negatives=["inne", "obce", "brak", "zero"],
     )
     second_positive = score_group(
         TokenScorer(),
@@ -54,7 +73,7 @@ def test_query_macro_does_not_overweight_multi_positive_queries() -> None:
         query_id="q1",
         query="trafne",
         positive="trafne także",
-        negatives=["inne"],
+        negatives=["inne", "obce", "brak", "zero"],
     )
     failed = score_group(
         TokenScorer(),
@@ -62,12 +81,12 @@ def test_query_macro_does_not_overweight_multi_positive_queries() -> None:
         query_id="q2",
         query="trafne",
         positive="inne",
-        negatives=["trafne"],
+        negatives=["trafne", "trafne także", "trafne mocno", "trafne bardzo"],
     )
     rows = [successful, second_positive, failed]
-    assert aggregate(rows)["recall_at_1"] == pytest.approx(2 / 3)
+    assert aggregate(rows)["pool_recall_at_1"] == pytest.approx(2 / 3)
     macro = aggregate_query_macro(rows)
-    assert macro["recall_at_1"] == pytest.approx(0.5)
+    assert macro["pool_recall_at_1"] == pytest.approx(0.5)
     assert macro["query_count"] == 2
     assert macro["pair_count"] == 3
 
@@ -108,7 +127,7 @@ def test_disagreement_is_explicit() -> None:
         ReverseScorer(), example_id="x", query="a b", positive="a b", negatives=["a"]
     )
     report = disagreement([primary], [shadow])
-    assert report["positive_winner_disagreement_rate"] == 1
+    assert report["pool_winner_disagreement_rate"] == 1
     assert report["disagreed_example_ids"] == ["x"]
 
 

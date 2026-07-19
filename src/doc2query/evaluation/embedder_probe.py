@@ -17,10 +17,12 @@ import torch.nn.functional as functional
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
+from doc2query.evaluation.corpus import sha256_file
 from doc2query.evaluation.datasets import evaluation_fingerprint, load_frozen_records
 from doc2query.evaluation.retrieval import (
+    CORPUS_RETRIEVAL,
     aggregate_query_metrics,
-    metrics_from_positive_ranks,
+    corpus_metrics_from_positive_ranks,
 )
 from doc2query.utils.records import JsonlWriter, read_records, write_json
 from doc2query.utils.reproducibility import set_seed
@@ -304,6 +306,7 @@ def evaluate_probe(
     model_path: Path,
     records: list[dict[str, Any]],
     *,
+    documents_path: Path,
     recipe: ProbeRecipe,
     output_dir: Path,
     test_fingerprint: str,
@@ -316,13 +319,14 @@ def evaluate_probe(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device).eval()
     corpus: dict[str, str] = {}
-    for record in records:
-        for document in [*record.get("positives", []), *record.get("hard_negatives", [])]:
-            doc_id, text = str(document["doc_id"]), str(document["text"])
-            if doc_id in corpus and corpus[doc_id] != text:
-                raise ValueError(f"document text conflict for doc_id={doc_id}")
-            corpus[doc_id] = text
+    for document in read_records(documents_path):
+        doc_id, text = str(document["doc_id"]), str(document["text"])
+        if doc_id in corpus:
+            raise ValueError(f"duplicate document in frozen corpus: doc_id={doc_id}")
+        corpus[doc_id] = text
     corpus_ids = sorted(corpus)
+    if len(corpus_ids) < 100:
+        raise ValueError("corpus_retrieval requires at least 100 documents for Recall@100")
     corpus_index = {doc_id: index for index, doc_id in enumerate(corpus_ids)}
     index_started = time.perf_counter()
     corpus_embeddings = _encode_batched(
@@ -335,13 +339,13 @@ def evaluate_probe(
     )
     index_seconds = time.perf_counter() - index_started
     per_query: list[dict[str, Any]] = []
-    metric_rows: list[dict[str, float]] = []
+    metric_rows: list[dict[str, float | int]] = []
     latencies: list[float] = []
-    with JsonlWriter(output_dir / "retrieval_per_query.jsonl") as writer:
+    with JsonlWriter(output_dir / "corpus_retrieval_per_query.jsonl") as writer:
         for record in records:
             positives = record.get("positives", [])
             negatives = record.get("hard_negatives", [])
-            if not positives or not negatives:
+            if not positives:
                 continue
             started = time.perf_counter()
             query_embedding = _encode(
@@ -355,6 +359,9 @@ def evaluate_probe(
             scores = (query_embedding @ corpus_embeddings.T).squeeze(0)
             positive_ids = [str(value["doc_id"]) for value in positives]
             negative_ids = [str(value["doc_id"]) for value in negatives]
+            missing = [doc_id for doc_id in positive_ids if doc_id not in corpus_index]
+            if missing:
+                raise ValueError(f"test positives are absent from frozen corpus: {missing[:3]}")
             positive_ranks = []
             for doc_id in positive_ids:
                 index = corpus_index[doc_id]
@@ -367,32 +374,62 @@ def evaluate_probe(
                 for positive_id in positive_ids
                 for negative_id in negative_ids
             ]
-            metrics = metrics_from_positive_ranks(
+            metrics = corpus_metrics_from_positive_ranks(
                 positive_ranks,
                 candidate_count=len(corpus_ids),
-                hard_negative_win_rate=sum(pairwise_wins) / len(pairwise_wins),
             )
-            row = {"example_id": str(record["example_id"]), **metrics}
+            row = {
+                "example_id": str(record["example_id"]),
+                **metrics,
+                "pool_candidate_count": len(positive_ids) + len(negative_ids),
+                "pool_hard_negative_win_rate": (
+                    sum(pairwise_wins) / len(pairwise_wins) if pairwise_wins else None
+                ),
+            }
             writer.write(row)
             per_query.append(row)
             metric_rows.append(metrics)
     aggregate = aggregate_query_metrics(metric_rows)
     summary = {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "measured",
+        "protocol": CORPUS_RETRIEVAL,
+        "metric_prefix": "corpus_",
         "test_fingerprint": test_fingerprint,
         "recipe_fingerprint": recipe.fingerprint,
         "query_count": len(per_query),
         "metrics": aggregate,
+        "metric_candidate_count": {metric: len(corpus_ids) for metric in aggregate},
         "latency_seconds_per_query": sum(latencies) / len(latencies) if latencies else None,
-        "corpus_document_count": len(corpus_ids),
+        "corpus_candidate_count": len(corpus_ids),
+        "corpus_path": str(documents_path),
+        "corpus_sha256": sha256_file(documents_path),
+        "candidate_pool_diagnostics": {
+            "pool_hard_negative_win_rate": (
+                sum(
+                    float(row["pool_hard_negative_win_rate"])
+                    for row in per_query
+                    if isinstance(row.get("pool_hard_negative_win_rate"), (int, float))
+                )
+                / sum(
+                    isinstance(row.get("pool_hard_negative_win_rate"), (int, float))
+                    for row in per_query
+                )
+                if any(
+                    isinstance(row.get("pool_hard_negative_win_rate"), (int, float))
+                    for row in per_query
+                )
+                else None
+            ),
+            "pool_candidate_count": sorted({int(row["pool_candidate_count"]) for row in per_query}),
+        },
         "index_build_seconds": index_seconds,
         "index_size_bytes": corpus_embeddings.nelement() * corpus_embeddings.element_size(),
         "model_size_bytes": sum(
             path.stat().st_size for path in model_path.rglob("*") if path.is_file()
         ),
     }
-    write_json(output_dir / "retrieval_summary.json", summary)
+    write_json(output_dir / "corpus_retrieval_summary.json", summary)
     return summary
 
 
@@ -406,6 +443,7 @@ def run_probe_experiment(
     query_source: QuerySource,
     synthetic_generations: Path | None = None,
     train_limit: int | None = None,
+    documents_path: Path,
 ) -> dict[str, Any]:
     pairs, train_fingerprint = prepare_probe_pairs(
         read_records(train_path),
@@ -424,10 +462,11 @@ def run_probe_experiment(
     retrieval = evaluate_probe(
         output_dir / "model",
         test_records,
+        documents_path=documents_path,
         recipe=recipe,
         output_dir=output_dir,
         test_fingerprint=evaluation_fingerprint(frozen_manifest, test_subset),
     )
-    result = {"training": train_summary, "retrieval": retrieval}
+    result = {"training": train_summary, "corpus_retrieval": retrieval}
     write_json(output_dir / "result.json", result)
     return result

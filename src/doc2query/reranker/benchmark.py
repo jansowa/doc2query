@@ -5,8 +5,9 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable
 from statistics import fmean
-from typing import Any
+from typing import Any, cast
 
+from doc2query.evaluation.retrieval import CANDIDATE_POOL_RANKING, validate_recall_cutoffs
 from doc2query.reranker.infer import GroupScore
 
 
@@ -23,16 +24,19 @@ def aggregate(scores: Iterable[GroupScore]) -> dict[str, Any]:
     rows = list(scores)
     if not rows:
         raise ValueError("cannot aggregate an empty benchmark")
+    validate_recall_cutoffs(min(row.pool_candidate_count for row in rows), (1, 5))
     return {
         "count": len(rows),
-        "recall_at_1": fmean(row.recall_at_1 for row in rows),
-        "recall_at_5": fmean(row.recall_at_5 for row in rows),
-        "mrr": fmean(row.reciprocal_rank for row in rows),
-        "ndcg_at_10": fmean(row.ndcg_at_10 for row in rows),
-        "mean_margin": fmean(row.margin for row in rows),
-        "negative_margin_rate": fmean(row.margin < 0 for row in rows),
-        "near_zero_margin_rate": fmean(row.near_zero_margin for row in rows),
-        "all_scores_close_rate": fmean(row.all_scores_close for row in rows),
+        "protocol": CANDIDATE_POOL_RANKING,
+        "pool_candidate_count": sorted({row.pool_candidate_count for row in rows}),
+        "pool_recall_at_1": fmean(row.pool_recall_at_1 for row in rows),
+        "pool_recall_at_5": fmean(cast(float, row.pool_recall_at_5) for row in rows),
+        "pool_mrr": fmean(row.pool_mrr for row in rows),
+        "pool_ndcg_at_10": fmean(row.pool_ndcg_at_10 for row in rows),
+        "pool_mean_margin": fmean(row.pool_margin for row in rows),
+        "pool_negative_margin_rate": fmean(row.pool_margin < 0 for row in rows),
+        "pool_near_zero_margin_rate": fmean(row.pool_near_zero_margin for row in rows),
+        "pool_all_scores_close_rate": fmean(row.pool_all_scores_close for row in rows),
     }
 
 
@@ -45,14 +49,14 @@ def aggregate_query_macro(scores: Iterable[GroupScore]) -> dict[str, Any]:
         raise ValueError("cannot aggregate an empty benchmark")
     per_query = [aggregate(rows) for rows in by_query.values()]
     metric_names = (
-        "recall_at_1",
-        "recall_at_5",
-        "mrr",
-        "ndcg_at_10",
-        "mean_margin",
-        "negative_margin_rate",
-        "near_zero_margin_rate",
-        "all_scores_close_rate",
+        "pool_recall_at_1",
+        "pool_recall_at_5",
+        "pool_mrr",
+        "pool_ndcg_at_10",
+        "pool_mean_margin",
+        "pool_negative_margin_rate",
+        "pool_near_zero_margin_rate",
+        "pool_all_scores_close_rate",
     )
     return {
         "query_count": len(by_query),
@@ -67,14 +71,17 @@ def disagreement(primary: Iterable[GroupScore], shadow: Iterable[GroupScore]) ->
     shared = sorted(left.keys() & right.keys())
     if not shared:
         raise ValueError("judges have no shared examples")
-    rank_disagree = [left[key].positive_rank != right[key].positive_rank for key in shared]
-    winner_disagree = [(left[key].margin >= 0) != (right[key].margin >= 0) for key in shared]
+    rank_disagree = [left[key].pool_rank != right[key].pool_rank for key in shared]
+    winner_disagree = [
+        (left[key].pool_margin >= 0) != (right[key].pool_margin >= 0) for key in shared
+    ]
     return {
         "count": len(shared),
-        "positive_rank_disagreement_rate": fmean(rank_disagree),
-        "positive_winner_disagreement_rate": fmean(winner_disagree),
-        "margin_pearson": _pearson(
-            [left[key].margin for key in shared], [right[key].margin for key in shared]
+        "pool_rank_disagreement_rate": fmean(rank_disagree),
+        "pool_winner_disagreement_rate": fmean(winner_disagree),
+        "pool_margin_pearson": _pearson(
+            [left[key].pool_margin for key in shared],
+            [right[key].pool_margin for key in shared],
         ),
         "disagreed_example_ids": [
             key for key, flag in zip(shared, winner_disagree, strict=True) if flag

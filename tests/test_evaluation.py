@@ -7,7 +7,17 @@ from typing import Any
 import pytest
 
 from doc2query.evaluation.bootstrap import assert_same_test_fingerprint, paired_bootstrap
-from doc2query.evaluation.comparison import rank_variants
+from doc2query.evaluation.comparison import compare_generator_runs, rank_variants
+from doc2query.evaluation.corpus import (
+    BiEncoderCorpusIndex,
+    BM25CorpusIndex,
+    BM25IndexConfig,
+    FrozenBiEncoderConfig,
+    backfill_candidate_pools,
+    build_biencoder_index,
+    build_bm25_index,
+    evaluate_round_trip_query,
+)
 from doc2query.evaluation.datasets import (
     evaluation_fingerprint,
     freeze_evaluation_sets,
@@ -20,10 +30,11 @@ from doc2query.evaluation.format import format_metrics
 from doc2query.evaluation.human import cohen_kappa, fleiss_kappa
 from doc2query.evaluation.intrinsic import evaluate_intrinsic_records
 from doc2query.evaluation.retrieval import (
+    candidate_pool_metrics_from_rank,
+    corpus_metrics_from_positive_ranks,
     distribution,
-    metrics_from_positive_ranks,
-    metrics_from_rank,
     ndcg,
+    validate_recall_cutoffs,
 )
 from doc2query.evaluation.slices import aggregate_slices
 from doc2query.utils.records import JsonlWriter
@@ -108,19 +119,34 @@ def test_frozen_set_detects_id_tampering(tmp_path: Path) -> None:
 
 
 def test_known_retrieval_rankings() -> None:
-    first = metrics_from_rank(1, 11)
-    third = metrics_from_rank(3, 11)
-    assert first["mrr"] == 1.0
-    assert third["mrr"] == pytest.approx(1 / 3)
-    assert third["recall_at_1"] == 0.0
-    assert third["recall_at_5"] == 1.0
-    assert third["ndcg_at_10"] == pytest.approx(1 / 2)
+    first = candidate_pool_metrics_from_rank(1, candidate_count=11)
+    third = candidate_pool_metrics_from_rank(3, candidate_count=11)
+    assert first["pool_mrr"] == 1.0
+    assert third["pool_mrr"] == pytest.approx(1 / 3)
+    assert third["pool_recall_at_1"] == 0.0
+    assert third["pool_recall_at_5"] == 1.0
+    assert third["pool_ndcg_at_10"] == pytest.approx(1 / 2)
+    assert third["pool_candidate_count"] == 11
     assert ndcg([0, 1, 0], 10) == pytest.approx(1 / 1.584962500721156)
-    multi = metrics_from_positive_ranks([1, 3], candidate_count=1000, hard_negative_win_rate=0.75)
-    assert multi["recall_at_1"] == 0.5
-    assert multi["recall_at_5"] == 1.0
-    assert multi["map"] == pytest.approx((1 + 2 / 3) / 2)
-    assert multi["hard_negative_win_rate"] == 0.75
+    multi = corpus_metrics_from_positive_ranks([1, 3], candidate_count=1000)
+    assert multi["corpus_recall_at_1"] == 0.5
+    assert multi["corpus_recall_at_5"] == 1.0
+    assert multi["corpus_map"] == pytest.approx((1 + 2 / 3) / 2)
+    assert multi["corpus_candidate_count"] == 1000
+
+
+def test_protocol_metric_names_are_disjoint_and_recall_cutoff_is_validated() -> None:
+    pool = candidate_pool_metrics_from_rank(1, candidate_count=11)
+    corpus = corpus_metrics_from_positive_ranks([1], candidate_count=100)
+    assert set(pool).isdisjoint(corpus)
+    assert all(key.startswith("pool_") for key in pool)
+    assert all(key.startswith("corpus_") for key in corpus)
+    with pytest.raises(ValueError, match="only 4 documents"):
+        candidate_pool_metrics_from_rank(1, candidate_count=4)
+    with pytest.raises(ValueError, match="recall@100"):
+        corpus_metrics_from_positive_ranks([1], candidate_count=99)
+    with pytest.raises(ValueError, match="only 3 documents"):
+        validate_recall_cutoffs(3, (1, 5))
 
 
 def test_duplicates_have_expected_diversity_penalty() -> None:
@@ -193,9 +219,25 @@ def test_ranking_requires_probe_metric() -> None:
     intrinsic_only = {"experiment_id": "reward-winner", "reward": 100.0}
     probe = {
         "experiment_id": "probe",
-        "probe_embedder": {"ndcg_at_10": 0.4, "mrr_at_10": 0.5},
+        "probe_embedder": {"corpus_ndcg_at_10": 0.4, "corpus_mrr_at_10": 0.5},
     }
     assert rank_variants([intrinsic_only, probe]) == [probe]
+
+
+def test_generator_comparison_requires_measured_same_corpus_index(tmp_path: Path) -> None:
+    left = tmp_path / "left.json"
+    right = tmp_path / "right.json"
+    payload = {"test_fingerprint": "f" * 64, "protocols": {}}
+    left.write_text(json.dumps(payload), encoding="utf-8")
+    right.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="measured corpus_retrieval"):
+        compare_generator_runs(
+            left,
+            right,
+            left_per_generation_path=tmp_path / "missing-left.jsonl",
+            right_per_generation_path=tmp_path / "missing-right.jsonl",
+            output_path=tmp_path / "comparison.json",
+        )
 
 
 class _OverlapScorer:
@@ -237,4 +279,165 @@ def test_intrinsic_smoke_writes_null_for_unmeasured(tmp_path: Path) -> None:
     assert summary["judges"]["shadow_status"] == "not_measured"
     assert summary["focus"]["control_accuracy"] is None
     assert summary["diversity"]["semantic_cluster_count"] is None
+    assert summary["protocols"]["candidate_pool_ranking"]["metric_prefix"] == "pool_"
+    assert summary["protocols"]["corpus_retrieval"]["status"] == "not_measured"
     assert json.loads((tmp_path / "summary.json").read_text())["test_fingerprint"] == "f" * 64
+
+
+def _corpus_documents(count: int = 100) -> list[dict[str, Any]]:
+    return [
+        {
+            "doc_id": f"d-{index:03d}",
+            "text": (
+                "Warszawa jest stolicą Polski nad Wisłą."
+                if index == 0
+                else f"Kraków ma zabytek numer {index}."
+            ),
+            "metadata": {},
+        }
+        for index in range(count)
+    ]
+
+
+def test_bm25_corpus_round_trip_records_full_pool_and_fingerprint(tmp_path: Path) -> None:
+    documents = tmp_path / "documents.jsonl"
+    _write_jsonl(documents, _corpus_documents())
+    index_dir = tmp_path / "bm25"
+    manifest = build_bm25_index(
+        documents,
+        output_dir=index_dir,
+        config=BM25IndexConfig(
+            relevance_score_threshold=1.0,
+            ambiguity_candidate_threshold=20,
+        ),
+    )
+    assert manifest["protocol"] == "corpus_retrieval"
+    assert manifest["candidate_count"] == 100
+    assert len(manifest["index_fingerprint"]) == 64
+    with BM25CorpusIndex(index_dir) as index:
+        result = evaluate_round_trip_query(
+            index,
+            query="Gdzie leży Warszawa?",
+            positive_doc_ids=("d-000",),
+        )
+    assert result["corpus_candidate_count"] == 100
+    assert result["corpus_round_trip_at_1"] == 1.0
+    assert result["corpus_round_trip_at_100"] == 1.0
+    assert result["corpus_margin_to_best_nonpositive"] > 0
+    assert isinstance(result["corpus_effective_candidate_count"], int)
+
+
+def test_candidate_pool_backfill_is_deterministic_and_marks_provenance(tmp_path: Path) -> None:
+    documents = tmp_path / "documents.jsonl"
+    _write_jsonl(documents, _corpus_documents())
+    source = _canonical("short", negative_count=2)
+    first = backfill_candidate_pools(
+        [source],
+        documents_path=documents,
+        corpus_fingerprint="c" * 64,
+    )
+    second = backfill_candidate_pools(
+        [source],
+        documents_path=documents,
+        corpus_fingerprint="c" * 64,
+    )
+    assert first == second
+    assert len(first[0]["hard_negatives"]) == 10
+    assert first[0]["candidate_pool_backfilled_count"] == 8
+    assert all(
+        document["metadata"]["candidate_pool_backfill"]["corpus_fingerprint"] == "c" * 64
+        for document in first[0]["hard_negatives"][2:]
+    )
+
+
+class _FixtureEncoder:
+    def encode(self, texts: Any, *, batch_size: int) -> Any:
+        import numpy as np
+
+        del batch_size
+        return np.asarray(
+            [[1.0, 0.0] if "warszaw" in str(text).lower() else [0.0, 1.0] for text in texts],
+            dtype=np.float32,
+        )
+
+
+def test_frozen_auxiliary_biencoder_manifest_and_round_trip(tmp_path: Path) -> None:
+    documents = tmp_path / "documents.jsonl"
+    _write_jsonl(documents, _corpus_documents())
+    config = FrozenBiEncoderConfig(
+        model_name_or_path="fixture/encoder",
+        revision="a" * 40,
+        license="apache-2.0",
+        relevance_score_threshold=0.5,
+    )
+    index_dir = tmp_path / "biencoder"
+    manifest = build_biencoder_index(
+        documents,
+        output_dir=index_dir,
+        config=config,
+        encoder=_FixtureEncoder(),
+    )
+    assert manifest["config"]["revision"] == "a" * 40
+    assert manifest["config"]["license"] == "apache-2.0"
+    index = BiEncoderCorpusIndex(index_dir, encoder=_FixtureEncoder())
+    try:
+        result = evaluate_round_trip_query(
+            index,
+            query="Warszawa",
+            positive_doc_ids=("d-000",),
+        )
+    finally:
+        index.close()
+    assert result["corpus_round_trip_at_1"] == 1.0
+    assert result["corpus_candidate_count"] == 100
+
+
+def test_intrinsic_reports_round_trip_and_pool_margin_correlation(tmp_path: Path) -> None:
+    corpus_rows = _corpus_documents()
+    documents = tmp_path / "documents.jsonl"
+    _write_jsonl(documents, corpus_rows)
+    index_dir = tmp_path / "bm25"
+    build_bm25_index(
+        documents,
+        output_dir=index_dir,
+        config=BM25IndexConfig(relevance_score_threshold=1.0),
+    )
+    base = {
+        "experiment_id": "fixture",
+        "example_id": "1",
+        "mode": "diverse",
+        "reference": "Gdzie leży Warszawa?",
+        "positive": corpus_rows[0],
+        "hard_negatives": corpus_rows[1:11],
+        "positive_count": 1,
+        "metadata": {"source": "fixture"},
+    }
+    generations = [
+        {
+            **base,
+            "evaluation_id": "1::diverse::0",
+            "candidate_index": 0,
+            "generated": "Warszawa stolica",
+        },
+        {
+            **base,
+            "evaluation_id": "1::diverse::1",
+            "candidate_index": 1,
+            "generated": "Kraków zabytek",
+        },
+    ]
+    with BM25CorpusIndex(index_dir) as index:
+        summary = evaluate_intrinsic_records(
+            generations,
+            primary=_OverlapScorer(),
+            shadow=None,
+            output_dir=tmp_path / "evaluation",
+            test_fingerprint="f" * 64,
+            experiment_id="fixture",
+            corpus_index=index,
+        )
+    corpus = summary["protocols"]["corpus_retrieval"]
+    assert corpus["status"] == "measured"
+    assert corpus["candidate_count"] == 100
+    assert corpus["metrics"]["corpus_round_trip_at_20"] == 0.5
+    assert corpus["round_trip_pool_margin_correlation"]["corpus_round_trip_at_20"] == 1.0

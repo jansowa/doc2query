@@ -19,7 +19,13 @@ def main() -> None:
     parser.add_argument("--recipe", type=Path, required=True)
     parser.add_argument("--train-input", type=Path, required=True)
     parser.add_argument("--frozen-manifest", type=Path, required=True)
-    parser.add_argument("--test-subset", default="test_embedder_rank10")
+    parser.add_argument("--test-subset", default="test_embedder")
+    parser.add_argument(
+        "--corpus",
+        type=Path,
+        required=True,
+        help="Full frozen documents.parquet used by corpus_retrieval.",
+    )
     parser.add_argument(
         "--query-source", choices=("natural", "copy_control", "synthetic"), required=True
     )
@@ -47,11 +53,12 @@ def main() -> None:
         query_source=args.query_source,
         synthetic_generations=args.synthetic_generations,
         train_limit=args.train_limit,
+        documents_path=args.corpus,
     )
     if args.smoke_steps is not None:
         result["comparability"] = "smoke_only_not_comparable"
         result["training"]["comparability"] = "smoke_only_not_comparable"
-        result["retrieval"]["comparability"] = "smoke_only_not_comparable"
+        result["corpus_retrieval"]["comparability"] = "smoke_only_not_comparable"
         write_json(args.output_dir / "result.json", result)
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
 

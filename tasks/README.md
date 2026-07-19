@@ -37,7 +37,7 @@ uruchomiono.
 | [01](01_data_contract_audit_and_splits.md) | Kontrakt danych, audyt, deduplikacja i splity | `IMPLEMENTED` | Pełny `msmarco_pl` przetworzono do zamrożonych splitów v1 i par doc2query bez leakage pozytywów. Dla rekordów z <10 negatywami przyjęto corpus retrieval oraz oznaczone, deterministyczne backfillowanie tylko w diagnostycznej puli. Pozostał raport tokenowych percentyli/HTML. |
 | [02](02_reranker_and_reward_proxies.md) | Zamrożone rerankery i proxy nagrody | `IMPLEMENTED` | Integracja, kalibracja, reward proxies i testy są gotowe; base-ranknet i primary v3 zmierzyły panel 100 generacji W05. Pozostał benchmark primary/shadow na dev/test z hard negative'ami. |
 | [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | Run W06 4.5B Instruct/50k zakończył 3125 kroków w 8 h 14 min. Jego wyniki są diagnostyczne, nie selekcyjne, dopóki Task 04 nie dostarczy Harness v1.1. Po v1.1 wykonać P-05: S00 zero/few-shot, S07 plT5/mT5 i małą macierz probe, następnie P-06: czyszczenie/ważenie par na 1.5B. Nie rozpoczynać kolejnej kampanii 4.5B przed tą bramką. |
-| [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IN PROGRESS` | Dotychczasowy harness i intrinsic W03/W05/W06 są użyteczną diagnostyką, ale audyt ujawnił cztery blokery. Następny krok: pakiet Harness v1.1 P-01→P-04 — rozdzielone protokoły pool/corpus, natywny polski holdout, polityka false negatives probe oraz zamrożony kontrakt statystyczno-budżetowy. Do tego czasu nie uruchamiać porównawczych probe, eksperymentów D ani Task 06. |
+| [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IN PROGRESS` | P-01 Harness v1.1 zaimplementowano i przetestowano: rozłączne protokoły/metryki `pool_*` i `corpus_*`, jawny rozmiar puli, walidacja Recall@K, infrastruktura zamrożonych indeksów BM25/bi-encoder oraz korpusowy round-trip. Pełnych indeksów i runów W03/W05/W06 nie wykonano. Następny bloker: P-02 native PL holdout, potem P-03 false negatives i P-04 kontrakt statystyczno-budżetowy. Do ich zamknięcia nie uruchamiać porównawczych probe, eksperymentów D ani Task 06. |
 | [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `TODO` | Kod taksonomii i kontrolek może powstawać równolegle, ale eksperymenty D00–D12 wymagają ukończonego Harness v1.1 z Task 04. |
 | [06](06_candidate_scoring_and_preference_data.md) | Scoring kandydatów i dane preferencyjne | `TODO` | Wymaga stabilnego checkpointu SFT, ukończonego Harness v1.1 oraz Task 02 i 05. |
 | [07](07_dpo_training.md) | DPO i continued-SFT control | `TODO` | Wymaga danych preferencyjnych z Task 06. |
@@ -53,8 +53,9 @@ Ten rejestr jest jedynym operacyjnym źródłem kolejności i statusów.
 pozostaje zapisem przesłanek i identyfikatorów P-xx, ale nie jest równoległym
 backlogiem. Zakres P-xx został przeniesiony do wskazanych plików zadań.
 
-1. **Teraz — Task 04 / Harness v1.1:** P-01, następnie P-02, P-03 i P-04.
-   Wszystkie cztery są blokerami pierwszego porównawczego probe.
+1. **Teraz — Task 04 / Harness v1.1:** P-01 zaimplementowano; następnie
+   P-02, P-03 i P-04. Pozostałe trzy są blokerami pierwszego porównawczego
+   probe.
 2. **Brama tanich baseline'ów — Task 03:** P-05 i P-06 na 1.5B. W06 pozostaje
    eksploracyjnym dowodem wykonalności 4.5B/8 GB, a nie zgodą na dalszą
    kampanię skali.
@@ -67,7 +68,7 @@ backlogiem. Zakres P-xx został przeniesiony do wskazanych plików zadań.
 
 Najbliższy jednoznaczny punkt wejścia dla kolejnej sesji to
 [`Task 04`](04_evaluation_harness.md), sekcja „Harness v1.1 — blokery po
-audycie”, zaczynając od P-01.
+audycie”, zaczynając od P-02.
 
 ## Kolejność bazowa
 

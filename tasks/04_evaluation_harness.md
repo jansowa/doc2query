@@ -39,6 +39,22 @@ i nie definiuje polityki fałszywych negatywów. Dlatego zadanie ponownie ma
 status `IN PROGRESS`, a wyniki W03/W05/W06 są diagnostyczne. Nie wolno na ich
 podstawie wybierać finalisty ani uruchamiać pierwszych porównawczych probe.
 
+19 lipca zaimplementowano P-01 Harness v1.1. Kontrakty
+`candidate_pool_ranking` i `corpus_retrieval` mają rozłączne prefiksy
+`pool_`/`corpus_`, każdy rekord i blok metryk podaje rozmiar puli, a wspólna
+walidacja odrzuca Recall@K dla puli mniejszej niż K. Probe korzysta teraz z
+jawnego pełnego pliku dokumentów zamiast puli złożonej z rekordów testowych.
+Dodano dyskowy BM25 na cachowanej analizie tekstu i brute-force zamrożonego
+bi-encodera z revision, licencją i fingerprintami, deterministyczny backfill
+puli diagnostycznej oraz korpusowy round-trip@1/5/20/100 ze specyficznością,
+marginesem i korelacją z marginesem rerankera. Testy tanie przeszły; nie
+zbudowano jeszcze pełnoskalowych indeksów korpusu i nie uruchomiono probe.
+
+Następnym blokerem jest P-02. Po nim nadal pozostają P-03 i P-04; do
+zamknięcia wszystkich trzech nie wolno uruchamiać porównawczych probe,
+eksperymentów D00–D12 ani Task 06. Pozostają także wcześniej wymienione
+pełnoskalowe pomiary, shadow judge, diversity embeddingowe i panel ludzi.
+
 ## Harness v1.1 — blokery po audycie
 
 Poniższy pakiet jest następnym zadaniem projektu. Kolejność wykonania:
@@ -46,7 +62,7 @@ Poniższy pakiet jest następnym zadaniem projektu. Kolejność wykonania:
 [`docs/plan_poprawek_po_audytach.md`](../docs/plan_poprawek_po_audytach.md);
 operacyjny zakres i status są utrzymywane tutaj oraz w `tasks/README.md`.
 
-### P-01 — rozdzielone protokoły retrieval
+### P-01 — rozdzielone protokoły retrieval — `IMPLEMENTED`
 
 - `candidate_pool_ranking`: pozytyw(y) i odziedziczone lub deterministycznie
   uzupełnione negatywy; metryki z prefiksem `pool_`, diagnostyka generatora;
@@ -60,6 +76,10 @@ operacyjny zakres i status są utrzymywane tutaj oraz w `tasks/README.md`.
   pula ma mniej niż K dokumentów;
 - raportuje `corpus_round_trip@1/5/20/100` i jego korelację z marginesem
   rerankera.
+
+Implementacja i testy jednostkowe/smoke są gotowe. Pełnoskalowe indeksy BM25
+i pomocniczego bi-encodera, ich throughput oraz round-trip W03/W05/W06 nie
+zostały uruchomione i nie są tu deklarowane jako wynik eksperymentalny.
 
 ### P-02 — natywny polski holdout
 
