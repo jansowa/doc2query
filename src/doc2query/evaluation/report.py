@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from doc2query.utils.records import read_records
+from doc2query.utils.records import read_records, write_json
 
 
 def _display(value: Any) -> str:
@@ -84,6 +84,10 @@ def build_generator_report(
         ("Corpus round-trip@1", corpus_metrics.get("corpus_round_trip_at_1")),
         ("Corpus round-trip@100", corpus_metrics.get("corpus_round_trip_at_100")),
         ("Format valid", summary.get("format", {}).get("valid_rate")),
+        (
+            "Translationese surface risk",
+            summary.get("translationese", {}).get("generated", {}).get("mean_risk_score"),
+        ),
         (
             "Probe embedder",
             summary.get("probe_embedder"),
@@ -233,3 +237,92 @@ Reranker scores are proxies and do not establish logical answerability.</p>
         "examples": len(examples),
         "summary_fields": len(_flatten("", summary)),
     }
+
+
+def build_embedder_report(
+    result: dict[str, Any],
+    *,
+    markdown_path: Path,
+    json_path: Path,
+) -> dict[str, Any]:
+    """Render native and translated probe results side by side, preserving missing values."""
+    evaluations = result.get("evaluation_sets", {})
+    native = evaluations.get("test_native_pl", {})
+    translated = evaluations.get("test_translated_msmarco_pl", {})
+    metrics = (
+        "corpus_recall_at_1",
+        "corpus_recall_at_5",
+        "corpus_recall_at_10",
+        "corpus_recall_at_100",
+        "corpus_mrr_at_10",
+        "corpus_ndcg_at_10",
+        "corpus_map",
+    )
+    report = {
+        "schema_version": 1,
+        "status": result.get("report_status", "incomplete"),
+        "complete": result.get("report_status") == "complete",
+        "comparison_eligible": bool(result.get("comparison_eligible", False)),
+        "incomplete_reasons": result.get("incomplete_reasons", []),
+        "native": native,
+        "translated": translated,
+        "policy": {
+            "native_required": True,
+            "native_tuning_prohibited": True,
+            "separate_reporting": True,
+            "translationese_is_diagnostic_only": True,
+        },
+    }
+    write_json(json_path, report)
+    lines = [
+        "# Probe embedder evaluation",
+        "",
+        f"- Report status: `{report['status']}`",
+        f"- Comparison eligible: `{str(report['comparison_eligible']).lower()}`",
+        "- Native holdout is final-test-only and must not be used for tuning.",
+        "- Native and machine-translated results are never pooled.",
+        "- Translationese is a transparent surface heuristic, not proof of translation.",
+        "",
+        "## Native versus translated",
+        "",
+        "| Metric | test_native_pl | test_translated_msmarco_pl |",
+        "|---|---:|---:|",
+    ]
+    native_metrics = native.get("metrics") if isinstance(native, dict) else None
+    translated_metrics = translated.get("metrics") if isinstance(translated, dict) else None
+    for metric in metrics:
+        native_value = native_metrics.get(metric) if isinstance(native_metrics, dict) else None
+        translated_value = (
+            translated_metrics.get(metric) if isinstance(translated_metrics, dict) else None
+        )
+        lines.append(f"| {metric} | {_display(native_value)} | {_display(translated_value)} |")
+    lines.extend(
+        [
+            "",
+            "## Dataset status and provenance",
+            "",
+            "| Dataset | Status | Profile | Fingerprint | Corpus size | Translationese risk |",
+            "|---|---|---|---|---:|---:|",
+        ]
+    )
+    for label, payload in (("native", native), ("translated", translated)):
+        translationese = payload.get("translationese", {}) if isinstance(payload, dict) else {}
+        lines.append(
+            f"| {label} | {_display(payload.get('status'))} | "
+            f"{_display(payload.get('profile'))} | "
+            f"`{_display(payload.get('test_fingerprint'))}` | "
+            f"{_display(payload.get('corpus_candidate_count'))} | "
+            f"{_display(translationese.get('mean_risk_score'))} |"
+        )
+    if report["incomplete_reasons"]:
+        lines.extend(
+            [
+                "",
+                "## Missing required measurements",
+                "",
+                *[f"- {reason}" for reason in report["incomplete_reasons"]],
+            ]
+        )
+    markdown_path.parent.mkdir(parents=True, exist_ok=True)
+    markdown_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return report

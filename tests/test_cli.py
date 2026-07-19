@@ -58,6 +58,14 @@ def test_sft_help_documents_automatic_resume() -> None:
     assert "--resume-if-available" in result.stdout
 
 
+def test_embedder_help_exposes_native_holdout_profiles_without_loading_model() -> None:
+    result = runner.invoke(app, ["evaluate", "embedder", "--help"])
+    assert result.exit_code == 0
+    assert "--holdout-manifest" in result.stdout
+    assert "--native-corpus" in result.stdout
+    assert "--holdout-profile" in result.stdout
+
+
 def test_data_validate_cli_runs_task01_pipeline(tmp_path: Path) -> None:
     input_path = tmp_path / "input.jsonl"
     with JsonlWriter(input_path) as writer:

@@ -205,6 +205,13 @@ def evaluate_embedder(
     corpus: Annotated[Path, typer.Option("--corpus", exists=True, dir_okay=False)],
     query_source: Annotated[str, typer.Option("--query-source")] = "natural",
     test_subset: Annotated[str, typer.Option("--test-subset")] = "test_embedder",
+    holdout_manifest: Annotated[
+        Path | None, typer.Option("--holdout-manifest", exists=True, dir_okay=False)
+    ] = None,
+    native_corpus: Annotated[
+        Path | None, typer.Option("--native-corpus", exists=True, dir_okay=False)
+    ] = None,
+    holdout_profile: Annotated[str, typer.Option("--holdout-profile")] = "quick",
     synthetic_generations: Annotated[
         Path | None, typer.Option("--synthetic-generations", exists=True, dir_okay=False)
     ] = None,
@@ -221,6 +228,8 @@ def evaluate_embedder(
         raise typer.BadParameter("probe recipe must be a YAML mapping")
     if query_source not in {"natural", "copy_control", "synthetic"}:
         raise typer.BadParameter("query-source must be natural, copy_control, or synthetic")
+    if holdout_profile not in {"quick", "medium", "full"}:
+        raise typer.BadParameter("holdout-profile must be quick, medium, or full")
     result = run_probe_experiment(
         train_path=parsed.data.input_path,
         frozen_manifest=frozen_manifest,
@@ -231,6 +240,9 @@ def evaluate_embedder(
         synthetic_generations=synthetic_generations,
         train_limit=train_limit,
         documents_path=corpus,
+        holdout_manifest=holdout_manifest,
+        native_documents_path=native_corpus,
+        holdout_profile=holdout_profile,  # type: ignore[arg-type]
     )
     console.print_json(json.dumps(result))
 

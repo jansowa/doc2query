@@ -1,0 +1,97 @@
+{
+  "manifest_path": "data/processed/v1/evaluation/task04-native-pl-v1/manifest.json",
+  "status": "complete",
+  "version": "task04-native-pl-v1",
+  "sets": {
+    "test_native_pl": {
+      "status": "materialized",
+      "source_repo": "ipipan/polqa",
+      "source_revision": "d78d036ef08ab3b9f4d85a2893f4d3a0c95a6f37",
+      "count": 956,
+      "source_artifact_sha256": "d0c990692ecf73234d898ea21142113beb8410ba67c53376082e6604d5c0464c",
+      "records_sha256": "d89b716f01f0bc09e2b8d9fd6e67d6f365645f3d7f94e5c15bb882b5593c37b8",
+      "id_list_sha256": "31946d1d79ebe04e9b865d7fb5c149fe6b87030f73a0316f4327c1663c12de1d",
+      "translationese_surface_v1": {
+        "query_count": 956,
+        "mean_risk_score": 0.001778242677824268,
+        "interpretation": "diagnostic_only_not_proof_of_translation_or_naturalness"
+      },
+      "profiles": {
+        "quick": {
+          "count": 100,
+          "id_list_sha256": "b73d1fc2ed4e27656d22d0375b24fc9ac3d7a6f8bc0dc68cf0a4029364826e02",
+          "evaluation_fingerprint": "1885b5eec6ccf9f96058a0bf004b6535ae0fcb566ad8d6da437152d40f51943b"
+        },
+        "medium": {
+          "count": 500,
+          "id_list_sha256": "0b5d6fbbddf269c7b98457ceb7cbbad226996e4461500aebacc905235e7700ad",
+          "evaluation_fingerprint": "c7ce5db0ba61778dda2f0bbf76ede8dc210f0be89a524de5871195e06ddbfad8"
+        },
+        "full": {
+          "count": 956,
+          "id_list_sha256": "31946d1d79ebe04e9b865d7fb5c149fe6b87030f73a0316f4327c1663c12de1d",
+          "evaluation_fingerprint": "eba85ffc8c76af3f67b5a577020648897a9fab8d517810b7251ce2aaafd33f39"
+        }
+      },
+      "corpora": {
+        "quick": {
+          "document_count": 1114,
+          "sha256": "1f14d7b3183e356511ea5ea2a657a2172cca1061221434f88d164431c6cbcc4c"
+        },
+        "medium": {
+          "document_count": 5558,
+          "sha256": "5bc3838f8fe86e5d86f06a9a0531fe173956b19b65b0e778a2cdd853ab211509"
+        },
+        "full": {
+          "document_count": 7097288,
+          "source_sha256": "902fef5a8710d41a5603e8b067baaef20eb3b2b9181e639e60834b6ca2cd0a66",
+          "sha256": "8dc01f02efcd8e1f179e22ce6e5548cd9e4a1c28cbc1c20f3e2068358a4d823f"
+        }
+      },
+      "exact_overlap_with_translated": {
+        "query_count": 0,
+        "document_count": 0,
+        "near_duplicate_status": "not_measured",
+        "artifact_sha256": "ab4252e8b262eb2604c4dcc89cb17f4f0e4fdc6ef5316a65be0e169f8a8d2560"
+      }
+    },
+    "test_translated_msmarco_pl": {
+      "status": "materialized",
+      "count": 16272,
+      "records_sha256": "3aef27e01c68745595e39925cf6a5db372d3dcc811304a6665965aa0df7cb10f",
+      "id_list_sha256": "42a4d429a99d8cc7c024fcc22febf8f4a5f9cb3bfa4afd5346b1aa9baef5633f",
+      "translationese_surface_v1": {
+        "query_count": 16272,
+        "mean_risk_score": 0.004707472959685347,
+        "interpretation": "diagnostic_only_not_proof_of_translation_or_naturalness"
+      },
+      "profiles": {
+        "quick": {
+          "count": 100,
+          "id_list_sha256": "deb03b5d62d0f034043a6144ceecafcf2c1948d17dcefc52a07e5a8789fce0fe",
+          "evaluation_fingerprint": "53210bc5f751401c928dce4ff1543720c8f7a940ee694f5d90c0ee70d39c0a5b"
+        },
+        "medium": {
+          "count": 500,
+          "id_list_sha256": "d35f0dc79ddbf58a5ce19c041f667566666faf720e88a3e2c27d6db2edb9479b",
+          "evaluation_fingerprint": "5946376fbd15a9d90330aebdbb6056b3471134d9d89eb3b473f6804c3f1b1956"
+        },
+        "full": {
+          "count": 16272,
+          "id_list_sha256": "42a4d429a99d8cc7c024fcc22febf8f4a5f9cb3bfa4afd5346b1aa9baef5633f",
+          "evaluation_fingerprint": "afde9c09e8daa12ae23347d10f549e99819f07d2891276105a3f8e8f190f101c"
+        }
+      },
+      "diagnostic_corpora": {
+        "quick": {
+          "document_count": 996,
+          "sha256": "21ae70565c298a6ffa4292c8475753b20a6e00900a5cc1f4e034cb8101de48f2"
+        },
+        "medium": {
+          "document_count": 5069,
+          "sha256": "a1e33a3953c29ce115556491632af7d2339b5c0609e5f06858eaf6b4d22c2524"
+        }
+      }
+    }
+  }
+}

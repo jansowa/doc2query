@@ -21,6 +21,21 @@ def main() -> None:
     parser.add_argument("--frozen-manifest", type=Path, required=True)
     parser.add_argument("--test-subset", default="test_embedder")
     parser.add_argument(
+        "--holdout-manifest",
+        type=Path,
+        help="P-02 manifest containing test_native_pl and translated provenance.",
+    )
+    parser.add_argument(
+        "--native-corpus",
+        type=Path,
+        help="Adapted native corpus; quick/medium use the manifest's judged corpus by default.",
+    )
+    parser.add_argument(
+        "--holdout-profile",
+        choices=("quick", "medium", "full"),
+        default="quick",
+    )
+    parser.add_argument(
         "--corpus",
         type=Path,
         required=True,
@@ -54,6 +69,9 @@ def main() -> None:
         synthetic_generations=args.synthetic_generations,
         train_limit=args.train_limit,
         documents_path=args.corpus,
+        holdout_manifest=args.holdout_manifest,
+        native_documents_path=args.native_corpus,
+        holdout_profile=args.holdout_profile,
     )
     if args.smoke_steps is not None:
         result["comparability"] = "smoke_only_not_comparable"

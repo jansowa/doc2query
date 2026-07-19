@@ -22,6 +22,7 @@ from doc2query.evaluation.retrieval import (
     pearson_correlation,
 )
 from doc2query.evaluation.slices import aggregate_slices, rank_buckets
+from doc2query.evaluation.translationese import aggregate_translationese
 from doc2query.reranker.base import PairScorer
 from doc2query.reranker.focus import assign_focus, split_sentences
 from doc2query.reranker.infer import score_group
@@ -509,6 +510,13 @@ def evaluate_intrinsic_records(
                     if row["language_confidence_pl"] is not None
                 ]
             ),
+        },
+        "translationese": {
+            "generated": aggregate_translationese(str(row["generated"]) for row in measured),
+            "natural_reference": aggregate_translationese(
+                str(row["reference"]) for row in measured
+            ),
+            "warning": "surface diagnostic only; it is not proof of translation or naturalness",
         },
         "focus": {
             "sentence_level_source_hit": _mean_rate(measured, "sentence_level_source_hit"),

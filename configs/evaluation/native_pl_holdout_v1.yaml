@@ -1,0 +1,42 @@
+schema_version: 1
+version: task04-native-pl-v1
+
+native:
+  dataset: ipipan/polqa
+  revision: d78d036ef08ab3b9f4d85a2893f4d3a0c95a6f37
+  converted_parquet_revision: 288bec95fd4c29c70d90b075a81cf53090abe9ce
+  split: test
+  language_origin: native_polish
+  license: cc-by-sa-4.0
+  usage_policy: final_test_only_never_for_tuning
+
+translated:
+  dataset: msmarco_pl
+  source_set: test_embedder
+  language_origin: machine_translated_from_english
+  usage_policy: evaluation_only
+
+selection:
+  algorithm: "sha256(task04-native-pl-v1:set_name:example_id), ascending"
+  profiles:
+    quick:
+      query_limit: 100
+      corpus: judged_only
+      comparison_eligible: false
+      purpose: target_5_to_10_minute_diagnostic
+    medium:
+      query_limit: 500
+      corpus: judged_only
+      comparison_eligible: false
+      purpose: broader_diagnostic
+    full:
+      query_limit: null
+      corpus: full_source_corpus
+      comparison_eligible: true
+      purpose: final_comparison
+
+reporting:
+  pool_native_and_translated: false
+  native_required_for_complete_report: true
+  cross_profile_comparison: forbidden
+  translationese_heuristic: translationese-surface-v1

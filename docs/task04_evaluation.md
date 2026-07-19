@@ -108,6 +108,66 @@ bootstrap rejects different test or corpus fingerprints. Variant ranking is
 emitted only when measured probe metrics exist; intrinsic reward never
 substitutes for them.
 
+## Native Polish holdout (P-02)
+
+The source audit, licensing notes, contamination risks, frozen artifact
+fingerprints and the non-networking import procedure are in
+[`datasets/native_pl_holdout.md`](datasets/native_pl_holdout.md). The frozen
+contract is `configs/evaluation/native_pl_holdout_v1.yaml`; measured
+fingerprints are recorded in
+`configs/evaluation/native_pl_holdout_v1_fingerprints.json`.
+
+Freeze or verify the two named sets without downloading a model:
+
+```bash
+UV_CACHE_DIR="$PWD/.uv-cache" uv run python scripts/freeze_native_pl_holdout.py \
+  --translated-manifest data/processed/v1/evaluation/task04-v1/manifest.json \
+  --polqa-test data/raw/native_pl/polqa/<revision>/test.csv \
+  --polqa-passages data/raw/native_pl/polqa/<revision>/passages.jsonl \
+  --output-dir data/processed/v1/evaluation/task04-native-pl-v1
+
+UV_CACHE_DIR="$PWD/.uv-cache" uv run python scripts/freeze_native_pl_holdout.py \
+  --output-dir data/processed/v1/evaluation/task04-native-pl-v1 --verify
+```
+
+Omitting `--polqa-test` is safe for contract testing: translated MS MARCO-PL is
+materialized, while native remains `missing_source_artifact` with `null`
+hashes. The production v1 manifest includes the pinned PolQA test and corpus.
+The importer never turns validation/train rows into a test. Existing manifests
+are immutable.
+
+`quick` selects 100 queries, `medium` 500 and `full` all frozen IDs. Selection
+is deterministic and every profile has its own ID hash. Quick/medium use only
+the deduplicated judged passages of their selected queries and are diagnostics;
+the frozen translated corpora contain 996 and 5,069 documents respectively.
+Full uses the frozen 7,097,288-document PolQA corpus and is the comparison
+profile. It has been materialized, but no full index or probe has been run.
+Cross-profile comparison is forbidden.
+
+One probe training can evaluate both origins:
+
+```bash
+UV_CACHE_DIR="$PWD/.uv-cache" uv run python scripts/train_probe_embedder.py \
+  --recipe configs/evaluation/probe_v1.yaml \
+  --train-input data/processed/v1/train.parquet \
+  --frozen-manifest data/processed/v1/evaluation/task04-v1/manifest.json \
+  --holdout-manifest data/processed/v1/evaluation/task04-native-pl-v1/manifest.json \
+  --holdout-profile quick \
+  --corpus data/processed/v1/documents.parquet \
+  --query-source natural \
+  --output-dir runs/probe-natural-v1
+```
+
+The result and `embedder_report.md/json` always show
+`test_native_pl` and `test_translated_msmarco_pl` separately. Missing native
+sets `report_status: incomplete`; missing metrics remain `null`/`NOT MEASURED`.
+The native test is final-test-only and prohibited for tuning.
+
+`translationese-surface-v1` reports English residue, three explicit calque
+patterns, punctuation spacing and a weak ASCII-only flag. It is deterministic
+and model-free, but is explicitly labeled as a distribution diagnostic rather
+than proof of translation or naturalness.
+
 ## Human panel
 
 `scripts/human_evaluation.py export` creates randomized blind A/B CSV and JSONL

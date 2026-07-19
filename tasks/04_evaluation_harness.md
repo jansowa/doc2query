@@ -50,10 +50,22 @@ puli diagnostycznej oraz korpusowy round-trip@1/5/20/100 ze specyficznością,
 marginesem i korelacją z marginesem rerankera. Testy tanie przeszły; nie
 zbudowano jeszcze pełnoskalowych indeksów korpusu i nie uruchomiono probe.
 
-Następnym blokerem jest P-02. Po nim nadal pozostają P-03 i P-04; do
-zamknięcia wszystkich trzech nie wolno uruchamiać porównawczych probe,
-eksperymentów D00–D12 ani Task 06. Pozostają także wcześniej wymienione
-pełnoskalowe pomiary, shadow judge, diversity embeddingowe i panel ludzi.
+19 lipca zaimplementowano kontrakt i kod P-02. Audyt źródeł pierwotnych
+wybrał test PolQA jako natywny kandydat oraz odrzucił całe PIRB/MAUPQA jako
+jednorodny „native” holdout. Zamrożono rzeczywisty
+`test_translated_msmarco_pl` (16 272 rekordy) z profilami `quick=100`,
+`medium=500`, `full=16 272`, hashami list ID i fingerprintami. Importer PolQA,
+profile kosztu, weryfikacja immutable manifestu, osobne raportowanie
+native/translated oraz jawny model-free sygnał `translationese-surface-v1`
+są gotowe i przetestowane bez modeli/GPU.
+
+Po usunięciu przejściowego problemu sieciowego domknięto artefakty P-02:
+zamrożono 956 pytań `test_native_pl`, pełny korpus PolQA z 7 097 288
+dokumentami oraz trzy profile z rzeczywistymi hashami ID i fingerprintami.
+Audyt exact-match nie znalazł wspólnych query ani dokumentów z translated
+MS MARCO-PL; near-duplicate pozostaje jawnie `NOT MEASURED`. Manifest przeszedł
+pełne `--verify` i nie ma blockerów. Nie zbudowano indeksu ani nie uruchomiono
+probe. P-03 i P-04 nadal pozostają nierozpoczęte.
 
 ## Harness v1.1 — blokery po audycie
 
@@ -81,7 +93,7 @@ Implementacja i testy jednostkowe/smoke są gotowe. Pełnoskalowe indeksy BM25
 i pomocniczego bi-encodera, ich throughput oraz round-trip W03/W05/W06 nie
 zostały uruchomione i nie są tu deklarowane jako wynik eksperymentalny.
 
-### P-02 — natywny polski holdout
+### P-02 — natywny polski holdout — `IMPLEMENTED`
 
 - audyt PIRB, PolQA i ewentualnie MAUPQA w
   `docs/datasets/native_pl_holdout.md`: licencja, pochodzenie języka,
@@ -92,6 +104,19 @@ zostały uruchomione i nie są tu deklarowane jako wynik eksperymentalny.
 - native nie jest używany do strojenia; brak wyniku native oznacza raport
   niekompletny;
 - dodać tani, jawnie opisany sygnał „translationese”.
+
+Gotowe: audyt PIRB/PolQA/MAUPQA, przypięte revisions i licencje, bezpieczny
+importer test-only, trzy deterministyczne profile kosztu, frozen native i
+translated split z fingerprintami/hashami ID, pełny korpus PolQA, weryfikacja
+manifestu, osobne sloty native/translated w `evaluate embedder` i raporcie,
+status `incomplete` bez zmierzonego native oraz jawny sygnał translationese.
+Szczegóły:
+[`docs/datasets/native_pl_holdout.md`](../docs/datasets/native_pl_holdout.md).
+
+Zmierzono exact overlap z MS MARCO-PL (zero identycznych query i dokumentów);
+near-duplicate pozostaje jawnie niezmierzony i nie jest zastępowany założeniem.
+Nie uruchomiono probe, benchmarku PIRB, pełnego indeksu ani żadnego wyniku
+eksperymentalnego. Kolejną bramką Harness v1.1 jest P-03.
 
 ### P-03 — probe recipe v1 i false negatives
 
@@ -289,6 +314,11 @@ Importuj oceny i licz Cohen/Fleiss kappa albo Krippendorff alpha zależnie od li
 - protokoły `pool_*` i `corpus_*` mają rozłączne nazwy;
 - `recall@K` jest odrzucane dla puli mniejszej niż K;
 - porównanie runów sprawdza wersję recepty probe i kontraktu budżetowego;
+- manifest native/translated odrzuca zmianę źródła, rekordów lub profilowej
+  listy ID;
+- importer native przyjmuje wyłącznie test i nie wymaga sieci/modelu/GPU;
+- raport embeddera bez zmierzonego `test_native_pl` ma status `incomplete`;
+- sygnał translationese ujawnia składowe i nie deklaruje dowodu tłumaczenia;
 
 ## Kryteria akceptacji
 

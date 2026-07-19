@@ -19,11 +19,20 @@ from torch.utils.data import DataLoader, Dataset
 
 from doc2query.evaluation.corpus import sha256_file
 from doc2query.evaluation.datasets import evaluation_fingerprint, load_frozen_records
+from doc2query.evaluation.native_holdout import (
+    HoldoutProfile,
+    holdout_artifact_path,
+    holdout_fingerprint,
+    holdout_set_status,
+    load_holdout_records,
+)
+from doc2query.evaluation.report import build_embedder_report
 from doc2query.evaluation.retrieval import (
     CORPUS_RETRIEVAL,
     aggregate_query_metrics,
     corpus_metrics_from_positive_ranks,
 )
+from doc2query.evaluation.translationese import aggregate_translationese
 from doc2query.utils.records import JsonlWriter, read_records, write_json
 from doc2query.utils.reproducibility import set_seed
 from doc2query.utils.tracking import collect_code_provenance
@@ -310,9 +319,12 @@ def evaluate_probe(
     recipe: ProbeRecipe,
     output_dir: Path,
     test_fingerprint: str,
+    dataset_name: str = "test_translated_msmarco_pl",
+    profile: str = "full",
 ) -> dict[str, Any]:
     from transformers import AutoTokenizer
 
+    output_dir.mkdir(parents=True, exist_ok=True)
     tokenizer_loader: Any = getattr(AutoTokenizer, "from_" + "pretrained")
     tokenizer = tokenizer_loader(model_path, trust_remote_code=False)
     model = MeanPoolEncoder(str(model_path), "main")
@@ -395,6 +407,8 @@ def evaluate_probe(
         "status": "measured",
         "protocol": CORPUS_RETRIEVAL,
         "metric_prefix": "corpus_",
+        "dataset_name": dataset_name,
+        "profile": profile,
         "test_fingerprint": test_fingerprint,
         "recipe_fingerprint": recipe.fingerprint,
         "query_count": len(per_query),
@@ -428,6 +442,7 @@ def evaluate_probe(
         "model_size_bytes": sum(
             path.stat().st_size for path in model_path.rglob("*") if path.is_file()
         ),
+        "translationese": aggregate_translationese(str(record["query"]) for record in records),
     }
     write_json(output_dir / "corpus_retrieval_summary.json", summary)
     return summary
@@ -444,6 +459,9 @@ def run_probe_experiment(
     synthetic_generations: Path | None = None,
     train_limit: int | None = None,
     documents_path: Path,
+    holdout_manifest: Path | None = None,
+    native_documents_path: Path | None = None,
+    holdout_profile: HoldoutProfile = "quick",
 ) -> dict[str, Any]:
     pairs, train_fingerprint = prepare_probe_pairs(
         read_records(train_path),
@@ -458,15 +476,129 @@ def run_probe_experiment(
         query_source=query_source,
         train_fingerprint=train_fingerprint,
     )
-    test_records = load_frozen_records(frozen_manifest, test_subset)
+    if (
+        holdout_manifest is not None
+        and holdout_set_status(holdout_manifest, "test_translated_msmarco_pl") == "materialized"
+    ):
+        test_records = load_holdout_records(
+            holdout_manifest,
+            "test_translated_msmarco_pl",
+            profile=holdout_profile,
+        )
+        translated_fingerprint = holdout_fingerprint(
+            holdout_manifest,
+            "test_translated_msmarco_pl",
+            holdout_profile,
+        )
+        translated_profile = holdout_profile
+    else:
+        test_records = load_frozen_records(frozen_manifest, test_subset)
+        translated_fingerprint = evaluation_fingerprint(frozen_manifest, test_subset)
+        translated_profile = "full"
+    effective_translated_corpus = documents_path
+    if holdout_manifest is not None and holdout_profile in {"quick", "medium"}:
+        diagnostic_corpus = holdout_artifact_path(
+            holdout_manifest,
+            f"translated_{holdout_profile}_corpus",
+        )
+        if diagnostic_corpus is not None:
+            effective_translated_corpus = diagnostic_corpus
+    # Keep the pre-P-02 translated artifact paths stable for existing
+    # comparison commands; native artifacts live in their own subdirectory.
+    translated_output = output_dir
     retrieval = evaluate_probe(
         output_dir / "model",
         test_records,
-        documents_path=documents_path,
+        documents_path=effective_translated_corpus,
         recipe=recipe,
-        output_dir=output_dir,
-        test_fingerprint=evaluation_fingerprint(frozen_manifest, test_subset),
+        output_dir=translated_output,
+        test_fingerprint=translated_fingerprint,
+        dataset_name="test_translated_msmarco_pl",
+        profile=translated_profile,
     )
-    result = {"training": train_summary, "corpus_retrieval": retrieval}
+    native: dict[str, Any]
+    if holdout_manifest is None:
+        native = {
+            "dataset_name": "test_native_pl",
+            "profile": holdout_profile,
+            "status": "not_measured",
+            "reason": "native holdout manifest was not supplied",
+            "test_fingerprint": None,
+            "metrics": None,
+        }
+    elif holdout_set_status(holdout_manifest, "test_native_pl") != "materialized":
+        native = {
+            "dataset_name": "test_native_pl",
+            "profile": holdout_profile,
+            "status": "missing_artifact",
+            "reason": "test_native_pl is not materialized in the frozen holdout manifest",
+            "test_fingerprint": None,
+            "metrics": None,
+        }
+    else:
+        effective_native_corpus = native_documents_path
+        if effective_native_corpus is None and holdout_profile in {"quick", "medium"}:
+            effective_native_corpus = holdout_artifact_path(
+                holdout_manifest,
+                f"native_{holdout_profile}_corpus",
+            )
+        if effective_native_corpus is None:
+            native = {
+                "dataset_name": "test_native_pl",
+                "profile": holdout_profile,
+                "status": "missing_artifact",
+                "reason": (
+                    "native corpus is missing; full requires the adapted complete PolQA corpus"
+                ),
+                "test_fingerprint": holdout_fingerprint(
+                    holdout_manifest, "test_native_pl", holdout_profile
+                ),
+                "metrics": None,
+            }
+        else:
+            native_records = load_holdout_records(
+                holdout_manifest,
+                "test_native_pl",
+                profile=holdout_profile,
+            )
+            native = evaluate_probe(
+                output_dir / "model",
+                native_records,
+                documents_path=effective_native_corpus,
+                recipe=recipe,
+                output_dir=output_dir / "evaluation" / "test_native_pl",
+                test_fingerprint=holdout_fingerprint(
+                    holdout_manifest, "test_native_pl", holdout_profile
+                ),
+                dataset_name="test_native_pl",
+                profile=holdout_profile,
+            )
+    report_status = "complete" if native.get("status") == "measured" else "incomplete"
+    comparison_eligible = (
+        report_status == "complete" and holdout_profile == "full" and translated_profile == "full"
+    )
+    result = {
+        "schema_version": 2,
+        "report_status": report_status,
+        "comparison_eligible": comparison_eligible,
+        "incomplete_reasons": (
+            []
+            if report_status == "complete"
+            else [str(native.get("reason", "native not measured"))]
+        ),
+        "training": train_summary,
+        "evaluation_sets": {
+            "test_native_pl": native,
+            "test_translated_msmarco_pl": retrieval,
+        },
+        # Compatibility alias for pre-P-02 consumers.  It is explicitly the
+        # translated result and must not be used as the native primary metric.
+        "corpus_retrieval": retrieval,
+    }
     write_json(output_dir / "result.json", result)
+    build_embedder_report(
+        result,
+        markdown_path=output_dir / "embedder_report.md",
+        json_path=output_dir / "embedder_report.json",
+    )
     return result
