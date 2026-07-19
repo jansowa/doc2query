@@ -1,0 +1,13 @@
+# @package _global_
+# Attention-only is isolated against W03 all-linear at the same rank and alpha.
+defaults:
+  - w03_1_5b_10k_lr2e4_seed42
+  - _self_
+run:
+  experiment_id: B05-1.5B-10K-ATTENTION-LR2E4-S42
+  seed: 42
+  output_dir: runs/B05-1.5B-10K-ATTENTION-LR2E4-S42
+lora:
+  target_modules: [q_proj, k_proj, v_proj, o_proj]
+  minimum_target_modules: 4
+  expected_layer_patterns: [attn]

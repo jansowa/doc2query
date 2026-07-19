@@ -1,0 +1,11 @@
+# @package _global_
+# Dropout is the only change against W03.
+defaults:
+  - w03_1_5b_10k_lr2e4_seed42
+  - _self_
+run:
+  experiment_id: B07-1.5B-10K-DROPOUT0-LR2E4-S42
+  seed: 42
+  output_dir: runs/B07-1.5B-10K-DROPOUT0-LR2E4-S42
+lora:
+  dropout: 0.0

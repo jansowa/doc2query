@@ -26,6 +26,21 @@ def main() -> None:
     reports: list[dict[str, Any]] = []
     for length in args.lengths:
         run_dir = root / f"length-{length}"
+        summary_path = run_dir / "sft_summary.json"
+        if summary_path.is_file() and (run_dir / "adapter").is_dir():
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            reports.append(
+                {
+                    "max_length": length,
+                    "status": "already_complete",
+                    "returncode": 0,
+                    "run_dir": str(run_dir),
+                    "peak_vram_allocated_bytes": summary["peak_vram_allocated_bytes"],
+                    "peak_vram_reserved_bytes": summary["peak_vram_reserved_bytes"],
+                    "throughput_examples_per_second": summary["throughput_examples_per_second"],
+                }
+            )
+            continue
         command = [
             sys.executable,
             str(Path(__file__).with_name("train_sft.py")),
@@ -38,6 +53,7 @@ def main() -> None:
             "--output-dir",
             str(run_dir),
             "--no-panel",
+            "--resume-if-available",
         ]
         completed = subprocess.run(command, check=False, text=True, capture_output=True)
         entry: dict[str, Any] = {
@@ -46,7 +62,6 @@ def main() -> None:
             "returncode": completed.returncode,
             "run_dir": str(run_dir),
         }
-        summary_path = run_dir / "sft_summary.json"
         if summary_path.is_file():
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
             entry.update(

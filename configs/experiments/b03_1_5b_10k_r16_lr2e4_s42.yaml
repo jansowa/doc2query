@@ -1,0 +1,12 @@
+# @package _global_
+# Rank ablation keeps alpha/r=2 and every W03 field except LoRA capacity.
+defaults:
+  - w03_1_5b_10k_lr2e4_seed42
+  - _self_
+run:
+  experiment_id: B03-1.5B-10K-R16-LR2E4-S42
+  seed: 42
+  output_dir: runs/B03-1.5B-10K-R16-LR2E4-S42
+lora:
+  r: 16
+  alpha: 32

@@ -51,6 +51,17 @@ Po audycie wynik ten należy traktować wyłącznie jako diagnostykę i dowód
 wykonalności QLoRA 4.5B na 8 GB. Kolejna kampania 4.5B czeka na Harness v1.1
 oraz bramkę P-05/P-06 poniżej.
 
+Przygotowano jedną wznawialną kolejkę techniczną dla bazowego Bielika 1.5B:
+`scripts/run_base_1_5b_campaign.sh`. Najpierw domyka ona wyłącznie dev-only
+P-03 W05, następnie mierzy brakujące memory probe 768/1024 i uruchamia siedem
+jednoczynnikowych runów 10k: długość 768/1024, LoRA rank 16/32,
+attention-only, efektywny batch 32 i dropout 0. Istniejące W01–W05 są
+automatycznie wykorzystywane jako pokrycie LR/baseline i nie są powtarzane.
+Kolejka, konfiguracje i testy wznowienia są gotowe, ale nowych runów nie
+uruchomiono w tej sesji. Nie wybiera ona finalisty ani nie zastępuje P-04
+i porównywalnego probe. Plan:
+[`task03_base_1_5b_campaign_queue.md`](../docs/experiments/task03_base_1_5b_campaign_queue.md).
+
 ## Cel
 
 Zaimplementować stabilny trening passage→query i uruchomić serię tanich baseline’ów, zanim projekt przejdzie do DPO lub RL.
