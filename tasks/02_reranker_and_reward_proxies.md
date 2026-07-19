@@ -31,6 +31,17 @@ Nie implementuj `train_reranker.py`, nie aktualizuj wag rerankera i nie wykorzys
 
 Ewentualne dostrajanie rerankera może powstać wyłącznie jako osobny projekt po udokumentowaniu, że wszystkie rozsądne gotowe modele zawodzą na ręcznie ocenionym holdoucie. Nie jest to automatyczny kolejny krok.
 
+Role są rozdzielone już w głównym pipeline, a nie dopiero w Task 11:
+
+- primary jest `builder judge` do focus, kalibracji, filtracji i preferencji;
+- shadow jest niezależnym `confirmatory judge` i może pełnić veto przy dużej
+  niezgodności, ale nie jest dostrajany;
+- corpus retrieval z Task 04 jest niezależnym sygnałem;
+- panel ludzki służy do kalibracji i kontroli.
+
+Raporty porównawcze intrinsic pokazują primary i shadow obok siebie. Task 11
+pozostaje pełnym, późnym audytem hackingu.
+
 ## Część A — wybór gotowych rerankerów
 
 Jako domyślnego głównego sędziego przetestuj:

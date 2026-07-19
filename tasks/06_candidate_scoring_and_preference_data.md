@@ -12,7 +12,8 @@ Zbudować wysokiej jakości pary `chosen/rejected` dla DPO, nie myląc preferenc
 
 ## Zależności
 
-Taski 02, 04 i 05 oraz stabilny checkpoint SFT.
+Taski 02, ukończony Harness v1.1 z Task 04 i Task 05 oraz stabilny checkpoint
+SFT.
 
 ## Generacja kandydatów
 
@@ -49,6 +50,9 @@ Zapisuj osobno każdy komponent oraz total. Przykładowe pola:
 {
   "ground_score": 0.81,
   "negative_margin": 0.42,
+  "corpus_round_trip": 1.0,
+  "effective_candidate_count": 3,
+  "possible_false_negative": false,
   "overlap_reward": 0.65,
   "focus_accuracy": 1.0,
   "style_accuracy": 1.0,
@@ -60,6 +64,17 @@ Zapisuj osobno każdy komponent oraz total. Przykładowe pola:
 ```
 
 Nie usuwaj składowych po zsumowaniu.
+
+Primary jest builder judge, shadow sędzią potwierdzającym, corpus retrieval
+niezależnym sygnałem, a panel ludzki kalibracją. Raportuj niezgodność. Kandydat
+z wysokim primary score, ale słabym round-trip jest wartościowym rejected typu
+„zbyt ogólne”. Dla zaakceptowanych kandydatów wykonuj re-mining zgodny
+z wersjonowaną polityką Task 04 i zapisuj provenance minera.
+
+Większy, zamrożony model inference-only może być dodatkowym źródłem kandydatów
+wyłącznie jako jawna ablacja teachera. Opcjonalny zamrożony answerability judge
+może rozstrzygać disagreement i wskazywać evidence; żadnego z sędziów nie
+wolno dostrajać na outputach generatora.
 
 ## Budowa par
 

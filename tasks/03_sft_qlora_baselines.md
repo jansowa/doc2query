@@ -47,6 +47,9 @@ różnic nie obejmują zera. Dla diverse nie ma potwierdzonej przewagi retrieval
 a duplicate rate, Self-BLEU i pairwise lemma Jaccard są gorsze. Pełne wyniki,
 koszt i ograniczenia opisuje
 [`docs/experiments/task03_w06_vs_1_5b_2026-07-19.md`](../docs/experiments/task03_w06_vs_1_5b_2026-07-19.md).
+Po audycie wynik ten należy traktować wyłącznie jako diagnostykę i dowód
+wykonalności QLoRA 4.5B na 8 GB. Kolejna kampania 4.5B czeka na Harness v1.1
+oraz bramkę P-05/P-06 poniżej.
 
 ## Cel
 
@@ -139,9 +142,10 @@ Wykonaj memory probe dla 512, 768 i 1024. Raportuj realny peak VRAM, nie tylko e
 ### S00 — prompting bez treningu
 
 - 5 tys. passage dev;
+- zero-shot i few-shot z 3–8 naturalnymi przykładami dev dobieranymi per styl;
 - greedy i sampling;
-- stały prompt;
-- pełna ewaluacja intrinsic.
+- stały, wersjonowany prompt;
+- pełna ewaluacja Harness v1.1.
 
 ### S01 — tiny smoke
 
@@ -165,6 +169,29 @@ Identyczne dane, seed i budżet tokenów.
 ### S05 — 4.5B 50k ordinary vs balanced vs weighted
 
 Sprawdź, czy kontrola rozkładu danych poprawia overlap/style bez utraty grounding.
+
+### S06 — czyszczenie naturalnych par
+
+Na 1.5B/50k porównaj kontrolę bez zmian, odrzucenie dolnych około 5–10%
+naturalnych par według skalibrowanego primary margin oraz ważenie jako funkcję
+tego marginesu. Score źródłowy `pos_score >= 23.50` nie jest wystarczającym
+filtrem po tłumaczeniu. Zachowaj score offline i oceniaj wyłącznie Harnessem
+v1.1. Zwycięski wariant może stać się przygotowaniem danych 4.5B dopiero po
+potwierdzeniu wyniku.
+
+### S07 — polski baseline seq2seq
+
+Dostrój plT5-base/large albo mT5 na tym samym splicie, liczbie par i budżecie
+co Bielik 1.5B. Porównaj koszt generacji, filtering i downstream probe.
+Angielski docT5query pozostaje kontekstem historycznym, nie polskim baseline'em.
+
+### Bramka P-05/P-06 przed kolejną kampanią 4.5B
+
+Po ukończeniu Harness v1.1 porównaj S00 zero/few-shot, S03/W05, S07 oraz
+gold-data control na candidate-pool, corpus, translated i native. Pierwsza
+mała macierz probe obejmuje gold-data control, W05 synthetic-only i jedną
+budżetowo dopasowaną mieszankę natural+synthetic. Następnie wykonaj S06.
+Decyzja o dalszej skali musi opierać się na retrieval i ADR, nie eval loss.
 
 ## Checkpointing i wznowienie
 

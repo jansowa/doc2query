@@ -102,6 +102,7 @@ Wymagania:
 
 - pełny intrinsic test raz, po zamrożeniu;
 - pełny probe lub docelowy embedder trening;
+- osobne wyniki `test_native_pl` i `test_translated_msmarco_pl`;
 - human panel;
 - porównanie z natural-only, heuristic i najlepszym baseline’em;
 - slice’y;
@@ -117,6 +118,7 @@ Udokumentuj:
 - sposób treningu;
 - dane i ograniczenia;
 - metryki;
+- oddzielne metryki natywnego i tłumaczonego holdoutu;
 - różnorodność stylów;
 - ryzyko halucynacji i query, na które nie można odpowiedzieć z pasażu;
 - licencje;

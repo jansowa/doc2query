@@ -12,21 +12,24 @@ Zwiększyć różnorodność zapytań i pokrycie całego pasażu bez utraty ugru
 
 ## Zależności
 
-Taski 02–04.
+Taski 02–04. Implementacja może powstawać równolegle z naprawami Task 04, ale
+żaden eksperyment D00–D12 nie może wystartować przed ukończeniem Harness v1.1.
 
-## Style taxonomy
+## Taksonomia formy i intencji
 
-Zaimplementuj początkowo:
+Nie mieszaj formy wypowiedzi z intencją. Zaimplementuj początkowo:
 
-- `full_question`: pełne pytanie z poprawną składnią;
-- `keyword_query`: krótka fraza wyszukiwawcza;
-- `fact_lookup`: pytanie o konkretny fakt;
-- `definition`: „co to jest / znaczenie”;
-- `entity_lookup`: zapytanie skupione na osobie, organizacji, miejscu;
-- `how_to`: procedura lub sposób działania;
-- `comparison`: porównanie dwóch elementów.
+- `form`: `full_question`, `keyword_query`;
+- `intent`: `fact_lookup`, `definition`, `entity_lookup`, `procedure`,
+  `comparison` i rozszerzalne wartości domenowe.
 
-Nie każdy styl pasuje do każdego pasażu. Dodaj `style_applicable` i nie wymuszaj niemożliwego stylu.
+Nie każda intencja pasuje do każdego pasażu. Dodaj `intent_applicable` i nie
+wymuszaj niemożliwej intencji. Rozkład docelowy kalibruj na naturalnych query
+per domena. Oś `retrieval_task` pozostaje poza zakresem do czasu korpusu
+wielodomenowego.
+
+Dodaj do schematu opcjonalne `evidence_sentence_ids`, `evidence_type`
+i `evidence_confidence`, aby przyszłe rozszerzenie nie łamało cache'ów.
 
 ## Automatyczne etykietowanie naturalnych query
 
@@ -125,8 +128,16 @@ Użyj greedy submodular-like selection lub małego beam search. Nie wybieraj K n
 - D05: K independent generations;
 - D06: multi-query JSON;
 - D07: K-independent + coverage-aware selection.
+- D08: ekstrakcja koncepcji z lematów/encji/liczb i audyt około 200 pasaży;
+- D09: stateful generation z niepokrytymi koncepcjami i poprzednimi query;
+- D10: consistency filtering wsparty pokryciem koncepcji;
+- D11: krzywa K=1/2/4/8(/16) osobno przy stałej liczbie pasaży i par;
+- D12: top-N vs MMR vs coverage-aware na tych samych kandydatach.
 
 Każdy na tym samym subset, seedach i budżecie generacyjnym.
+Przed zamrożeniem configu diverse wykonaj jedną małą ablację: stałe top-p,
+min-p (jeśli wspierane), miks 2–3 temperatur i stateful coverage. Top-k nie
+jest osobną osią różnorodności.
 
 ## Kryteria sukcesu
 

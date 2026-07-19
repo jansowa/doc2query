@@ -7,7 +7,8 @@
 `BLOCKED`
 
 Zadanie oczekuje na implementację wcześniejszych etapów w zakresie
-dopuszczonym przez bramki.
+dopuszczonym przez bramki. W szczególności blokują je Harness v1.1 P-01…P-04,
+baseline'y P-05/P-06 oraz pełna ablacja polityki hard negative'ów z Task 04.
 
 ## Cel
 
@@ -28,6 +29,8 @@ Nie uruchamiaj pełnej macierzy kartezjańskiej. Stosuj successive halving:
 5. 100k–500k tylko finalistom.
 
 Budżet porównuj w tokenach i krokach, nie tylko liczbie przykładów.
+Kontrakt budżetowy z Task 04 porównuje jednocześnie tokeny, pary, unikalne
+pasaże i K query/pasaż oraz wersję recepty probe.
 
 ## Minimalna kolejność
 
@@ -81,6 +84,18 @@ Utwórz ranking wielokryterialny, ale nie ukrywaj Pareto frontu. Priorytety:
 6. koszt queries/s i VRAM.
 
 Nie sumuj bezrefleksyjnie wszystkiego do jednego score. Użyj score tylko do wstępnej selekcji, a finalną decyzję opisz w ADR.
+Główny wynik musi pochodzić z natywnego polskiego holdoutu; poprawa wyłącznie
+na tłumaczonym teście nie wystarcza bez jawnego ADR.
+
+## Eksperymenty opcjonalne po bramkach
+
+- MIX0–MIX4 (100/75/50/25/0% natural) tylko dla 1–2 finalistów i przy
+  dopasowanym budżecie;
+- probe recipe v2 z GPL/MarginMSE tylko jako osobna, pełna replikacja
+  porównań dla 2–3 finalistów;
+- kontrfaktyczne negatywy dopiero po stabilnym corpus-mined HN;
+- noisy self-training wyłącznie po osobnej bramce;
+- drugi backbone probe jako potwierdzenie finalistów.
 
 ## Kryteria eliminacji
 

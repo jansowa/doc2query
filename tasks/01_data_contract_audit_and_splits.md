@@ -122,6 +122,12 @@ Wygeneruj `reports/data_audit.html` i `reports/data_audit.json` zawierające:
 - rozkład stylów i domen;
 - 50 przykładów typowych i 50 podejrzanych.
 
+Po audycie Harness v1.1 rekordy dev/test z mniej niż 10 negatywami po cleanupie
+nie są usuwane z głównego protokołu: `corpus_retrieval` korzysta z pełnego
+korpusu splitu. W diagnostycznym `candidate_pool_ranking` negatywy należy
+deterministycznie uzupełnić dokumentami z tego samego splitu i oznaczyć
+`backfilled=true`; provenance uzupełnienia jest częścią artefaktu.
+
 ## Testy
 
 - malformed records;

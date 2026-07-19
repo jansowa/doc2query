@@ -4,9 +4,10 @@
 **Wejście:** `docs/doc2query_conceptual_review.md` (audyt zewnętrzny), wcześniejszy
 przegląd `przeglad_koncepcyjny.md`, stan repo po ukończeniu implementacji
 harnessu ewaluacyjnego (Task 04).
-**Charakter dokumentu:** backlog wykonawczy. Każde zadanie P-xx ma zostać
-przeniesione do właściwych plików `tasks/*.md` (z aktualizacją
-`tasks/README.md` w tym samym commicie) albo jawnie odrzucone z uzasadnieniem.
+**Charakter dokumentu:** archiwalny zapis audytu i uzasadnień. Punkty P-xx
+zostały przeniesione do właściwych plików `tasks/*.md`; jedynym operacyjnym
+źródłem kolejności i statusów jest [`tasks/README.md`](../tasks/README.md).
+Nie aktualizuj statusów w tym pliku i nie traktuj go jako równoległego backlogu.
 
 ---
 
@@ -322,9 +323,9 @@ jakość targetów ogranicza wszystko dalej).
 
 ## P-10 — Porządkowe [PRZY NAJBLIŻSZEJ EDYCJI]
 
-1. Zmienić nazwę `tasks/11_optional_alternating_cotraining.md` na
-   `tasks/11_judge_robustness_audit.md` (treść zabrania cotrainingu — nazwa
-   myli); zaktualizować linki.
+1. Nazwę `tasks/11_optional_alternating_cotraining.md` zmieniono podczas
+   integracji na `tasks/11_judge_robustness_audit.md` (treść zabrania
+   cotrainingu, więc poprzednia nazwa myliła); zaktualizowano linki.
 2. W pliku researchu (`doc2query_research.md` / `doc2query_wnioski_sesja.md`)
    oznaczyć sekcje o ekspansji indeksu BM25, dual-index i keywordach
    reklamowych jako „kontekst, poza zakresem projektu"; fragment o „treningu

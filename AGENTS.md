@@ -742,7 +742,7 @@ Aktualny stan, następne kroki i reguły aktualizacji są utrzymywane w `tasks/R
 9. `tasks/08_grpo_multiobjective_rl.md`
 10. `tasks/09_experiment_campaign.md`
 11. `tasks/10_final_scaleup_inference_release.md`
-12. `tasks/11_optional_alternating_cotraining.md`
+12. `tasks/11_judge_robustness_audit.md`
 
 Codex może delegować niezależne moduły subagentom, ale integracja, kontrakty danych i ostateczna walidacja należą do głównego agenta. Zadania zależne od wyników eksperymentów nie mogą być „zaliczone” na podstawie założonych rezultatów.
 

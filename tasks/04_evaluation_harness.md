@@ -4,7 +4,7 @@
 
 ## Status
 
-`IMPLEMENTED`
+`IN PROGRESS`
 
 Centralny harness, zamrożone manifesty/ID, metryki i slice’y, raporty
 HTML/Markdown, ślepy eksport A/B, bootstrap oraz zamrożona recepta probe
@@ -32,6 +32,75 @@ v1 i nie wpisano niewykonanych wyników.
 vs W03/W05. W06 ma potwierdzoną przewagę greedy MRR/nDCG nad W05, ale diverse
 retrieval pozostaje nierozróżnialny, a miary różnorodności są gorsze. Nie
 zastępuje to nadal niewykonanych pełnych probe embedderów.
+
+Audyt z 18 lipca wykazał, że dotychczasowy kontrakt nie rozdziela rankingu
+w małej puli od retrievalu korpusowego, nie ma natywnego polskiego holdoutu
+i nie definiuje polityki fałszywych negatywów. Dlatego zadanie ponownie ma
+status `IN PROGRESS`, a wyniki W03/W05/W06 są diagnostyczne. Nie wolno na ich
+podstawie wybierać finalisty ani uruchamiać pierwszych porównawczych probe.
+
+## Harness v1.1 — blokery po audycie
+
+Poniższy pakiet jest następnym zadaniem projektu. Kolejność wykonania:
+`P-01 → P-02 → P-03 → P-04`. Uzasadnienie historyczne znajduje się w
+[`docs/plan_poprawek_po_audytach.md`](../docs/plan_poprawek_po_audytach.md);
+operacyjny zakres i status są utrzymywane tutaj oraz w `tasks/README.md`.
+
+### P-01 — rozdzielone protokoły retrieval
+
+- `candidate_pool_ranking`: pozytyw(y) i odziedziczone lub deterministycznie
+  uzupełnione negatywy; metryki z prefiksem `pool_`, diagnostyka generatora;
+- `corpus_retrieval`: pełny zamrożony `documents.parquet`; metryki z prefiksem
+  `corpus_`, główna ocena probe i round-trip generatora;
+- indeks korpusowy BM25 oraz zamrożony pomocniczy bi-encoder
+  (FAISS albo brute-force), z revision, licencją i fingerprintem;
+- `effective_candidate_count`, margines do najlepszego niepozytywnego
+  dokumentu i `possibly_ambiguous_query`;
+- każda metryka raportuje rozmiar puli; pipeline odrzuca `recall@K`, gdy
+  pula ma mniej niż K dokumentów;
+- raportuje `corpus_round_trip@1/5/20/100` i jego korelację z marginesem
+  rerankera.
+
+### P-02 — natywny polski holdout
+
+- audyt PIRB, PolQA i ewentualnie MAUPQA w
+  `docs/datasets/native_pl_holdout.md`: licencja, pochodzenie języka,
+  kontaminacja i overlap z `msmarco_pl`;
+- zamrożone `test_native_pl` oraz `test_translated_msmarco_pl`, opcjonalnie
+  `test_transfer_ood`, wraz z fingerprintami i hashami ID;
+- `evaluate embedder` i raport pokazują native i translated osobno;
+- native nie jest używany do strojenia; brak wyniku native oznacza raport
+  niekompletny;
+- dodać tani, jawnie opisany sygnał „translationese”.
+
+### P-03 — probe recipe v1 i false negatives
+
+- dla naturalnych i syntetycznych query primary reranker flaguje odziedziczony
+  negatyw jako `possible_false_negative` według progu kalibracyjnego z Task 02;
+- polityka `drop | demote | keep+log`, domyślnie `drop`, identyczna dla
+  wszystkich wariantów; raportuje odsetek flag per generator;
+- wersja recepty jest częścią manifestu, a porównanie odmawia pracy dla
+  różnych wersji;
+- jednorazowy sensitivity check W05: HN0, HN0+filter i HN1 BM25. Istotna
+  różnica wymaga ADR przed dalszymi porównaniami;
+- pełne HN0/HN0+filter/HN1/HN2/HN3 pozostaje bramką przed Task 09.
+
+### P-04 — kontrakt statystyczny i budżetowy
+
+Przed pierwszym porównaniem utworzyć ADR z:
+
+- główną metryką (propozycja: `corpus_ndcg@10` probe na `test_native_pl`);
+- metrykami i marginesami non-inferiority dla grounding, answerability
+  i formatu;
+- minimalnym praktycznym efektem, seedami successive halving oraz osobnym
+  raportowaniem wariancji między treningami i bootstrapu po query;
+- budżetem liczonym równocześnie w tokenach, parach, unikalnych pasażach
+  i K query/pasaż;
+- regułami dev oraz jednorazowego otwarcia finalnych testów.
+
+Pipeline porównań musi cytować wersję ADR i odmawiać porównania niezgodnych
+definicji budżetu. Dopiero spełnienie P-01…P-04 zezwala na porównawcze probe,
+eksperymenty D00–D12 oraz Task 06.
 
 ## Cel
 
@@ -139,7 +208,7 @@ Wymagania:
 - identyczny sampling pozytywów i hard negative’ów;
 - te same seedy;
 - zapis pełnego configu;
-- trening na naturalnych query jako upper/control baseline;
+- trening na naturalnych query jako gold-data control;
 - trening na prostych kopiach/heurystycznych query jako negative control;
 - trening na syntetycznych query każdego generatora.
 
@@ -197,10 +266,14 @@ Importuj oceny i licz Cohen/Fleiss kappa albo Krippendorff alpha zależnie od li
 - slice’y sumują się do całości;
 - brak danych nie jest zamieniany na zero;
 - porównanie runów sprawdza zgodność test fingerprintu.
+- protokoły `pool_*` i `corpus_*` mają rozłączne nazwy;
+- `recall@K` jest odrzucane dla puli mniejszej niż K;
+- porównanie runów sprawdza wersję recepty probe i kontraktu budżetowego;
 
 ## Kryteria akceptacji
 
 - jeden command ocenia checkpoint i generuje komplet artefaktów;
 - raport generatora i probe embeddera można odtworzyć z manifestu;
 - pipeline odrzuca porównanie runów na różnych wersjach testu;
+- raport bez wyniku `test_native_pl` jest oznaczany jako niekompletny;
 - główny ranking wariantów może używać wyniku probe embeddera, nie tylko rewardu.

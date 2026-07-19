@@ -38,6 +38,10 @@ Dla każdej konfiguracji DPO uruchom `continued SFT`:
 - analogiczny LR search.
 
 Bez tej kontroli nie wolno przypisać poprawy samemu DPO.
+Dodatkową obowiązkową kontrolą jest `score-weighted continued SFT` przy tym
+samym przybliżonym budżecie. Co najwyżej jedną metodę listwise (LiPO albo PRO)
+wolno dopuścić dopiero po stabilnym DPO i tylko przy potwierdzonej jakości
+rankingu kandydatów.
 
 ## Konfiguracja startowa
 

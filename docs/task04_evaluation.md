@@ -48,7 +48,7 @@ fingerprint in all comparison outputs. Metrics that were not run remain
 
 `configs/evaluation/probe_v1.yaml` is the frozen comparison budget. It uses the
 same pinned Polish encoder, tokenizer, positive/hard-negative sampling, number
-of steps and seed for natural-query upper/control, copy negative control and
+of steps and seed for natural-query gold-data control, copy negative control and
 each synthetic generator. Smoke overrides are explicitly non-comparable.
 
 ```bash
