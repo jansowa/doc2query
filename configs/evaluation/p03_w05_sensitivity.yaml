@@ -1,0 +1,40 @@
+schema_version: 1
+experiment_id: P03-W05-HN-SENSITIVITY
+scope: task04-p03-only
+
+generator:
+  model_name_or_path: speakleash/Bielik-1.5B-v3
+  revision: 4b25049621bf3952a1fc9314c89773102eda0333
+  checkpoint: runs/W05-1.5B-50K-8GB/checkpoint-3125
+  config: configs/experiments/w05_1_5b_50k_8gb.yaml
+  seed: 42
+  train_examples: 10000
+  max_length: 512
+  max_new_tokens: 64
+  do_sample: false
+  num_return_sequences: 1
+
+inputs:
+  train: data/processed/v1/train.parquet
+  frozen_evaluation_manifest: data/processed/v1/evaluation/task04-v1/manifest.json
+  dev_subset: dev_intrinsic_rank10
+  dev_examples: 1000
+  train_corpus: artifacts/task04/p03/train_corpus/documents.parquet
+  bm25_index: artifacts/task04/p03/bm25_train_v1
+  calibration: artifacts/task02/pfn_dev_v1/calibration.json
+
+pins:
+  calibration_fingerprint: 9ee4280f18e684b0dc3bb7fd885801b5ae8821af758e2845ab349c559613b3f4
+  bm25_fingerprint: e5df243227e8e877550c283e2f7c882fa931ee38d849d39e8f2e2a51dc182119
+
+probe:
+  recipe: configs/evaluation/probe_v1.yaml
+  primary_judge: configs/reranker/primary_polish_roberta_v3.yaml
+  checkpoint_steps: 100
+
+bootstrap:
+  samples: 2000
+  seed: 42
+
+output_dir: artifacts/task04/p03/w05_sensitivity
+report_dir: reports/measurements/task04_p03_w05_sensitivity

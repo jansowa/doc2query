@@ -1,6 +1,6 @@
 # Task 04 P-03 — blocker W05 sensitivity check
 
-Status: `BLOCKED` (calibration and BM25 ready; W05 train generations absent)
+Status: `BLOCKED` (complete runner ready; pinned Bielik 1.5B snapshot absent)
 
 Date of audit: 2026-07-19
 
@@ -112,3 +112,26 @@ comparison compatibility checks.
    contract, create an ADR before any generator comparison.
 
 No sensitivity result or recipe choice is claimed. P-04 was not started.
+
+## Implemented resumable runner
+
+The complete fail-closed path is now:
+
+```bash
+HF_HOME="$PWD/.cache/huggingface" \
+UV_CACHE_DIR="$PWD/.uv-cache" \
+CUDA_VISIBLE_DEVICES=0 \
+bash scripts/run_p03_w05_sensitivity.sh
+```
+
+It freezes train IDs and their fingerprint, resumes one-query greedy W05
+generation without duplicates, prepares a shared legal-negative cohort,
+equalizes the padded token/step budget, resumes all three probe arms, evaluates
+only frozen `dev_intrinsic_rank10`, performs paired-query bootstrap and writes
+an ADR for a separated or inconclusive outcome. Mock smoke and dry-run modes
+are `--smoke` and `--dry-run`.
+
+The current dry-run still blocks before generation because
+`speakleash/Bielik-1.5B-v3@4b25049621bf3952a1fc9314c89773102eda0333` is not in
+the project-local Hugging Face cache. This access check is not bypassed. No
+sensitivity measurement or hard-negative recipe selection is claimed.

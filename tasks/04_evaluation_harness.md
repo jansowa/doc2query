@@ -10,9 +10,13 @@ Centralny harness, zamrożone manifesty/ID, metryki i slice’y, raporty
 HTML/Markdown, ślepy eksport A/B, bootstrap oraz zamrożona recepta probe
 embeddera są zaimplementowane i przetestowane. P-03 ma gotowy kod i testy
 kontraktu negatywów. Dev-only kalibracja progu i train-corpus BM25 są już
-zmierzone, zweryfikowane i przypięte. W05 pozostaje jawnie zablokowany przez
-brak syntetycznych generacji W05 dla train (istniejące generacje mają zero
-wspólnych train ID), a lokalny cache nie zawiera bazowych wag Bielik 1.5B.
+zmierzone, zweryfikowane i przypięte. Dodano kompletny one-command runner
+P-03, który zamraża train ID, wznawia generację i trening, tworzy wspólną
+kohortę HN0/HN0+filter/HN1, zrównuje jawny budżet tokenów, ocenia wyłącznie
+zamrożony dev i wykonuje paired-query bootstrap przez dedykowany comparator.
+W05 pozostaje pomiarowo zablokowany, ponieważ projektowy cache nadal nie
+zawiera przypiętych bazowych wag Bielik 1.5B; dry-run zatrzymuje się przed
+generacją i nie omija gated access.
 Na lokalnej karcie 8 GB rzeczywiście oceniono W03, W05 i W06 w trybie
 deterministic oraz diverse na tym samym zamrożonym panelu 100 rekordów z co
 najmniej 10 hard negative’ami; wykonano też nieporównywalny 2-step smoke
@@ -91,8 +95,10 @@ artefakt ma fingerprint `9ee4280f…3b3f4` i nie używa żadnego testu. Zamrożo
 
 Preflight ujawnił kolejny brak: W05 ma tylko generacje panelu testowego, z
 zerowym pokryciem train ID, zaś bazowych wag Bielik 1.5B nie ma w lokalnym
-cache. Nie użyto testu ani naturalnych query jako substytutu, więc
-HN0/HN0+filter/HN1 nie uruchomiono i nie ma rozstrzygnięcia. Blocker:
+cache. Dodany runner odtwarza brakujące train-query legalnie z checkpointu
+po dostępności przypiętego snapshotu; nie używa testu ani naturalnych query
+jako substytutu. HN0/HN0+filter/HN1 nadal nie uruchomiono i nie ma
+rozstrzygnięcia. Blocker:
 `reports/blockers/task04_p03_w05_sensitivity.md`. P-04 nie został rozpoczęty.
 
 ## Harness v1.1 — blokery po audycie
@@ -147,7 +153,7 @@ near-duplicate pozostaje jawnie niezmierzony i nie jest zastępowany założenie
 Nie uruchomiono probe, benchmarku PIRB, pełnego indeksu ani żadnego wyniku
 eksperymentalnego. Kolejną bramką Harness v1.1 jest P-03.
 
-### P-03 — probe recipe v1 i false negatives — `IMPLEMENTED / W05 INPUT BLOCKED`
+### P-03 — probe recipe v1 i false negatives — `IMPLEMENTED / MEASUREMENT BLOCKED`
 
 - dla naturalnych i syntetycznych query primary reranker flaguje odziedziczony
   negatyw jako `possible_false_negative` według progu kalibracyjnego z Task 02;
@@ -166,12 +172,21 @@ SHA-256 score’ów, rewizję primary, przestrzeń score’u, operator, próg or
 metodę jego wyboru. HN1 dodatkowo wymaga przypiętego fingerprintu indeksu BM25.
 
 Dev-only kalibracja oraz train-corpus BM25 są gotowe i przypięte. Jednorazowy
-sensitivity check W05 nie został jednak uruchomiony, bo nie istnieje syntetyczny
-artefakt train-query W05 zgodny z wejściem probe. Należy najpierw wygenerować
-go z przypiętego checkpointu/base revision na zamrożonej liście train ID, a
-potem uruchomić wyłącznie trzy identycznie zabudżetowane ramiona diagnostyczne.
-Istotna lub nierozstrzygalna przed P-04 różnica wymaga ADR. Nie wolno uznać
-P-03 za pomiarowo zamknięte ani przejść do porównań generatorów.
+sensitivity check W05 nie został jednak uruchomiony, bo projektowy cache nie
+zawiera przypiętego snapshotu `speakleash/Bielik-1.5B-v3` revision
+`4b25049621bf3952a1fc9314c89773102eda0333`. Gotowy runner
+`scripts/run_p03_w05_sensitivity.sh` wykonuje fail-closed preflight, zamraża
+deterministyczne train ID i fingerprint, generuje dokładnie jedno greedy query
+z checkpointu `runs/W05-1.5B-50K-8GB/checkpoint-3125` z resume bez duplikatów,
+materializuje wspólną kohortę legalnych negatywów, trenuje trzy ramiona z
+identycznym modelem/LR/batchem/seedem/max_length/max_steps i stałym padded
+token budgetem, wznawia trening oraz ocenia tylko `dev_intrinsic_rank10`.
+Dedykowany comparator zezwala na drift strategii HN i jej artefaktu BM25, ale
+odrzuca wszystkie pozostałe różnice kontraktu; raportuje paired-query
+bootstrap 95% CI, flag/drop rates, throughput i peak VRAM. Wynik istotny albo
+nierozstrzygalny automatycznie zapisuje ADR bez wyboru recepty. Mock smoke i
+testy kontraktowe są gotowe. Nie wolno uznać P-03 za pomiarowo zamknięte ani
+przejść do P-04 lub porównań generatorów przed rzeczywistym runem.
 
 ### P-04 — kontrakt statystyczny i budżetowy
 

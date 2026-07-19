@@ -328,11 +328,16 @@ def prepare_probe_pairs(
 
 
 def _tokenize(
-    tokenizer: Any, texts: list[str], max_length: int, device: torch.device
+    tokenizer: Any,
+    texts: list[str],
+    max_length: int,
+    device: torch.device,
+    *,
+    padding: bool | str = True,
 ) -> dict[str, torch.Tensor]:
     encoded: dict[str, torch.Tensor] = tokenizer(
         texts,
-        padding=True,
+        padding=padding,
         truncation=True,
         max_length=max_length,
         return_tensors="pt",
