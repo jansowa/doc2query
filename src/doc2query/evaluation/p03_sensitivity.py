@@ -8,6 +8,7 @@ import math
 import os
 import shutil
 import sqlite3
+import sys
 import time
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, replace
@@ -47,6 +48,25 @@ BM25_FINGERPRINT = "e5df243227e8e877550c283e2f7c882fa931ee38d849d39e8f2e2a51dc18
 SENSITIVITY_CONTRACT_VERSION = "p03-w05-sensitivity-v1"
 ARM_NAMES = ("hn0", "hn0_filter", "hn1_bm25")
 FINAL_TEST_MARKERS = ("test_native", "test_translated", "test_embedder", "final_test")
+
+
+def _duration(seconds: float) -> str:
+    seconds = max(0, round(seconds))
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+def _progress(stage: str, completed: int, total: int, elapsed: float) -> None:
+    rate = completed / elapsed if completed and elapsed > 0 else 0.0
+    eta = (total - completed) / rate if rate > 0 else 0.0
+    percent = 100.0 * completed / total if total else 100.0
+    print(
+        f"[P03 {stage}] {completed}/{total} ({percent:5.1f}%) "
+        f"elapsed={_duration(elapsed)} rate={rate:.3f}/s eta={_duration(eta)}",
+        file=sys.stderr,
+        flush=True,
+    )
 
 
 def canonical_fingerprint(value: Any) -> str:
@@ -252,7 +272,13 @@ def generate_w05_queries(
     config: Any = None
     started = time.perf_counter()
     generated_now = 0
+    _progress("generation/resume", len(completed), len(records), previous_elapsed)
     if not mock and len(completed) < len(records):
+        print(
+            "[P03 generation] loading pinned W05 generator and adapter...",
+            file=sys.stderr,
+            flush=True,
+        )
         config = load_config(Path(str(generator["config"])))
         if (
             config.model.name_or_path != GENERATOR_NAME
@@ -271,6 +297,11 @@ def generate_w05_queries(
             local_files_only=True,
         )
         model.eval()
+        print(
+            "[P03 generation] model ready; greedy generation started.",
+            file=sys.stderr,
+            flush=True,
+        )
     session_elapsed = 0.0
     session_peak = 0
     try:
@@ -333,6 +364,10 @@ def generate_w05_queries(
             )
             connection.commit()
             generated_now += 1
+            total_completed = len(completed) + generated_now
+            current_elapsed = previous_elapsed + time.perf_counter() - started
+            if generated_now == 1 or total_completed % 25 == 0 or total_completed == len(records):
+                _progress("generation", total_completed, len(records), current_elapsed)
             if interrupt_after is not None and generated_now >= interrupt_after:
                 raise InterruptedError("deliberate generation interruption")
         _write_generation_artifact(connection, output_path, len(records))
@@ -697,6 +732,8 @@ def train_sensitivity_probe(
             torch.cuda.set_rng_state_all(cuda_rng_states)
     losses: list[float] = []
     started = time.perf_counter()
+    strategy = str(contract["hard_negative_strategy"])
+    _progress(f"{strategy}/train", start_step, recipe.max_steps, previous_elapsed)
     torch.cuda.reset_peak_memory_stats() if torch.cuda.is_available() else None
     for step in range(start_step, recipe.max_steps):
         indexes = _batch_indices(len(rows), recipe.batch_size, recipe.seed, step)
@@ -739,6 +776,14 @@ def train_sensitivity_probe(
         optimizer.zero_grad(set_to_none=True)
         losses.append(float(loss.detach().cpu()))
         completed_step = step + 1
+        total_elapsed = previous_elapsed + time.perf_counter() - started
+        if completed_step == start_step + 1 or completed_step % 25 == 0:
+            _progress(
+                f"{strategy}/train",
+                completed_step,
+                recipe.max_steps,
+                total_elapsed,
+            )
         if completed_step % checkpoint_steps == 0 and completed_step < recipe.max_steps:
             _save_probe_checkpoint(
                 output_dir,
@@ -801,8 +846,9 @@ def evaluate_probe_on_dev(
     metric_rows: list[dict[str, float | int]] = []
     started = time.perf_counter()
     latencies: list[float] = []
+    strategy = str(contract["hard_negative_strategy"])
     with JsonlWriter(output_dir / "dev_per_query.jsonl") as writer:
-        for record in records:
+        for index, record in enumerate(records, start=1):
             positives = sorted(
                 cast(list[dict[str, Any]], record["positives"]),
                 key=lambda value: str(value["doc_id"]),
@@ -837,6 +883,13 @@ def evaluate_probe_on_dev(
             row = {"example_id": str(record["example_id"]), **metrics}
             writer.write(row)
             metric_rows.append(metrics)
+            if index == 1 or index % 25 == 0 or index == len(records):
+                _progress(
+                    f"{strategy}/dev",
+                    index,
+                    len(records),
+                    time.perf_counter() - started,
+                )
     elapsed = time.perf_counter() - started
     summary = {
         "schema_version": 1,

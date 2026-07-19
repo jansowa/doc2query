@@ -65,6 +65,12 @@ Runner nie używa CPU-only `.venv`: automatycznie tworzy lub naprawia
 projektowe `.venv-gpu` z przypiętym, odtworzonym z udanych runów stosem
 CUDA 12.4. Można też jawnie podać `DOC2QUERY_PYTHON`. Preflight raportuje
 osobno CPU build Torch i brak CUDA w wybranym procesie.
+Kolejkę rozszerzono o pięć przypiętych, porównywalnych ramion
+`Bielik-1.5B-v3.0-Instruct`: trzy LR na 10k, replikację seed 43 i baseline
+50k. Wszystkie zachowują B1, dane, QLoRA i budżety odpowiadających im ramion
+base. To przygotowuje pomiary, ale nie deklaruje zwycięzcy bez P-04.
+Wyjście każdego etapu jest jednocześnie widoczne w terminalu i zapisywane do
+logu.
 
 ## Cel
 

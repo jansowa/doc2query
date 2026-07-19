@@ -36,8 +36,8 @@ uruchomiono.
 | [00](00_repository_bootstrap.md) | Bootstrap repozytorium i odtwarzalność | `DONE` | Szkielet projektu, środowisko, CLI, testy i rejestrowanie są gotowe. |
 | [01](01_data_contract_audit_and_splits.md) | Kontrakt danych, audyt, deduplikacja i splity | `IMPLEMENTED` | Pełny `msmarco_pl` przetworzono do zamrożonych splitów v1 i par doc2query bez leakage pozytywów. Dla rekordów z <10 negatywami przyjęto corpus retrieval oraz oznaczone, deterministyczne backfillowanie tylko w diagnostycznej puli. Pozostał raport tokenowych percentyli/HTML. |
 | [02](02_reranker_and_reward_proxies.md) | Zamrożone rerankery i proxy nagrody | `IMPLEMENTED` | Integracja, reward proxies i testy są gotowe; primary zmierzył pełny frozen dev, a query-macro próg Youdena `possible_false_negative` jest przypięty bez użycia testu. Pozostał pełny benchmark primary/shadow na dev/test z hard negative'ami. |
-| [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | W01–W05 pokrywają bazowy 1.5B LR/baseline, a W06 4.5B Instruct/50k pozostaje diagnostyczny. Gotowa wznawialna kolejka bazowego 1.5B najpierw domyka P-03, potem mierzy 768/1024 oraz siedem jednoczynnikowych runów 10k: length, rank, attention-only, batch i dropout. Nowych runów jeszcze nie wykonano; kolejka nie wybiera finalisty. P-04/probe pozostają wymagane przed 50k/multi-seed i kolejną kampanią 4.5B. |
-| [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IN PROGRESS` | P-01/P-02 i implementacja P-03 są gotowe. Kompletny, wznawialny runner `scripts/run_p03_w05_sensitivity.sh` przypina checkpoint/revision, train cohort, dev-only evaluation, kalibrację (`9ee4280f…3b3f4`) i BM25 (`e5df2432…2119`), zrównuje budżet trzech ramion oraz tworzy bootstrap/ADR. Dry-run nadal blokuje właściwy pomiar, bo przypiętych wag Bielik 1.5B nie ma w projektowym cache; wyniku ani recepty HN nie zadeklarowano. Po legalnej materializacji cache uruchomić jedną komendę i domknąć wyłącznie W05 P-03. P-04 pozostaje nierozpoczęte. |
+| [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | W01–W05 pokrywają bazowy 1.5B LR/baseline, a W06 4.5B Instruct/50k pozostaje diagnostyczny. Wznawialna kolejka po P-03 mierzy siedem technicznych ramion base oraz pięć dopasowanych ramion 1.5B Instruct: trzy LR/10k, seed 43 i 50k. Nowych treningów z kolejki jeszcze nie wykonano; kolejka nie wybiera finalisty. P-04/probe pozostają wymagane przed wyborem i kolejną kampanią 4.5B. |
+| [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IN PROGRESS` | P-01/P-02 i implementacja P-03 są gotowe. Właściwy, wznawialny run P-03 rozpoczął generację W05 po legalnej materializacji przypiętych wag w projektowym cache; wynik ani recepta HN nie są jeszcze dostępne. Runner przypina train cohort, dev-only evaluation, kalibrację (`9ee4280f…3b3f4`) i BM25 (`e5df2432…2119`), zrównuje budżet trzech ramion, raportuje postęp/ETA oraz tworzy bootstrap/ADR. P-04 pozostaje nierozpoczęte. |
 | [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `TODO` | Kod taksonomii i kontrolek może powstawać równolegle, ale eksperymenty D00–D12 wymagają ukończonego Harness v1.1 z Task 04. |
 | [06](06_candidate_scoring_and_preference_data.md) | Scoring kandydatów i dane preferencyjne | `TODO` | Wymaga stabilnego checkpointu SFT, ukończonego Harness v1.1 oraz Task 02 i 05. |
 | [07](07_dpo_training.md) | DPO i continued-SFT control | `TODO` | Wymaga danych preferencyjnych z Task 06. |
@@ -55,10 +55,9 @@ backlogiem. Zakres P-xx został przeniesiony do wskazanych plików zadań.
 
 1. **Teraz — Task 04 / Harness v1.1:** P-01/P-02 i implementacja P-03 są
    gotowe. P-03 ma przypiętą dev-only kalibrację, train-corpus BM25 oraz
-   one-command runner, ale właściwy pomiar pozostaje zablokowany przez brak
-   przypiętych wag Bielik 1.5B w projektowym cache. Po legalnym uzupełnieniu
-   cache runner sam materializuje train-query i wykonuje diagnostyczny W05;
-   następnie P-04. Niedomknięte
+   one-command runner. Właściwy pomiar rozpoczął wznawialną generację W05;
+   po jej zakończeniu runner wykona trzy diagnostyczne ramiona, a następnie
+   pozostanie P-04. Niedomknięte
    W05/P-04 są blokerami pierwszego porównawczego probe.
 2. **Brama tanich baseline'ów — Task 03:** P-05 i P-06 na 1.5B. W06 pozostaje
    eksploracyjnym dowodem wykonalności 4.5B/8 GB, a nie zgodą na dalszą
@@ -77,8 +76,9 @@ CUDA_VISIBLE_DEVICES=0 bash scripts/run_base_1_5b_campaign.sh`. Kolejka
 automatycznie tworzy projektowe `.venv-gpu` z przypiętym CUDA Torch, pobiera
 legalnie dostępne przypięte snapshoty, materializuje train-query W05 i
 wykonuje wyłącznie diagnostyczny HN0/HN0+filter/HN1 przed technicznymi runami
-base 1.5B. CPU-only `.venv` pozostaje środowiskiem testowym. Szczegóły i
-warunki są w
+base 1.5B oraz pięcioma dopasowanymi treningami 1.5B Instruct. Całe wyjście
+jest jednocześnie przesyłane do konsoli i logu, z postępem oraz ETA dla P-03.
+CPU-only `.venv` pozostaje środowiskiem testowym. Szczegóły i warunki są w
 [`Task 04`](04_evaluation_harness.md) oraz blockerze
 `reports/blockers/task04_p03_w05_sensitivity.md`. P-04 i porównawcze probe
 pozostają po tej bramce.

@@ -1,11 +1,13 @@
-# Task 03 — resumable Bielik 1.5B base technical queue
+# Task 03 — resumable Bielik 1.5B base/instruct technical queue
 
 ## Scope
 
 This queue prepares technical, single-factor QLoRA measurements for
 `speakleash/Bielik-1.5B-v3` at pinned revision
-`4b25049621bf3952a1fc9314c89773102eda0333`. It does not compare base against
-instruct, select a final generator, open a final test, or start DPO/GRPO.
+`4b25049621bf3952a1fc9314c89773102eda0333` and matched training runs for
+`speakleash/Bielik-1.5B-v3.0-Instruct` at
+`1907cec498b762e8223b7cffc2b8f279c417a44d`. It does not select a final
+generator, open a final test, or start DPO/GRPO.
 
 The existing completed runs already cover:
 
@@ -30,6 +32,9 @@ They are reused and never restarted.
 4. Run seven resumable 10k single-factor technical ablations against W03:
    length 768, length 1024, rank 16, rank 32, attention-only LoRA, effective
    batch 32 and LoRA dropout 0.
+5. Run five matched Instruct arms: the same 10k LR sweep
+   (`1e-4`, `5e-5`, `2e-4`), the seed-43 replication at `1e-4`, and the same
+   50k `1e-4` baseline as W05.
 
 All new SFT runs use the same base revision, deterministic 10k selection,
 seed 42, LR 2e-4, B1 prompt and completion-only loss. Rank runs preserve
@@ -39,6 +44,9 @@ the only changed factor.
 The queue intentionally does not pick two 50k finalists. Eval loss is logged
 but is not an allowed final selection metric. P-04 and comparable probe
 measurements must select finalists before expensive 50k/multi-seed expansion.
+Base and Instruct use the identical B1 prompt-completion contract, so the
+starting checkpoint is the model factor; native ChatML is not silently mixed
+into this comparison.
 
 ## Commands
 
@@ -74,6 +82,9 @@ and prints the diagnostic tail immediately on failure.
 Interrupting the foreground command is safe. Re-running the same command
 resumes P-03 generation/probe training, completed memory probes and the latest
 compatible SFT checkpoint. The queue lock prevents two concurrent owners.
+All child output is streamed simultaneously to the terminal and the combined
+log. P-03 reports generation/preparation/training/dev progress, throughput,
+elapsed time and ETA; Transformers supplies the SFT step progress and ETA.
 
 Progress is written to `reports/base_1_5b_campaign/status.tsv`; combined logs
 are written to `logs/base_1_5b_campaign.log`.

@@ -32,12 +32,6 @@ mkdir -p \
 LOG="$ROOT/logs/base_1_5b_campaign.log"
 STATUS="$ROOT/reports/base_1_5b_campaign/status.tsv"
 LOCK="$ROOT/reports/base_1_5b_campaign/queue.lock"
-exec 9>"$LOCK"
-if ! flock -n 9; then
-  printf '[%s] Another base campaign owns %s; exiting.\n' \
-    "$(date --iso-8601=seconds)" "$LOCK" | tee -a "$LOG"
-  exit 3
-fi
 
 configs=(
   configs/experiments/b01_1_5b_10k_l768_lr2e4_s42.yaml
@@ -47,6 +41,14 @@ configs=(
   configs/experiments/b05_1_5b_10k_attention_lr2e4_s42.yaml
   configs/experiments/b06_1_5b_10k_eb32_lr2e4_s42.yaml
   configs/experiments/b07_1_5b_10k_dropout0_lr2e4_s42.yaml
+)
+
+instruct_configs=(
+  configs/experiments/i01_1_5b_instruct_10k_lr1e4_s42.yaml
+  configs/experiments/i02_1_5b_instruct_10k_lr5e5_s42.yaml
+  configs/experiments/i03_1_5b_instruct_10k_lr2e4_s42.yaml
+  configs/experiments/i04_1_5b_instruct_10k_lr1e4_s43.yaml
+  configs/experiments/i05_1_5b_instruct_50k_lr1e4_s42.yaml
 )
 
 usage() {
@@ -59,7 +61,7 @@ case "${1:-}" in
     exit 0
     ;;
   --dry-run)
-    "${DOC2QUERY_PYTHON:-.venv/bin/python}" - "${configs[@]}" <<'PY'
+    "${DOC2QUERY_PYTHON:-.venv/bin/python}" - "${configs[@]}" "${instruct_configs[@]}" <<'PY'
 import sys
 from pathlib import Path
 from doc2query.config import load_config
@@ -89,6 +91,13 @@ PY
     ;;
 esac
 
+exec 9>"$LOCK"
+if ! flock -n 9; then
+  printf '[%s] Another base campaign owns %s; exiting.\n' \
+    "$(date --iso-8601=seconds)" "$LOCK" | tee -a "$LOG"
+  exit 3
+fi
+
 if [[ ! -f "$STATUS" ]]; then
   printf 'started_at\tfinished_at\tname\texit_code\n' >"$STATUS"
 fi
@@ -100,8 +109,8 @@ record_step() {
   started="$(date --iso-8601=seconds)"
   printf '\n[%s] START %s\n' "$started" "$name" | tee -a "$LOG"
   set +e
-  "$@" >>"$LOG" 2>&1
-  rc=$?
+  "$@" 2>&1 | tee -a "$LOG"
+  rc=${PIPESTATUS[0]}
   set -e
   finished="$(date --iso-8601=seconds)"
   printf '[%s] END %s rc=%s\n' "$finished" "$name" "$rc" | tee -a "$LOG"
@@ -136,23 +145,21 @@ ensure_snapshot() {
   local destination="$HF_HUB_CACHE/$slug"
   local home_source="$HOME/.cache/huggingface/hub/$slug"
   if [[ -d "$destination/snapshots/$revision" ]]; then
-    printf '[%s] CACHE HIT %s@%s\n' "$(date --iso-8601=seconds)" "$repo" "$revision" \
-      | tee -a "$LOG"
+    printf '[%s] CACHE HIT %s@%s\n' "$(date --iso-8601=seconds)" "$repo" "$revision"
     return 0
   fi
   if [[ -d "$home_source/snapshots/$revision" ]]; then
     printf '[%s] COPY %s@%s from user cache to project cache\n' \
-      "$(date --iso-8601=seconds)" "$repo" "$revision" | tee -a "$LOG"
+      "$(date --iso-8601=seconds)" "$repo" "$revision"
     mkdir -p "$destination"
     cp -a "$home_source/." "$destination/"
   else
     printf '[%s] DOWNLOAD %s@%s into project cache\n' \
-      "$(date --iso-8601=seconds)" "$repo" "$revision" | tee -a "$LOG"
+      "$(date --iso-8601=seconds)" "$repo" "$revision"
     HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 \
       "$HF_CLI" download "$repo" \
       --revision "$revision" \
-      --cache-dir "$HF_HUB_CACHE" \
-      --quiet >>"$LOG" 2>&1
+      --cache-dir "$HF_HUB_CACHE"
   fi
   if [[ ! -d "$destination/snapshots/$revision" ]]; then
     echo "Campaign blocked: exact snapshot was not materialized: $repo@$revision" >&2
@@ -176,6 +183,10 @@ record_step cache-bielik-base \
   ensure_snapshot \
   speakleash/Bielik-1.5B-v3 \
   4b25049621bf3952a1fc9314c89773102eda0333
+record_step cache-bielik-instruct \
+  ensure_snapshot \
+  speakleash/Bielik-1.5B-v3.0-Instruct \
+  1907cec498b762e8223b7cffc2b8f279c417a44d
 record_step cache-probe \
   ensure_snapshot \
   sdadas/polish-reranker-base-ranknet \
@@ -211,5 +222,15 @@ for config in "${configs[@]}"; do
     --resume-if-available
 done
 
-printf '[%s] Base 1.5B technical queue complete. No winner was selected; P-04/probe remains required.\n' \
+# Matched base-vs-instruct training arms. They deliberately keep the same B1
+# prompt/completion format so the starting checkpoint is the only model
+# factor. Selection still requires the later P-04 probe contract.
+for config in "${instruct_configs[@]}"; do
+  record_step "train-$(basename "$config" .yaml)" \
+    "$PYTHON" scripts/train_sft.py \
+    --config "$config" \
+    --resume-if-available
+done
+
+printf '[%s] Base/instruct 1.5B technical queue complete. No winner was selected; P-04/probe remains required.\n' \
   "$(date --iso-8601=seconds)" | tee -a "$LOG"

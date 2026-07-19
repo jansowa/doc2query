@@ -1,6 +1,6 @@
-# Task 04 P-03 — blocker W05 sensitivity check
+# Task 04 P-03 — resolved blocker / running W05 sensitivity check
 
-Status: `BLOCKED` (complete runner ready; pinned Bielik 1.5B snapshot absent)
+Status: `UNBLOCKED / MEASUREMENT IN PROGRESS`
 
 Date of audit: 2026-07-19
 
@@ -38,9 +38,9 @@ The two original artifact blockers are resolved without opening any final test:
 The calibration and BM25 fingerprints are pinned in
 `configs/evaluation/probe_v1.yaml`.
 
-## Remaining blocker found by W05 preflight
+## Former blocker found by W05 preflight
 
-The diagnostic run still cannot start:
+The original preflight found:
 
 - `reports/evaluation/W05-1.5B-50K-8GB/generations.jsonl` contains 100 unique
   example IDs from the frozen test panel and has zero intersection with
@@ -51,9 +51,12 @@ The diagnostic run still cannot start:
   queries keyed by train `example_id`; supplying either existing file would
   produce zero training pairs;
 - the W05 adapter and checkpoint are present, but the pinned
-  `speakleash/Bielik-1.5B-v3` base weights are not present in the project-local
-  Hugging Face cache, so the missing train generations cannot be recreated
-  offline in this session.
+  `speakleash/Bielik-1.5B-v3` base weights were initially absent from the
+  project-local Hugging Face cache.
+
+The exact snapshot was subsequently copied from the authenticated user cache
+to the project partition. The proper dev-only run has started its resumable
+10k train-query generation. No sensitivity result is available yet.
 
 Using `test_native_pl`, the translated final test panel, the W05 test
 generations, or natural queries as a substitute would invalidate the
@@ -131,7 +134,9 @@ only frozen `dev_intrinsic_rank10`, performs paired-query bootstrap and writes
 an ADR for a separated or inconclusive outcome. Mock smoke and dry-run modes
 are `--smoke` and `--dry-run`.
 
-The current dry-run still blocks before generation because
-`speakleash/Bielik-1.5B-v3@4b25049621bf3952a1fc9314c89773102eda0333` is not in
-the project-local Hugging Face cache. This access check is not bypassed. No
-sensitivity measurement or hard-negative recipe selection is claimed.
+The pinned
+`speakleash/Bielik-1.5B-v3@4b25049621bf3952a1fc9314c89773102eda0333` now
+passes the project-local cache check without bypassing gated access. The
+runner streams progress, throughput, elapsed time and ETA to both console and
+the combined campaign log. No completed sensitivity measurement or
+hard-negative recipe selection is claimed.

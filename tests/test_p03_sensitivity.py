@@ -49,7 +49,9 @@ def _generation_config() -> dict[str, Any]:
     }
 
 
-def test_generation_resume_has_exactly_one_row_per_id(tmp_path: Path) -> None:
+def test_generation_resume_has_exactly_one_row_per_id(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     journal = tmp_path / "generation.sqlite"
     output = tmp_path / "generations.jsonl"
     with pytest.raises(InterruptedError):
@@ -77,6 +79,10 @@ def test_generation_resume_has_exactly_one_row_per_id(tmp_path: Path) -> None:
     assert all(row["candidate_index"] == 0 for row in rows)
     assert all(row["revision"] == "4b25049621bf3952a1fc9314c89773102eda0333" for row in rows)
     assert all(row["fingerprint"] == rows[0]["fingerprint"] for row in rows)
+    progress = capsys.readouterr().err
+    assert "[P03 generation/resume]" in progress
+    assert "4/4 (100.0%)" in progress
+    assert "eta=" in progress
 
 
 def test_final_test_ids_are_rejected() -> None:

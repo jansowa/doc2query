@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Any, cast
 
@@ -142,6 +143,11 @@ def _markdown_report(
 
 
 def run(config_path: Path, root: Path) -> dict[str, Any]:
+    print(
+        "[P03] preflight: pins, local cache and dev-only contract...",
+        file=sys.stderr,
+        flush=True,
+    )
     raw = load_sensitivity_config(config_path)
     check = preflight(raw, root, require_model_cache=True)
     generator = _mapping(raw, "generator")
@@ -164,6 +170,11 @@ def run(config_path: Path, root: Path) -> dict[str, Any]:
         forbidden_ids=frozen_test_ids(manifest_path),
     )
     ordered_ids = cast(list[str], cohort["ordered_ids"])
+    print(
+        f"[P03] frozen train cohort ready: {len(ordered_ids)} IDs.",
+        file=sys.stderr,
+        flush=True,
+    )
     records = materialize_selected_train(root / str(inputs["train"]), ordered_ids)
     generations_path = output_dir / "w05_train_generations.jsonl"
     generation = generate_w05_queries(
@@ -189,6 +200,11 @@ def run(config_path: Path, root: Path) -> dict[str, Any]:
         and all((output_dir / "prepared" / arm / "pairs.jsonl").is_file() for arm in ARM_NAMES)
     )
     if cache_matches:
+        print(
+            "[P03] prepared-arm cache hit; verifying common cohort and order...",
+            file=sys.stderr,
+            flush=True,
+        )
         cached_mapping = cast(dict[str, Any], cached)
         common = cast(dict[str, Any], cached_mapping["common_cohort"])
         arm_reports = cast(
@@ -204,11 +220,38 @@ def run(config_path: Path, root: Path) -> dict[str, Any]:
             raise ValueError("cached P-03 common cohort fingerprint or order drifted")
         common_rows = verified_rows
     else:
+        print(
+            "[P03] preparing HN0, HN0+filter and HN1 BM25 arms...",
+            file=sys.stderr,
+            flush=True,
+        )
         judge = load_frozen_reranker(_load_judge(root / str(probe_block["primary_judge"])))
         arm_rows: dict[str, list[dict[str, Any]]] = {}
         arm_audits: dict[str, list[dict[str, Any]]] = {}
         arm_reports = {}
         for arm in ARM_NAMES:
+            print(f"[P03 {arm}/prepare] started.", file=sys.stderr, flush=True)
+            arm_started = time.perf_counter()
+
+            def report_preparation(
+                completed: int,
+                total: int,
+                *,
+                arm_name: str = arm,
+                started: float = arm_started,
+            ) -> None:
+                if completed == 1 or completed % 100 == 0 or completed == total:
+                    elapsed = time.perf_counter() - started
+                    rate = completed / elapsed if elapsed else 0.0
+                    eta = (total - completed) / rate if rate else 0.0
+                    print(
+                        f"[P03 {arm_name}/prepare] {completed}/{total} "
+                        f"({100 * completed / total:5.1f}%) rate={rate:.2f}/s "
+                        f"eta={eta / 60:.1f} min",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+
             recipe = negative_recipe_for_arm(base_recipe, arm)
             index = (
                 load_corpus_index(root / str(inputs["bm25_index"])) if arm == "hn1_bm25" else None
@@ -224,6 +267,7 @@ def run(config_path: Path, root: Path) -> dict[str, Any]:
                     generator_id="W05-1.5B-50K-8GB",
                     bm25_index=index,
                     documents_path=root / str(inputs["train_corpus"]),
+                    progress=report_preparation,
                 )
             finally:
                 if index is not None:
@@ -231,6 +275,11 @@ def run(config_path: Path, root: Path) -> dict[str, Any]:
             arm_rows[arm] = rows
             arm_audits[arm] = audits
             arm_reports[arm] = audit_report
+            print(
+                f"[P03 {arm}/prepare] complete: {len(rows)} legal pairs.",
+                file=sys.stderr,
+                flush=True,
+            )
 
         common_rows, common = common_cohort(arm_rows, ordered_ids)
         write_json(output_dir / "common_cohort.json", common)
@@ -271,6 +320,11 @@ def run(config_path: Path, root: Path) -> dict[str, Any]:
         for arm in ARM_NAMES
     }
     equal_budget = assert_equal_budget(budgets)
+    print(
+        f"[P03] common cohort and equal token budget verified: {common['count']} examples.",
+        file=sys.stderr,
+        flush=True,
+    )
     preparation = {
         "status": "measured",
         "common_cohort": common,
@@ -289,6 +343,11 @@ def run(config_path: Path, root: Path) -> dict[str, Any]:
     )
     arm_eval_dirs: dict[str, Path] = {}
     for arm in ARM_NAMES:
+        print(
+            f"[P03 {arm}] probe training/evaluation started.",
+            file=sys.stderr,
+            flush=True,
+        )
         recipe = negative_recipe_for_arm(base_recipe, arm)
         contract = sensitivity_contract(
             recipe=recipe,
@@ -315,8 +374,14 @@ def run(config_path: Path, root: Path) -> dict[str, Any]:
             contract=contract,
         )
         arm_eval_dirs[arm] = arm_dir
+        print(
+            f"[P03 {arm}] probe training/evaluation complete.",
+            file=sys.stderr,
+            flush=True,
+        )
 
     comparison_path = report_dir / "sensitivity_report.json"
+    print("[P03] paired bootstrap comparison started.", file=sys.stderr, flush=True)
     comparison = compare_sensitivity_arms(
         arm_eval_dirs,
         output_path=comparison_path,

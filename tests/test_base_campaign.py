@@ -45,6 +45,14 @@ CAMPAIGN_CONFIGS = {
     },
 }
 
+INSTRUCT_CONFIGS = {
+    "i01_1_5b_instruct_10k_lr1e4_s42.yaml": (10_000, 1e-4, 42),
+    "i02_1_5b_instruct_10k_lr5e5_s42.yaml": (10_000, 5e-5, 42),
+    "i03_1_5b_instruct_10k_lr2e4_s42.yaml": (10_000, 2e-4, 42),
+    "i04_1_5b_instruct_10k_lr1e4_s43.yaml": (10_000, 1e-4, 43),
+    "i05_1_5b_instruct_50k_lr1e4_s42.yaml": (50_000, 1e-4, 42),
+}
+
 
 def test_base_campaign_configs_are_pinned_single_factor_runs() -> None:
     root = Path("configs/experiments")
@@ -69,6 +77,21 @@ def test_base_campaign_configs_are_pinned_single_factor_runs() -> None:
     assert dropout.lora.dropout == 0.0
 
 
+def test_instruct_campaign_is_pinned_and_matched_to_base_runs() -> None:
+    root = Path("configs/experiments")
+    for name, (examples, learning_rate, seed) in INSTRUCT_CONFIGS.items():
+        config = load_config(root / name)
+        assert config.model.name_or_path == "speakleash/Bielik-1.5B-v3.0-Instruct"
+        assert config.model.revision == "1907cec498b762e8223b7cffc2b8f279c417a44d"
+        assert config.data.max_train_examples == examples
+        assert config.training.learning_rate == learning_rate
+        assert config.run.seed == seed
+        assert config.training.baseline == "b1"
+        assert config.training.max_length == 512
+        assert config.lora.r == 8
+        assert config.lora.alpha == 16
+
+
 def test_base_campaign_help_dry_run_and_order() -> None:
     for script, argument in (
         ("scripts/run_base_1_5b_campaign.sh", "--help"),
@@ -86,7 +109,8 @@ def test_base_campaign_help_dry_run_and_order() -> None:
     p03 = source.index("record_step p03-w05-sensitivity")
     memory = source.index("record_step memory-probe-768-1024")
     first_training = source.index('for config in "${configs[@]}"')
-    assert p03 < memory < first_training
+    instruct_training = source.index('for config in "${instruct_configs[@]}"')
+    assert p03 < memory < first_training < instruct_training
 
 
 def test_base_campaign_uses_pinned_project_gpu_environment() -> None:
@@ -105,6 +129,8 @@ def test_base_campaign_uses_pinned_project_gpu_environment() -> None:
     campaign = Path("scripts/run_base_1_5b_campaign.sh").read_text(encoding="utf-8")
     assert "record_step gpu-environment bash scripts/bootstrap_gpu_env.sh" in campaign
     assert 'export DOC2QUERY_PYTHON="$PYTHON"' in campaign
+    assert "speakleash/Bielik-1.5B-v3.0-Instruct" in campaign
+    assert '"$@" 2>&1 | tee -a "$LOG"' in campaign
     assert ".venv/bin/python scripts/train_sft.py" not in campaign
 
 

@@ -1,0 +1,13 @@
+# @package _global_
+# Matched instruct counterpart of W02; training only, not a selection result.
+defaults:
+  - w02_1_5b_10k_lr5e5_seed42
+  - _self_
+model:
+  name_or_path: speakleash/Bielik-1.5B-v3.0-Instruct
+  revision: 1907cec498b762e8223b7cffc2b8f279c417a44d
+  trust_remote_code: false
+run:
+  experiment_id: I02-1.5B-INSTRUCT-10K-LR5E5-S42
+  seed: 42
+  output_dir: runs/I02-1.5B-INSTRUCT-10K-LR5E5-S42

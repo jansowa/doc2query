@@ -7,7 +7,7 @@ import heapq
 import json
 import math
 import time
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -221,6 +221,7 @@ def prepare_probe_pairs(
     generator_id: str | None = None,
     bm25_index: CorpusIndex | None = None,
     documents_path: Path | None = None,
+    progress: Callable[[int, int], None] | None = None,
 ) -> tuple[list[dict[str, Any]], str, dict[str, Any], list[dict[str, Any]]]:
     synthetic = _synthetic_map(synthetic_generations)
     materialized = list(records)
@@ -243,7 +244,9 @@ def prepare_probe_pairs(
     audit_rows: list[dict[str, Any]] = []
     selected: list[tuple[int, str, dict[str, Any]]] = []
     policy_dropped_examples = 0
-    for record, query in prepared:
+    for prepared_index, (record, query) in enumerate(prepared, start=1):
+        if progress is not None:
+            progress(prepared_index, len(prepared))
         positives = sorted(record.get("positives", []), key=lambda value: str(value["doc_id"]))
         negatives = record.get("hard_negatives", [])
         if not positives or (not negatives and negative_recipe.strategy != "hn1_bm25"):

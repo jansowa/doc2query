@@ -153,7 +153,7 @@ near-duplicate pozostaje jawnie niezmierzony i nie jest zastępowany założenie
 Nie uruchomiono probe, benchmarku PIRB, pełnego indeksu ani żadnego wyniku
 eksperymentalnego. Kolejną bramką Harness v1.1 jest P-03.
 
-### P-03 — probe recipe v1 i false negatives — `IMPLEMENTED / MEASUREMENT BLOCKED`
+### P-03 — probe recipe v1 i false negatives — `IMPLEMENTED / MEASUREMENT IN PROGRESS`
 
 - dla naturalnych i syntetycznych query primary reranker flaguje odziedziczony
   negatyw jako `possible_false_negative` według progu kalibracyjnego z Task 02;
@@ -171,10 +171,11 @@ wyłącznie na dev i weryfikuje jego ID, fingerprint, fingerprint danych,
 SHA-256 score’ów, rewizję primary, przestrzeń score’u, operator, próg oraz
 metodę jego wyboru. HN1 dodatkowo wymaga przypiętego fingerprintu indeksu BM25.
 
-Dev-only kalibracja oraz train-corpus BM25 są gotowe i przypięte. Jednorazowy
-sensitivity check W05 nie został jednak uruchomiony, bo projektowy cache nie
-zawiera przypiętego snapshotu `speakleash/Bielik-1.5B-v3` revision
-`4b25049621bf3952a1fc9314c89773102eda0333`. Gotowy runner
+Dev-only kalibracja oraz train-corpus BM25 są gotowe i przypięte. Przypięty
+snapshot `speakleash/Bielik-1.5B-v3` revision
+`4b25049621bf3952a1fc9314c89773102eda0333` został legalnie skopiowany do
+projektowego cache i właściwy sensitivity check W05 rozpoczął generację.
+Wynik nie jest jeszcze dostępny. Gotowy runner
 `scripts/run_p03_w05_sensitivity.sh` wykonuje fail-closed preflight, zamraża
 deterministyczne train ID i fingerprint, generuje dokładnie jedno greedy query
 z checkpointu `runs/W05-1.5B-50K-8GB/checkpoint-3125` z resume bez duplikatów,
@@ -185,8 +186,10 @@ Dedykowany comparator zezwala na drift strategii HN i jej artefaktu BM25, ale
 odrzuca wszystkie pozostałe różnice kontraktu; raportuje paired-query
 bootstrap 95% CI, flag/drop rates, throughput i peak VRAM. Wynik istotny albo
 nierozstrzygalny automatycznie zapisuje ADR bez wyboru recepty. Mock smoke i
-testy kontraktowe są gotowe. Nie wolno uznać P-03 za pomiarowo zamknięte ani
-przejść do P-04 lub porównań generatorów przed rzeczywistym runem.
+testy kontraktowe są gotowe. Runner raportuje w konsoli i wspólnym logu
+postęp, throughput, czas i ETA generacji, przygotowania ramion, treningów
+probe i ewaluacji dev. Nie wolno uznać P-03 za pomiarowo zamknięte ani przejść
+do P-04 lub porównań generatorów przed zakończeniem właściwego runu.
 
 ### P-04 — kontrakt statystyczny i budżetowy
 
