@@ -7,7 +7,7 @@ import heapq
 import json
 import math
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -17,7 +17,7 @@ import torch.nn.functional as functional
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
-from doc2query.evaluation.corpus import sha256_file
+from doc2query.evaluation.corpus import CorpusIndex, sha256_file
 from doc2query.evaluation.datasets import evaluation_fingerprint, load_frozen_records
 from doc2query.evaluation.native_holdout import (
     HoldoutProfile,
@@ -26,6 +26,13 @@ from doc2query.evaluation.native_holdout import (
     holdout_set_status,
     load_holdout_records,
 )
+from doc2query.evaluation.probe_negatives import (
+    NegativeCandidate,
+    NegativeRecipe,
+    PossibleFalseNegativeCalibration,
+    select_negative,
+    summarize_false_negative_audit,
+)
 from doc2query.evaluation.report import build_embedder_report
 from doc2query.evaluation.retrieval import (
     CORPUS_RETRIEVAL,
@@ -33,6 +40,7 @@ from doc2query.evaluation.retrieval import (
     corpus_metrics_from_positive_ranks,
 )
 from doc2query.evaluation.translationese import aggregate_translationese
+from doc2query.reranker.base import PairScorer
 from doc2query.utils.records import JsonlWriter, read_records, write_json
 from doc2query.utils.reproducibility import set_seed
 from doc2query.utils.tracking import collect_code_provenance
@@ -44,6 +52,8 @@ QuerySource = Literal["natural", "copy_control", "synthetic"]
 class ProbeRecipe:
     model_name_or_path: str
     revision: str
+    recipe_version: str
+    negative_recipe: NegativeRecipe
     max_length: int = 256
     batch_size: int = 16
     max_steps: int = 1000
@@ -63,6 +73,17 @@ class ProbeRecipe:
             raise ValueError("the frozen v1 recipe uses exactly one paired hard negative")
         if not self.normalize_embeddings:
             raise ValueError("the frozen v1 recipe requires normalized embeddings")
+        if not self.recipe_version.strip():
+            raise ValueError("probe recipe_version must be non-empty")
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> ProbeRecipe:
+        payload = dict(raw)
+        negative = payload.get("negative_recipe")
+        if not isinstance(negative, Mapping):
+            raise ValueError("probe recipe requires a negative_recipe mapping")
+        payload["negative_recipe"] = NegativeRecipe(**dict(negative))
+        return cls(**payload)
 
     @property
     def fingerprint(self) -> str:
@@ -70,14 +91,14 @@ class ProbeRecipe:
         return hashlib.sha256(payload.encode()).hexdigest()
 
 
-class ProbePairs(Dataset[dict[str, str]]):
-    def __init__(self, rows: list[dict[str, str]]) -> None:
+class ProbePairs(Dataset[dict[str, Any]]):
+    def __init__(self, rows: list[dict[str, Any]]) -> None:
         self.rows = rows
 
     def __len__(self) -> int:
         return len(self.rows)
 
-    def __getitem__(self, index: int) -> dict[str, str]:
+    def __getitem__(self, index: int) -> dict[str, Any]:
         return self.rows[index]
 
 
@@ -115,39 +136,164 @@ def _copy_control(passage: str) -> str:
     return " ".join(sentence.split()[:12])
 
 
+def _query_for_record(
+    record: Mapping[str, Any],
+    *,
+    query_source: QuerySource,
+    synthetic: Mapping[str, str],
+) -> str | None:
+    if query_source == "natural":
+        return str(record["query"])
+    positives = record.get("positives", [])
+    if not isinstance(positives, list) or not positives:
+        return None
+    if query_source == "copy_control":
+        return _copy_control(str(positives[0]["text"]))
+    return synthetic.get(str(record["example_id"]))
+
+
+def _hn1_candidates(
+    prepared: Sequence[tuple[dict[str, Any], str]],
+    *,
+    index: CorpusIndex,
+    documents_path: Path,
+    recipe: NegativeRecipe,
+) -> dict[str, list[NegativeCandidate]]:
+    metadata = index.metadata
+    if metadata.get("backend") != "bm25_sqlite":
+        raise ValueError("HN1 requires the frozen P-01 BM25 index, not another corpus backend")
+    if metadata.get("index_fingerprint") != recipe.bm25_index_fingerprint:
+        raise ValueError("HN1 BM25 index fingerprint does not match the negative recipe")
+    ranked: dict[str, list[tuple[str, int, float]]] = {}
+    wanted: set[str] = set()
+    for record, query in prepared:
+        positives = {
+            str(document["doc_id"])
+            for document in record.get("positives", [])
+            if isinstance(document, dict) and "doc_id" in document
+        }
+        search = index.search(query, limit=recipe.bm25_candidates + len(positives))
+        candidates = [
+            (document.doc_id, document.rank, document.score)
+            for document in search.documents
+            if document.doc_id not in positives
+        ][: recipe.bm25_candidates]
+        if not candidates:
+            raise ValueError(
+                f"HN1 BM25 returned no non-positive candidate for {record['example_id']}"
+            )
+        ranked[str(record["example_id"])] = candidates
+        wanted.update(doc_id for doc_id, _rank, _score in candidates)
+    texts: dict[str, str] = {}
+    for document in read_records(documents_path):
+        doc_id = str(document["doc_id"])
+        if doc_id in wanted:
+            texts[doc_id] = str(document["text"])
+            if len(texts) == len(wanted):
+                break
+    missing = sorted(wanted - texts.keys())
+    if missing:
+        raise ValueError(f"HN1 BM25 documents are absent from the frozen corpus: {missing[:3]}")
+    return {
+        example_id: [
+            NegativeCandidate(
+                doc_id=doc_id,
+                text=texts[doc_id],
+                miner="bm25",
+                miner_rank=rank,
+                miner_score=score,
+            )
+            for doc_id, rank, score in candidates
+        ]
+        for example_id, candidates in ranked.items()
+    }
+
+
 def prepare_probe_pairs(
     records: Iterable[dict[str, Any]],
     *,
     query_source: QuerySource,
+    negative_recipe: NegativeRecipe,
+    calibration: PossibleFalseNegativeCalibration | None,
+    primary_scorer: PairScorer | None,
     synthetic_generations: Path | None = None,
     limit: int | None = None,
-) -> tuple[list[dict[str, str]], str]:
+    generator_id: str | None = None,
+    bm25_index: CorpusIndex | None = None,
+    documents_path: Path | None = None,
+) -> tuple[list[dict[str, Any]], str, dict[str, Any], list[dict[str, Any]]]:
     synthetic = _synthetic_map(synthetic_generations)
-    rows: list[dict[str, str]] = []
-    selected: list[tuple[int, str, dict[str, str]]] = []
-    for record in records:
+    materialized = list(records)
+    prepared: list[tuple[dict[str, Any], str]] = []
+    for record in materialized:
+        query = _query_for_record(record, query_source=query_source, synthetic=synthetic)
+        if query is not None:
+            prepared.append((record, query))
+    mined: dict[str, list[NegativeCandidate]] = {}
+    if negative_recipe.strategy == "hn1_bm25":
+        if bm25_index is None or documents_path is None:
+            raise ValueError("HN1 BM25 requires bm25_index and frozen documents_path")
+        mined = _hn1_candidates(
+            prepared,
+            index=bm25_index,
+            documents_path=documents_path,
+            recipe=negative_recipe,
+        )
+    rows: list[dict[str, Any]] = []
+    audit_rows: list[dict[str, Any]] = []
+    selected: list[tuple[int, str, dict[str, Any]]] = []
+    policy_dropped_examples = 0
+    for record, query in prepared:
         positives = sorted(record.get("positives", []), key=lambda value: str(value["doc_id"]))
         negatives = record.get("hard_negatives", [])
-        if not positives or not negatives:
+        if not positives or (not negatives and negative_recipe.strategy != "hn1_bm25"):
             continue
         example_id = str(record["example_id"])
         passage = str(positives[0]["text"])
-        if query_source == "natural":
-            query = str(record["query"])
-        elif query_source == "copy_control":
-            query = _copy_control(passage)
+        if negative_recipe.strategy == "hn1_bm25":
+            candidates = mined[example_id]
         else:
-            if example_id not in synthetic:
-                continue
-            query = synthetic[example_id]
-        negative_index = int(
-            hashlib.sha256(f"probe-v1:{example_id}".encode()).hexdigest()[:8], 16
-        ) % len(negatives)
+            candidates = [
+                NegativeCandidate(
+                    doc_id=str(document["doc_id"]),
+                    text=str(document["text"]),
+                    miner="inherited",
+                    miner_rank=index + 1,
+                )
+                for index, document in enumerate(
+                    sorted(negatives, key=lambda value: str(value["doc_id"]))
+                )
+            ]
+        selection = select_negative(
+            example_id=example_id,
+            query=query,
+            candidates=candidates,
+            recipe=negative_recipe,
+            scorer=primary_scorer,
+            calibration=calibration,
+        )
+        for audit in selection.audit_rows:
+            audit_rows.append(
+                {
+                    "example_id": example_id,
+                    "query_source": query_source,
+                    "generator_id": generator_id,
+                    **audit,
+                }
+            )
+        if selection.dropped_example:
+            policy_dropped_examples += 1
+            continue
         row = {
             "example_id": example_id,
             "query": query,
             "positive": passage,
-            "negative": str(negatives[negative_index]["text"]),
+            "negative": selection.paired.text if selection.paired is not None else "",
+            "negative_doc_id": (selection.paired.doc_id if selection.paired is not None else ""),
+            "demoted_negative": (selection.demoted.text if selection.demoted is not None else ""),
+            "demoted_negative_doc_id": (
+                selection.demoted.doc_id if selection.demoted is not None else ""
+            ),
         }
         if limit is None:
             rows.append(row)
@@ -170,7 +316,15 @@ def prepare_probe_pairs(
             json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
         )
         digest.update(b"\n")
-    return rows, digest.hexdigest()
+    report = summarize_false_negative_audit(
+        audit_rows,
+        query_source=query_source,
+        generator_id=generator_id,
+        input_examples=len(prepared),
+        output_examples=len(rows),
+        policy_dropped_examples=policy_dropped_examples,
+    )
+    return rows, digest.hexdigest(), report, audit_rows
 
 
 def _tokenize(
@@ -187,12 +341,15 @@ def _tokenize(
 
 
 def train_probe(
-    rows: list[dict[str, str]],
+    rows: list[dict[str, Any]],
     *,
     recipe: ProbeRecipe,
     output_dir: Path,
     query_source: QuerySource,
     train_fingerprint: str,
+    negative_contract: Mapping[str, Any],
+    false_negative_report: Mapping[str, Any],
+    negative_audit_rows: Sequence[dict[str, Any]],
 ) -> dict[str, Any]:
     if not rows:
         raise ValueError("probe training set is empty")
@@ -239,8 +396,18 @@ def train_probe(
             batch = next(iterator)
         queries = model(_tokenize(tokenizer, list(batch["query"]), recipe.max_length, device))
         positives = model(_tokenize(tokenizer, list(batch["positive"]), recipe.max_length, device))
-        negatives = model(_tokenize(tokenizer, list(batch["negative"]), recipe.max_length, device))
-        documents = torch.cat((positives, negatives), dim=0)
+        document_batches = [positives]
+        paired_negative_texts = [str(text) for text in batch["negative"] if str(text)]
+        if paired_negative_texts:
+            document_batches.append(
+                model(_tokenize(tokenizer, paired_negative_texts, recipe.max_length, device))
+            )
+        demoted_negative_texts = [str(text) for text in batch["demoted_negative"] if str(text)]
+        if demoted_negative_texts:
+            document_batches.append(
+                model(_tokenize(tokenizer, demoted_negative_texts, recipe.max_length, device))
+            )
+        documents = torch.cat(document_batches, dim=0)
         logits = queries @ documents.T / 0.05
         targets = torch.arange(queries.shape[0], device=device)
         loss = functional.cross_entropy(logits, targets)
@@ -259,6 +426,9 @@ def train_probe(
         "query_source": query_source,
         "recipe": asdict(recipe),
         "recipe_fingerprint": recipe.fingerprint,
+        "recipe_version": recipe.recipe_version,
+        "negative_contract": dict(negative_contract),
+        "possible_false_negative_report": dict(false_negative_report),
         "train_fingerprint": train_fingerprint,
         "train_examples": len(rows),
         "steps": recipe.max_steps,
@@ -270,6 +440,9 @@ def train_probe(
         ),
         "code": collect_code_provenance(),
     }
+    with JsonlWriter(output_dir / "negative_audit.jsonl") as writer:
+        for row in negative_audit_rows:
+            writer.write(row)
     write_json(output_dir / "train_summary.json", summary)
     return summary
 
@@ -321,6 +494,7 @@ def evaluate_probe(
     test_fingerprint: str,
     dataset_name: str = "test_translated_msmarco_pl",
     profile: str = "full",
+    negative_contract: Mapping[str, Any],
 ) -> dict[str, Any]:
     from transformers import AutoTokenizer
 
@@ -411,6 +585,8 @@ def evaluate_probe(
         "profile": profile,
         "test_fingerprint": test_fingerprint,
         "recipe_fingerprint": recipe.fingerprint,
+        "recipe_version": recipe.recipe_version,
+        "negative_contract": dict(negative_contract),
         "query_count": len(per_query),
         "metrics": aggregate,
         "metric_candidate_count": {metric: len(corpus_ids) for metric in aggregate},
@@ -462,12 +638,26 @@ def run_probe_experiment(
     holdout_manifest: Path | None = None,
     native_documents_path: Path | None = None,
     holdout_profile: HoldoutProfile = "quick",
+    primary_scorer: PairScorer | None = None,
+    bm25_index: CorpusIndex | None = None,
+    generator_id: str | None = None,
 ) -> dict[str, Any]:
-    pairs, train_fingerprint = prepare_probe_pairs(
+    calibration = recipe.negative_recipe.load_calibration()
+    negative_contract = recipe.negative_recipe.manifest(calibration) | {
+        "probe_recipe_version": recipe.recipe_version,
+        "probe_recipe_fingerprint": recipe.fingerprint,
+    }
+    pairs, train_fingerprint, false_negative_report, negative_audit_rows = prepare_probe_pairs(
         read_records(train_path),
         query_source=query_source,
+        negative_recipe=recipe.negative_recipe,
+        calibration=calibration,
+        primary_scorer=primary_scorer,
         synthetic_generations=synthetic_generations,
         limit=train_limit,
+        generator_id=generator_id,
+        bm25_index=bm25_index,
+        documents_path=documents_path,
     )
     train_summary = train_probe(
         pairs,
@@ -475,6 +665,9 @@ def run_probe_experiment(
         output_dir=output_dir,
         query_source=query_source,
         train_fingerprint=train_fingerprint,
+        negative_contract=negative_contract,
+        false_negative_report=false_negative_report,
+        negative_audit_rows=negative_audit_rows,
     )
     if (
         holdout_manifest is not None
@@ -515,6 +708,7 @@ def run_probe_experiment(
         test_fingerprint=translated_fingerprint,
         dataset_name="test_translated_msmarco_pl",
         profile=translated_profile,
+        negative_contract=negative_contract,
     )
     native: dict[str, Any]
     if holdout_manifest is None:
@@ -572,6 +766,7 @@ def run_probe_experiment(
                 ),
                 dataset_name="test_native_pl",
                 profile=holdout_profile,
+                negative_contract=negative_contract,
             )
     report_status = "complete" if native.get("status") == "measured" else "incomplete"
     comparison_eligible = (
@@ -587,6 +782,10 @@ def run_probe_experiment(
             else [str(native.get("reason", "native not measured"))]
         ),
         "training": train_summary,
+        "recipe_version": recipe.recipe_version,
+        "recipe_fingerprint": recipe.fingerprint,
+        "negative_contract": negative_contract,
+        "possible_false_negative_report": false_negative_report,
         "evaluation_sets": {
             "test_native_pl": native,
             "test_translated_msmarco_pl": retrieval,

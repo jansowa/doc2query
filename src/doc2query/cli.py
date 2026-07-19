@@ -10,8 +10,12 @@ from rich.console import Console
 
 from doc2query.config import load_config
 from doc2query.data.validate import ValidationPolicy, validate_dataset
+from doc2query.evaluation.corpus import load_corpus_index
 from doc2query.evaluation.embedder_probe import ProbeRecipe, run_probe_experiment
 from doc2query.evaluation.generator import run_checkpoint_evaluation
+from doc2query.evaluation.probe_negatives import ProbeNegativeBlocker
+from doc2query.reranker.base import FrozenRerankerConfig
+from doc2query.reranker.load import load_frozen_reranker
 from doc2query.training.sft import run_sft
 from doc2query.utils.hardware import collect_hardware_report, write_hardware_report
 
@@ -215,6 +219,13 @@ def evaluate_embedder(
     synthetic_generations: Annotated[
         Path | None, typer.Option("--synthetic-generations", exists=True, dir_okay=False)
     ] = None,
+    generator_id: Annotated[str | None, typer.Option("--generator-id")] = None,
+    primary_judge_config: Annotated[
+        Path | None, typer.Option("--primary-judge-config", exists=True, dir_okay=False)
+    ] = None,
+    bm25_index: Annotated[
+        Path | None, typer.Option("--bm25-index", exists=True, file_okay=False)
+    ] = None,
     train_limit: Annotated[int | None, typer.Option("--train-limit", min=1)] = None,
 ) -> None:
     """Train the frozen-budget probe and evaluate natural-query retrieval."""
@@ -230,20 +241,53 @@ def evaluate_embedder(
         raise typer.BadParameter("query-source must be natural, copy_control, or synthetic")
     if holdout_profile not in {"quick", "medium", "full"}:
         raise typer.BadParameter("holdout-profile must be quick, medium, or full")
-    result = run_probe_experiment(
-        train_path=parsed.data.input_path,
-        frozen_manifest=frozen_manifest,
-        test_subset=test_subset,
-        output_dir=output_dir,
-        recipe=ProbeRecipe(**raw),
-        query_source=query_source,  # type: ignore[arg-type]
-        synthetic_generations=synthetic_generations,
-        train_limit=train_limit,
-        documents_path=corpus,
-        holdout_manifest=holdout_manifest,
-        native_documents_path=native_corpus,
-        holdout_profile=holdout_profile,  # type: ignore[arg-type]
-    )
+    recipe = ProbeRecipe.from_dict(raw)
+    try:
+        calibration = recipe.negative_recipe.load_calibration()
+    except ProbeNegativeBlocker as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    if query_source == "synthetic" and not generator_id:
+        raise typer.BadParameter("synthetic probe runs require --generator-id")
+    if recipe.negative_recipe.strategy == "hn1_bm25" and bm25_index is None:
+        raise typer.BadParameter("HN1 requires --bm25-index")
+    index = load_corpus_index(bm25_index) if bm25_index is not None else None
+    try:
+        primary = None
+        if recipe.negative_recipe.requires_filter:
+            if primary_judge_config is None:
+                raise typer.BadParameter("filtered probe recipe requires --primary-judge-config")
+            judge_raw = yaml.safe_load(primary_judge_config.read_text(encoding="utf-8"))
+            if not isinstance(judge_raw, dict):
+                raise typer.BadParameter("primary judge config must be a YAML mapping")
+            judge_config = FrozenRerankerConfig(**judge_raw)
+            if calibration is None or (
+                judge_config.name_or_path != calibration.primary_judge_name
+                or judge_config.revision != calibration.primary_judge_revision
+            ):
+                raise typer.BadParameter(
+                    "primary judge config does not match calibration provenance"
+                )
+            primary = load_frozen_reranker(judge_config)
+        result = run_probe_experiment(
+            train_path=parsed.data.input_path,
+            frozen_manifest=frozen_manifest,
+            test_subset=test_subset,
+            output_dir=output_dir,
+            recipe=recipe,
+            query_source=query_source,  # type: ignore[arg-type]
+            synthetic_generations=synthetic_generations,
+            train_limit=train_limit,
+            documents_path=corpus,
+            holdout_manifest=holdout_manifest,
+            native_documents_path=native_corpus,
+            holdout_profile=holdout_profile,  # type: ignore[arg-type]
+            primary_scorer=primary,
+            bm25_index=index,
+            generator_id=generator_id,
+        )
+    finally:
+        if index is not None:
+            index.close()
     console.print_json(json.dumps(result))
 
 

@@ -9,6 +9,7 @@ from statistics import fmean
 from typing import Any
 
 from doc2query.evaluation.bootstrap import assert_same_test_fingerprint, paired_bootstrap
+from doc2query.evaluation.probe_negatives import assert_same_negative_contract
 from doc2query.evaluation.retrieval import CORPUS_RETRIEVAL
 from doc2query.utils.records import read_records, write_json
 
@@ -39,6 +40,7 @@ def compare_retrieval_runs(
         raise ValueError("probe comparison requires corpus_retrieval summaries")
     if left.get("corpus_sha256") != right.get("corpus_sha256"):
         raise ValueError("probe comparison requires the same frozen corpus fingerprint")
+    negative_contract = assert_same_negative_contract(left, right)
     metrics = (
         "corpus_recall_at_1",
         "corpus_recall_at_5",
@@ -52,6 +54,7 @@ def compare_retrieval_runs(
         "test_fingerprint": fingerprint,
         "left": str(left_summary_path),
         "right": str(right_summary_path),
+        "negative_contract": negative_contract,
         "bootstrap": {
             metric: paired_bootstrap(
                 _per_query(left_per_query_path, metric),

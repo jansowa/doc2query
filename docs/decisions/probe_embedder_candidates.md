@@ -2,10 +2,12 @@
 
 ## Stan decyzji
 
-Recepta `probe_v1.yaml` pozostaje zamrożona dla porównywalności istniejących
-artefaktów. Nie wykonano jeszcze pełnych runów, dlatego przed właściwą kampanią
-probe należy wykonać krótki, identyczny benchmark kosztu i jakości modeli
-poniżej, przypiąć revision i zapisać ADR wybierający jedną receptę v2.
+Model bazowy i budżet w `probe_v1.yaml` pozostają zamrożone. P-03 podbił
+wersję kontraktu do `probe-v1.1-p03`, ponieważ wcześniejsza recepta nie miała
+wersjonowanej polityki negatywów; nie wykonano na niej jeszcze pełnych
+porównywalnych runów. Przed właściwą kampanią probe należy wykonać krótki,
+identyczny benchmark kosztu i jakości modeli poniżej, przypiąć revision
+i zapisać ADR wybierający jedną receptę v2.
 
 ## Kandydaci
 

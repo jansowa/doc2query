@@ -29,6 +29,7 @@ from doc2query.evaluation.embedder_probe import prepare_probe_pairs
 from doc2query.evaluation.format import format_metrics
 from doc2query.evaluation.human import cohen_kappa, fleiss_kappa
 from doc2query.evaluation.intrinsic import evaluate_intrinsic_records
+from doc2query.evaluation.probe_negatives import NEGATIVE_RECIPE_VERSION, NegativeRecipe
 from doc2query.evaluation.retrieval import (
     candidate_pool_metrics_from_rank,
     corpus_metrics_from_positive_ranks,
@@ -190,8 +191,21 @@ def test_format_and_agreement_metrics() -> None:
 
 def test_probe_controls_keep_sampling_identical(tmp_path: Path) -> None:
     records = [_canonical("1"), _canonical("2")]
-    natural, natural_hash = prepare_probe_pairs(records, query_source="natural")
-    copied, copied_hash = prepare_probe_pairs(records, query_source="copy_control")
+    recipe = NegativeRecipe(version=NEGATIVE_RECIPE_VERSION, strategy="hn0")
+    natural, natural_hash, _, _ = prepare_probe_pairs(
+        records,
+        query_source="natural",
+        negative_recipe=recipe,
+        calibration=None,
+        primary_scorer=None,
+    )
+    copied, copied_hash, _, _ = prepare_probe_pairs(
+        records,
+        query_source="copy_control",
+        negative_recipe=recipe,
+        calibration=None,
+        primary_scorer=None,
+    )
     assert natural_hash != copied_hash
     assert [row["positive"] for row in natural] == [row["positive"] for row in copied]
     assert [row["negative"] for row in natural] == [row["negative"] for row in copied]
@@ -207,8 +221,14 @@ def test_probe_controls_keep_sampling_identical(tmp_path: Path) -> None:
             }
         ],
     )
-    synthetic, _ = prepare_probe_pairs(
-        records, query_source="synthetic", synthetic_generations=generations
+    synthetic, _, _, _ = prepare_probe_pairs(
+        records,
+        query_source="synthetic",
+        negative_recipe=recipe,
+        calibration=None,
+        primary_scorer=None,
+        synthetic_generations=generations,
+        generator_id="fixture-generator",
     )
     assert len(synthetic) == 1
     assert synthetic[0]["positive"] == natural[0]["positive"]

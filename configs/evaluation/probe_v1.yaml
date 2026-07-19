@@ -1,4 +1,6 @@
-# Frozen comparison recipe. Smoke runs must use a separate output and be labelled non-comparable.
+# Frozen Harness v1.1 comparison recipe. P-03 intentionally fails closed until
+# Task 02 produces and pins a dev-only possible-false-negative calibration artifact.
+recipe_version: probe-v1.1-p03
 model_name_or_path: sdadas/polish-reranker-base-ranknet
 revision: a7c66d41a8097ca02e75616d0951c941d94ff6a1
 max_length: 192
@@ -10,3 +12,16 @@ seed: 42
 negatives_per_example: 1
 normalize_embeddings: true
 loss: in_batch_cross_entropy_with_paired_hard_negative
+
+negative_recipe:
+  version: probe-negatives-v1
+  strategy: hn0_filter
+  false_negative_policy: drop
+  # These three fields must be filled together from one reproducible Task 02
+  # artifact fitted exclusively on dev. Null is a deliberate P-03 blocker,
+  # not permission to choose a threshold ad hoc.
+  calibration_artifact_path: null
+  calibration_artifact_id: null
+  calibration_artifact_fingerprint: null
+  bm25_index_fingerprint: null
+  bm25_candidates: 32

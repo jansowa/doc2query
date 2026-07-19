@@ -64,6 +64,9 @@ def test_embedder_help_exposes_native_holdout_profiles_without_loading_model() -
     assert "--holdout-manifest" in result.stdout
     assert "--native-corpus" in result.stdout
     assert "--holdout-profile" in result.stdout
+    assert "--primary-judge-conf" in result.stdout
+    assert "--bm25-index" in result.stdout
+    assert "--generator-id" in result.stdout
 
 
 def test_data_validate_cli_runs_task01_pipeline(tmp_path: Path) -> None:

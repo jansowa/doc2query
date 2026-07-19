@@ -108,6 +108,75 @@ bootstrap rejects different test or corpus fingerprints. Variant ranking is
 emitted only when measured probe metrics exist; intrinsic reward never
 substitutes for them.
 
+### P-03 hard-negative contract and fail-closed calibration
+
+The comparison recipe now declares `recipe_version: probe-v1.1-p03` and the
+versioned `probe-negatives-v1` contract. Its comparison path defaults to
+`hn0_filter` plus `drop`. No numeric `possible_false_negative` threshold is
+stored in the repository: Task 02 has not yet produced the required dev-only
+calibration artifact. The three calibration fields in
+`configs/evaluation/probe_v1.yaml` are deliberately `null`; a probe command
+therefore exits before loading a model and writes `p03_preflight.json` with
+status `blocked`.
+
+The accepted calibration JSON contract pins all of the following:
+
+- artifact ID and canonical payload fingerprint;
+- `fit_split` beginning with `dev` and containing no `test`;
+- fingerprint of the development records and SHA-256 of the source scores;
+- primary reranker name and full revision;
+- finite raw-pair-logit threshold, `greater_than_or_equal` operator and a
+  documented threshold-selection method.
+
+The loader rejects a missing/tampered artifact, a final-test fit, a different
+judge, score space, ID or fingerprint. `test_native_pl` and
+`test_translated_msmarco_pl` are evaluation-only and never enter this
+preflight.
+
+The deterministic strategies are:
+
+- `hn0`: inherited negatives without filtering, retained only for the
+  one-time W05 diagnostic;
+- `hn0_filter`: score all inherited negatives with the frozen primary judge,
+  flag scores at or above the pinned threshold, apply `drop | demote |
+  keep+log`, then choose deterministically;
+- `hn1_bm25`: mine a pinned number of candidates from the frozen P-01 BM25
+  index, exclude known positives, apply the same calibrated policy and retain
+  BM25 rank/score provenance.
+
+`demote` removes a flagged candidate from the explicit paired-negative role
+and may retain one as an ordinary in-batch negative. Reports contain candidate,
+flag and action counts/rates separately for `natural`, `copy_control`, and
+each synthetic `generator_id`. Probe summaries repeat the recipe version,
+strategy, policy, threshold, calibration ID/fingerprint and BM25 fingerprint.
+The comparison helper refuses any drift in those fields.
+
+After Task 02 creates the approved artifact exclusively on dev, pin its path,
+ID and fingerprint in the recipe. HN1 additionally requires a project-local
+BM25 index and its fingerprint. Use project-local caches:
+
+```bash
+UV_CACHE_DIR="$PWD/.uv-cache" \
+HF_HOME="$PWD/.cache/huggingface" \
+TRANSFORMERS_CACHE="$PWD/.cache/huggingface/transformers" \
+uv run python scripts/train_probe_embedder.py \
+  --recipe configs/evaluation/probe_v1.yaml \
+  --train-input data/processed/v1/train.parquet \
+  --frozen-manifest data/processed/v1/evaluation/task04-v1/manifest.json \
+  --corpus data/processed/v1/documents.parquet \
+  --primary-judge-config configs/reranker/primary_polish_roberta_v3.yaml \
+  --query-source synthetic \
+  --generator-id W05-1.5B-50K-8GB \
+  --synthetic-generations reports/evaluation/W05-1.5B-50K-8GB/generations.jsonl \
+  --output-dir runs/probe-w05-hn0-filter-v1
+```
+
+The W05 HN0/HN0+filter/HN1 sensitivity run is diagnostic only. It has not been
+run because neither the calibration threshold artifact nor a frozen BM25
+index exists. Its blocker is recorded in
+`reports/blockers/task04_p03_w05_sensitivity.md`; no final test was opened to
+select a threshold or negative recipe.
+
 ## Native Polish holdout (P-02)
 
 The source audit, licensing notes, contamination risks, frozen artifact

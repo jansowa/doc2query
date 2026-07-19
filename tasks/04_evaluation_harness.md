@@ -8,10 +8,13 @@
 
 Centralny harness, zamrożone manifesty/ID, metryki i slice’y, raporty
 HTML/Markdown, ślepy eksport A/B, bootstrap oraz zamrożona recepta probe
-embeddera są zaimplementowane i przetestowane. Na lokalnej karcie 8 GB
-rzeczywiście oceniono W03, W05 i W06 w trybie deterministic oraz diverse na tym
-samym zamrożonym panelu 100 rekordów z co najmniej 10 hard negative’ami;
-wykonano też nieporównywalny 2-step smoke probe’a.
+embeddera są zaimplementowane i przetestowane. P-03 ma gotowy kod i testy
+kontraktu negatywów, ale jego W05 jest jawnie zablokowany przez brak
+kalibracyjnego artefaktu progu z dev Task 02 i brak zbudowanego indeksu BM25.
+Na lokalnej karcie 8 GB rzeczywiście oceniono W03, W05 i W06 w trybie
+deterministic oraz diverse na tym samym zamrożonym panelu 100 rekordów z co
+najmniej 10 hard negative’ami; wykonano też nieporównywalny 2-step smoke
+probe’a.
 
 Pozostają pełne, porównywalne runy probe natural/copy/W03/W05/W06, niezależny
 BGE shadow judge, embeddingowe miary diversity, oceny ludzi dla co najmniej
@@ -24,8 +27,9 @@ Dotychczasowy zakres W03/W05 opisuje
 Shortlista nowych baz probe'a (`mmlw-roberta-base`,
 `polish-distilroberta`, Ettin 32M/17M), ryzyka oraz redukowana procedura wyboru
 recepty v2 są zapisane w
-`docs/decisions/probe_embedder_candidates.md`. Nie zmieniono zamrożonej recepty
-v1 i nie wpisano niewykonanych wyników.
+`docs/decisions/probe_embedder_candidates.md`. P-03 zachował model i budżet
+recepty v1, ale jawnie podbił wersję kontraktu do `probe-v1.1-p03`; nie wpisano
+niewykonanych wyników.
 
 19 lipca ten sam kontrakt intrinsic zastosowano do finalnego checkpointu W06
 4.5B/50k. Powstały komplet 500 generacji, raporty i sparowane bootstrapy W06
@@ -65,7 +69,26 @@ dokumentami oraz trzy profile z rzeczywistymi hashami ID i fingerprintami.
 Audyt exact-match nie znalazł wspólnych query ani dokumentów z translated
 MS MARCO-PL; near-duplicate pozostaje jawnie `NOT MEASURED`. Manifest przeszedł
 pełne `--verify` i nie ma blockerów. Nie zbudowano indeksu ani nie uruchomiono
-probe. P-03 i P-04 nadal pozostają nierozpoczęte.
+probe. Stan ten był punktem wejścia do implementacji P-03; P-04 nadal
+pozostaje nierozpoczęte.
+
+19 lipca zaimplementowano bezpieczną część P-03. Recepta
+`probe-v1.1-p03`/`probe-negatives-v1` definiuje deterministyczne HN0,
+HN0+filter i HN1 BM25, polityki `drop | demote | keep+log` z domyślnym
+`drop`, scoring naturalnych i syntetycznych query przez zamrożony primary,
+raport flag per query source/generator oraz komplet provenance w manifestach.
+Porównania odrzucają różne wersje recepty, strategie, polityki, progi,
+identyfikatory/fingerprinty kalibracji i fingerprinty BM25. Testy jednostkowe
+i smoke korzystają wyłącznie z mockowanego rerankera, bez modeli i GPU.
+
+Audyt nie znalazł legalnego progu: istniejące artefakty W05 zawierają tylko
+surowe score query–positive, a pełny benchmark i kalibracja Task 02 na dev
+pozostają niewykonane. Nie znaleziono też materializowanego indeksu BM25 P-01.
+Konfiguracja ma celowo puste pola kalibracji i blokuje probe przed ładowaniem
+modelu; nie użyto `test_native_pl` ani innego testu do progu. Dlatego W05
+HN0/HN0+filter/HN1 nie został uruchomiony i nie ma deklarowanego rozstrzygnięcia.
+Blocker: `reports/blockers/task04_p03_w05_sensitivity.md`. P-04 nie został
+rozpoczęty.
 
 ## Harness v1.1 — blokery po audycie
 
@@ -118,7 +141,7 @@ near-duplicate pozostaje jawnie niezmierzony i nie jest zastępowany założenie
 Nie uruchomiono probe, benchmarku PIRB, pełnego indeksu ani żadnego wyniku
 eksperymentalnego. Kolejną bramką Harness v1.1 jest P-03.
 
-### P-03 — probe recipe v1 i false negatives
+### P-03 — probe recipe v1 i false negatives — `IMPLEMENTED / W05 BLOCKED`
 
 - dla naturalnych i syntetycznych query primary reranker flaguje odziedziczony
   negatyw jako `possible_false_negative` według progu kalibracyjnego z Task 02;
@@ -129,6 +152,19 @@ eksperymentalnego. Kolejną bramką Harness v1.1 jest P-03.
 - jednorazowy sensitivity check W05: HN0, HN0+filter i HN1 BM25. Istotna
   różnica wymaga ADR przed dalszymi porównaniami;
 - pełne HN0/HN0+filter/HN1/HN2/HN3 pozostaje bramką przed Task 09.
+
+Kod, konfiguracja, manifesty, walidacja porównań i testy są gotowe. Domyślna
+recepta działa fail-closed: wymaga przypiętego artefaktu Task 02 utworzonego
+wyłącznie na dev i weryfikuje jego ID, fingerprint, fingerprint danych,
+SHA-256 score’ów, rewizję primary, przestrzeń score’u, operator, próg oraz
+metodę jego wyboru. HN1 dodatkowo wymaga przypiętego fingerprintu indeksu BM25.
+
+Jednorazowy sensitivity check W05 nie został uruchomiony, ponieważ oba
+wymagane artefakty są nieobecne. Po ich utworzeniu na partycji projektu należy
+uruchomić wyłącznie trzy identycznie zabudżetowane ramiona diagnostyczne.
+Istotna lub nierozstrzygalna przed P-04 różnica wymaga ADR. Nie wolno uznać
+P-03 za pomiarowo zamknięte ani przejść do porównań generatorów na podstawie
+samej implementacji.
 
 ### P-04 — kontrakt statystyczny i budżetowy
 
