@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+  - w06_4_5b_10k_8gb
+  - _self_
+run:
+  experiment_id: W06-4.5B-INSTRUCT-10K-8GB-BS2-L512
+  output_dir: runs/W06-4.5B-INSTRUCT-10K-8GB-BS2-L512
+training:
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 8

@@ -1,0 +1,9 @@
+# @package _global_
+defaults:
+  - w06_4_5b_50k_8gb_bs2
+  - _self_
+run:
+  experiment_id: W06-4.5B-INSTRUCT-50K-8GB-BS2-L384
+  output_dir: runs/W06-4.5B-INSTRUCT-50K-8GB-BS2-L384
+training:
+  max_length: 384

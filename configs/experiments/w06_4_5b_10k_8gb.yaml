@@ -1,0 +1,24 @@
+# @package _global_
+defaults:
+  - s04_4_5b_instruct
+  - _self_
+run:
+  experiment_id: W06-4.5B-INSTRUCT-10K-8GB-L512
+  seed: 42
+  output_dir: runs/W06-4.5B-INSTRUCT-10K-8GB-L512
+data:
+  max_train_examples: 10000
+  max_eval_examples: 1000
+lora:
+  r: 8
+  alpha: 16
+training:
+  max_length: 512
+  max_completion_tokens: 64
+  max_steps: -1
+  pad_to_max_length: false
+  logging_steps: 5
+  eval_steps: 50
+  save_steps: 50
+  save_total_limit: 20
+  resume_if_available: true

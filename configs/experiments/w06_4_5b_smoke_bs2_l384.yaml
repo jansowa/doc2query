@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+  - w06_4_5b_10k_8gb_bs2_l384
+  - _self_
+run:
+  experiment_id: W06-4.5B-INSTRUCT-SMOKE-8GB-BS2-L384
+  output_dir: runs/W06-4.5B-INSTRUCT-SMOKE-8GB-BS2-L384
+data:
+  max_train_examples: 128
+  max_eval_examples: 32

@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+  - w06_4_5b_50k_8gb_bs16
+  - _self_
+run:
+  experiment_id: W06-4.5B-INSTRUCT-SMOKE-8GB-BS16-L512
+  output_dir: runs/W06-4.5B-INSTRUCT-SMOKE-8GB-BS16-L512
+data:
+  max_train_examples: 128
+  max_eval_examples: 32

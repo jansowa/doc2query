@@ -9,16 +9,29 @@
 Centralny harness, zamrożone manifesty/ID, metryki i slice’y, raporty
 HTML/Markdown, ślepy eksport A/B, bootstrap oraz zamrożona recepta probe
 embeddera są zaimplementowane i przetestowane. Na lokalnej karcie 8 GB
-rzeczywiście oceniono W03 i W05 w trybie deterministic oraz diverse na tym samym
-zamrożonym panelu 100 rekordów z co najmniej 10 hard negative’ami; wykonano też
-nieporównywalny 2-step smoke probe’a.
+rzeczywiście oceniono W03, W05 i W06 w trybie deterministic oraz diverse na tym
+samym zamrożonym panelu 100 rekordów z co najmniej 10 hard negative’ami;
+wykonano też nieporównywalny 2-step smoke probe’a.
 
-Pozostają pełne, porównywalne runy probe natural/copy/W03/W05, niezależny BGE
-shadow judge, embeddingowe miary diversity, oceny ludzi dla co najmniej 300
-przypadków, pełny test rank10/embedder i S00 prompting baseline. Bez tych
-pomiarów bramka Fazy B i główny ranking generatorów nie są zamknięte. Rzeczywisty
-zakres, fingerprinty, wyniki i 95% CI opisuje
-`docs/experiments/task04_8gb_evaluation_2026-07-18.md`.
+Pozostają pełne, porównywalne runy probe natural/copy/W03/W05/W06, niezależny
+BGE shadow judge, embeddingowe miary diversity, oceny ludzi dla co najmniej
+300 przypadków, pełny test rank10/embedder i S00 prompting baseline. Bez tych
+pomiarów bramka Fazy B i główny ranking generatorów nie są zamknięte.
+Dotychczasowy zakres W03/W05 opisuje
+`docs/experiments/task04_8gb_evaluation_2026-07-18.md`, a porównanie z W06
+`docs/experiments/task03_w06_vs_1_5b_2026-07-19.md`.
+
+Shortlista nowych baz probe'a (`mmlw-roberta-base`,
+`polish-distilroberta`, Ettin 32M/17M), ryzyka oraz redukowana procedura wyboru
+recepty v2 są zapisane w
+`docs/decisions/probe_embedder_candidates.md`. Nie zmieniono zamrożonej recepty
+v1 i nie wpisano niewykonanych wyników.
+
+19 lipca ten sam kontrakt intrinsic zastosowano do finalnego checkpointu W06
+4.5B/50k. Powstały komplet 500 generacji, raporty i sparowane bootstrapy W06
+vs W03/W05. W06 ma potwierdzoną przewagę greedy MRR/nDCG nad W05, ale diverse
+retrieval pozostaje nierozróżnialny, a miary różnorodności są gorsze. Nie
+zastępuje to nadal niewykonanych pełnych probe embedderów.
 
 ## Cel
 

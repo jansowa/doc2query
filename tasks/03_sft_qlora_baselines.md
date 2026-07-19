@@ -19,6 +19,35 @@ jakościowej. Pozostały: S00, memory probe 768/1024, intrinsic i probe embedder
 z Task 04, 4.5B base vs instruct oraz ordinary/balanced/weighted. Do czasu tych
 pomiarów nie ma podstaw do przejścia do DPO.
 
+18 lipca uruchomiono nocną kolejkę W06 dla Bielika 4.5B Instruct na 8 GB.
+Po wstępnym potwierdzeniu, że BS1/L512 wykonuje backward bez OOM, kolejkę
+rozszerzono o wybór pierwszego udanego wariantu `BS2/L512 → BS2/L384 →
+BS1/L512`, zawsze z efektywnym batchem 16. Krótki smoke używa 128/32 przykładów
+train/eval. Wybrany wariant uruchamia ordinary QLoRA na 50 tys. przykładów
+(3125 optimizer steps), z checkpointem co 50 kroków, ewaluacją co 100,
+retencją 80 checkpointów i automatycznym wznowieniem pełnego stanu. Cache
+Hugging Face i pliki tymczasowe są kierowane na partycję projektu. Samo
+uruchomienie kolejki nie jest wynikiem eksperymentalnym; wynik, throughput i
+peak VRAM należy dopisać dopiero po zakończeniu smoke/runu.
+
+Systematyczny probe przy efektywnym batchu 16 porównał microbatch
+`2/4/8/16`. Throughput wyniósł odpowiednio 1,177/1,493/1,546 przykładu/s,
+a peak reserved 4,06/4,85/6,43 GB; BS16 zakończył się OOM. Wybrano
+`W06-4.5B-INSTRUCT-50K-8GB-BS8-L512` z gradient accumulation 2. Szczegóły
+zapisano w
+[`docs/experiments/task03_4_5b_batch_probe_2026-07-18.md`](../docs/experiments/task03_4_5b_batch_probe_2026-07-18.md).
+Pojedynczy pełny checkpoint zajmuje około 156,7 MB. Około 63 checkpointy
+zajmą łącznie około 9,9 GB, dlatego przy ponad 260 GB wolnego miejsca
+zachowywana jest cała krzywa, a nie tylko ostatnie punkty.
+
+W06 zakończył się kodem 0 po 3125 krokach i 8 h 14 min. Finalny checkpoint
+oceniono na tym samym zamrożonym panelu co W03/W05. Względem W05 greedy MRR
+wzrósł z 0,9433 do 0,9850, a nDCG@10 z 0,9568 do 0,9889; sparowane 95% CI obu
+różnic nie obejmują zera. Dla diverse nie ma potwierdzonej przewagi retrieval,
+a duplicate rate, Self-BLEU i pairwise lemma Jaccard są gorsze. Pełne wyniki,
+koszt i ograniczenia opisuje
+[`docs/experiments/task03_w06_vs_1_5b_2026-07-19.md`](../docs/experiments/task03_w06_vs_1_5b_2026-07-19.md).
+
 ## Cel
 
 Zaimplementować stabilny trening passage→query i uruchomić serię tanich baseline’ów, zanim projekt przejdzie do DPO lub RL.
