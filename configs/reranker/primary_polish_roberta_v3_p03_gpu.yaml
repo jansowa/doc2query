@@ -1,0 +1,8 @@
+# Frozen P-03 judge identity with throughput-only GPU execution settings.
+name_or_path: sdadas/polish-reranker-roberta-v3
+revision: e6471da541f4e7be33845b6d57248a8d8bde27e8
+license: gemma
+max_length: 8192
+batch_size: 32
+device: cuda
+trust_remote_code: false

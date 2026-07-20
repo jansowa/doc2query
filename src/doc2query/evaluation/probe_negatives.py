@@ -276,12 +276,17 @@ def _score_candidates(
     candidates: Sequence[NegativeCandidate],
     scorer: PairScorer,
     calibration: PossibleFalseNegativeCalibration,
+    precomputed_scores: Sequence[float] | None = None,
 ) -> tuple[list[float], list[bool]]:
     if scorer.name != calibration.primary_judge_name:
         raise ProbeNegativeBlocker(
             "P-03 BLOCKED: runtime primary reranker does not match the calibration artifact"
         )
-    scores = scorer.score_pairs([(query, candidate.text) for candidate in candidates])
+    scores = (
+        list(precomputed_scores)
+        if precomputed_scores is not None
+        else scorer.score_pairs([(query, candidate.text) for candidate in candidates])
+    )
     if len(scores) != len(candidates) or not all(math.isfinite(value) for value in scores):
         raise ValueError("primary reranker returned invalid possible-false-negative scores")
     flags = [float(score) >= calibration.threshold for score in scores]
@@ -296,6 +301,7 @@ def select_negative(
     recipe: NegativeRecipe,
     scorer: PairScorer | None,
     calibration: PossibleFalseNegativeCalibration | None,
+    precomputed_scores: Sequence[float] | None = None,
 ) -> NegativeSelection:
     """Select one paired negative and optionally one demoted candidate deterministically."""
     validated = _validate_candidates(candidates)
@@ -328,6 +334,7 @@ def select_negative(
         candidates=validated,
         scorer=scorer,
         calibration=calibration,
+        precomputed_scores=precomputed_scores,
     )
     unflagged = [
         candidate

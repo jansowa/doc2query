@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 from typing import Any, cast
 
+import torch
 import yaml
 
 from doc2query.evaluation.corpus import load_corpus_index
@@ -23,6 +24,7 @@ from doc2query.evaluation.p03_sensitivity import (
     evaluate_probe_on_dev,
     freeze_train_cohort,
     generate_w05_queries,
+    load_preparation_arm_cache,
     load_sensitivity_config,
     materialize_selected_train,
     mock_smoke,
@@ -32,10 +34,12 @@ from doc2query.evaluation.p03_sensitivity import (
     sensitivity_contract,
     token_budget,
     train_sensitivity_probe,
+    write_preparation_arm_cache,
     write_sensitivity_adr,
 )
 from doc2query.reranker.base import FrozenRerankerConfig
 from doc2query.reranker.load import load_frozen_reranker
+from doc2query.text.normalization import SpacyPolishNormalizer
 from doc2query.utils.records import JsonlWriter, read_records, write_json
 
 
@@ -158,6 +162,10 @@ def run(config_path: Path, root: Path) -> dict[str, Any]:
     report_dir = root / str(raw["report_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
     report_dir.mkdir(parents=True, exist_ok=True)
+    print("[P03] validating pinned pl_core_news_lg BM25 normalizer...", file=sys.stderr)
+    normalizer = SpacyPolishNormalizer("pl_core_news_lg")
+    print(f"[P03] BM25 normalizer ready: {normalizer.cache_namespace}.", file=sys.stderr)
+    del normalizer
 
     manifest_path = root / str(inputs["frozen_evaluation_manifest"])
     from doc2query.evaluation.p03_sensitivity import frozen_test_ids
@@ -230,8 +238,32 @@ def run(config_path: Path, root: Path) -> dict[str, Any]:
         arm_audits: dict[str, list[dict[str, Any]]] = {}
         arm_reports = {}
         for arm in ARM_NAMES:
+            recipe = negative_recipe_for_arm(base_recipe, arm)
+            calibration = recipe.negative_recipe.load_calibration()
+            arm_contract = {
+                "schema_version": 1,
+                "arm": arm,
+                "generation_fingerprint": generation["fingerprint"],
+                "frozen_cohort_fingerprint": cohort["ordered_ids_fingerprint"],
+                "negative_recipe": recipe.negative_recipe.manifest(calibration),
+            }
+            raw_cache_dir = output_dir / "preparation_arms" / arm
+            cached_arm = load_preparation_arm_cache(raw_cache_dir, arm_contract)
+            if cached_arm is not None:
+                rows, audits, audit_report = cached_arm
+                arm_rows[arm] = rows
+                arm_audits[arm] = audits
+                arm_reports[arm] = audit_report
+                print(
+                    f"[P03 {arm}/prepare] cache hit: {len(rows)} legal pairs.",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                continue
+
             print(f"[P03 {arm}/prepare] started.", file=sys.stderr, flush=True)
             arm_started = time.perf_counter()
+            last_reported = 0
 
             def report_preparation(
                 completed: int,
@@ -240,7 +272,9 @@ def run(config_path: Path, root: Path) -> dict[str, Any]:
                 arm_name: str = arm,
                 started: float = arm_started,
             ) -> None:
-                if completed == 1 or completed % 100 == 0 or completed == total:
+                nonlocal last_reported
+                if completed == 1 or completed - last_reported >= 100 or completed == total:
+                    last_reported = completed
                     elapsed = time.perf_counter() - started
                     rate = completed / elapsed if elapsed else 0.0
                     eta = (total - completed) / rate if rate else 0.0
@@ -252,7 +286,6 @@ def run(config_path: Path, root: Path) -> dict[str, Any]:
                         flush=True,
                     )
 
-            recipe = negative_recipe_for_arm(base_recipe, arm)
             index = (
                 load_corpus_index(root / str(inputs["bm25_index"])) if arm == "hn1_bm25" else None
             )
@@ -261,7 +294,7 @@ def run(config_path: Path, root: Path) -> dict[str, Any]:
                     records,
                     query_source="synthetic",
                     negative_recipe=recipe.negative_recipe,
-                    calibration=recipe.negative_recipe.load_calibration(),
+                    calibration=calibration,
                     primary_scorer=judge if recipe.negative_recipe.requires_filter else None,
                     synthetic_generations=generations_path,
                     generator_id="W05-1.5B-50K-8GB",
@@ -275,12 +308,21 @@ def run(config_path: Path, root: Path) -> dict[str, Any]:
             arm_rows[arm] = rows
             arm_audits[arm] = audits
             arm_reports[arm] = audit_report
+            write_preparation_arm_cache(
+                raw_cache_dir,
+                contract=arm_contract,
+                rows=rows,
+                audits=audits,
+                report=audit_report,
+            )
             print(
-                f"[P03 {arm}/prepare] complete: {len(rows)} legal pairs.",
+                f"[P03 {arm}/prepare] complete and cached: {len(rows)} legal pairs.",
                 file=sys.stderr,
                 flush=True,
             )
 
+        del judge
+        torch.cuda.empty_cache()
         common_rows, common = common_cohort(arm_rows, ordered_ids)
         write_json(output_dir / "common_cohort.json", common)
         for arm in ARM_NAMES:

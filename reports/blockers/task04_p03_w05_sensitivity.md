@@ -140,3 +140,15 @@ passes the project-local cache check without bypassing gated access. The
 runner streams progress, throughput, elapsed time and ETA to both console and
 the combined campaign log. No completed sensitivity measurement or
 hard-negative recipe selection is claimed.
+
+## Runtime recovery, 2026-07-20
+
+The first attempt persisted all 10,000 W05 train generations and completed
+in-memory HN0/HN0+filter preparation, then stopped when HN1 could not load
+`pl_core_news_lg==3.8.0` from `.venv-gpu`. The model is now an explicit
+project-environment bootstrap dependency and loads successfully. Preparation
+arms now have independent contract- and checksum-pinned resume caches.
+HN0+filter must be recomputed once because the failed version wrote only after
+all three arms. A CPU/GPU judge-equivalence smoke changed zero threshold flags;
+the GPU path is pinned only as a throughput execution setting. No final test
+or recipe decision was introduced.

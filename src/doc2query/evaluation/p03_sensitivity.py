@@ -78,6 +78,67 @@ def ordered_ids_fingerprint(ids: Sequence[str]) -> str:
     return canonical_fingerprint(list(ids))
 
 
+def load_preparation_arm_cache(
+    cache_dir: Path,
+    expected_contract: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]] | None:
+    """Load a complete preparation arm only when its contract and hashes match."""
+    manifest_path = cache_dir / "manifest.json"
+    pairs_path = cache_dir / "pairs.jsonl"
+    audits_path = cache_dir / "negative_audit.jsonl"
+    report_path = cache_dir / "audit_report.json"
+    if not all(path.is_file() for path in (manifest_path, pairs_path, audits_path, report_path)):
+        return None
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict) or manifest.get("contract") != expected_contract:
+        return None
+    hashes = manifest.get("sha256")
+    if not isinstance(hashes, dict) or hashes != {
+        "pairs": sha256_file(pairs_path),
+        "negative_audit": sha256_file(audits_path),
+        "audit_report": sha256_file(report_path),
+    }:
+        raise ValueError(f"P-03 arm cache checksum drift: {cache_dir}")
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    if not isinstance(report, dict):
+        raise ValueError(f"P-03 arm cache audit report is invalid: {report_path}")
+    return list(read_records(pairs_path)), list(read_records(audits_path)), report
+
+
+def write_preparation_arm_cache(
+    cache_dir: Path,
+    *,
+    contract: dict[str, Any],
+    rows: list[dict[str, Any]],
+    audits: list[dict[str, Any]],
+    report: dict[str, Any],
+) -> None:
+    """Persist one expensive preparation arm with a manifest written last."""
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = cache_dir / "manifest.json"
+    manifest_path.unlink(missing_ok=True)
+    pairs_path = cache_dir / "pairs.jsonl"
+    audits_path = cache_dir / "negative_audit.jsonl"
+    report_path = cache_dir / "audit_report.json"
+    for path, values in ((pairs_path, rows), (audits_path, audits)):
+        with JsonlWriter(path) as writer:
+            for value in values:
+                writer.write(value)
+    write_json(report_path, report)
+    write_json(
+        manifest_path,
+        {
+            "schema_version": 1,
+            "contract": contract,
+            "sha256": {
+                "pairs": sha256_file(pairs_path),
+                "negative_audit": sha256_file(audits_path),
+                "audit_report": sha256_file(report_path),
+            },
+        },
+    )
+
+
 def deterministic_ids(records: Iterable[Mapping[str, Any]], limit: int, seed: int) -> list[str]:
     """Select train IDs independently of source ordering."""
     if limit < 1:

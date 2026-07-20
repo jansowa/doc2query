@@ -126,6 +126,8 @@ def test_base_campaign_uses_pinned_project_gpu_environment() -> None:
     assert 'GPU_VENV="${DOC2QUERY_GPU_VENV:-$ROOT/.venv-gpu}"' in bootstrap
     assert "--torch-backend cu124" in bootstrap
     assert "--no-sources" in bootstrap
+    assert '"pl_core_news_lg": "3.8.0"' in bootstrap
+    assert "pl_core_news_lg-3.8.0-py3-none-any.whl" in bootstrap
     campaign = Path("scripts/run_base_1_5b_campaign.sh").read_text(encoding="utf-8")
     assert "record_step gpu-environment bash scripts/bootstrap_gpu_env.sh" in campaign
     assert 'export DOC2QUERY_PYTHON="$PYTHON"' in campaign

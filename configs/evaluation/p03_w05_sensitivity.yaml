@@ -29,7 +29,7 @@ pins:
 
 probe:
   recipe: configs/evaluation/probe_v1.yaml
-  primary_judge: configs/reranker/primary_polish_roberta_v3.yaml
+  primary_judge: configs/reranker/primary_polish_roberta_v3_p03_gpu.yaml
   checkpoint_steps: 100
 
 bootstrap:

@@ -55,10 +55,11 @@ if (($#)); then
 fi
 
 if [[ -z "$PYTHON" ]]; then
-  if bash scripts/bootstrap_gpu_env.sh --check >/dev/null 2>&1; then
-    PYTHON="$ROOT/.venv-gpu/bin/python"
-  else
+  if [[ "${MODE[*]:-}" == "--mock-smoke" || "${MODE[*]:-}" == "--dry-run" ]]; then
     PYTHON="$ROOT/.venv/bin/python"
+  else
+    bash scripts/bootstrap_gpu_env.sh
+    PYTHON="$ROOT/.venv-gpu/bin/python"
   fi
 fi
 if [[ ! -x "$PYTHON" ]]; then

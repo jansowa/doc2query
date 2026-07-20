@@ -191,6 +191,15 @@ postęp, throughput, czas i ETA generacji, przygotowania ramion, treningów
 probe i ewaluacji dev. Nie wolno uznać P-03 za pomiarowo zamknięte ani przejść
 do P-04 lub porównań generatorów przed zakończeniem właściwego runu.
 
+Pierwsza próba zapisała komplet 10k generacji, lecz zatrzymała się przy HN1,
+bo `.venv-gpu` nie zawierało przypiętego przez indeks
+`pl_core_news_lg==3.8.0`. Zależność jest już częścią bootstrapu i przechodzi
+smoke. Przygotowanie zapisuje teraz osobny atomowy cache po każdym ramieniu.
+Utracone HN0+filter trzeba przeliczyć raz; zbiorczy, jawnie przypięty scoring
+GPU zachował wszystkie flagi na panelu zgodności i przyspieszył smoke około
+15× względem pierwotnej ścieżki. Szczegóły:
+[`task04_p03_runtime_recovery_2026-07-20.md`](../docs/experiments/task04_p03_runtime_recovery_2026-07-20.md).
+
 ### P-04 — kontrakt statystyczny i budżetowy
 
 Przed pierwszym porównaniem utworzyć ADR z:

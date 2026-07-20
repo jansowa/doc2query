@@ -34,6 +34,17 @@ class _MockPrimary:
         return [9.0 if "fałszywy" in passage else 1.0 for _query, passage in pairs]
 
 
+class _CountingPrimary(_MockPrimary):
+    def __init__(self) -> None:
+        self.calls = 0
+        self.pairs = 0
+
+    def score_pairs(self, pairs: Any) -> list[float]:
+        self.calls += 1
+        self.pairs += len(pairs)
+        return super().score_pairs(pairs)
+
+
 def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     with JsonlWriter(path) as writer:
         for row in rows:
@@ -226,6 +237,22 @@ def test_flags_are_reported_separately_for_natural_and_synthetic(tmp_path: Path)
     assert synthetic_report["per_source"]["W05"]["possible_false_negative_count"] == 1
     assert {row["query_source"] for row in natural_audit} == {"natural"}
     assert {row["generator_id"] for row in synthetic_audit} == {"W05"}
+
+
+def test_filtered_preparation_bulk_scores_across_examples(tmp_path: Path) -> None:
+    calibration = _load_calibration(tmp_path)
+    scorer = _CountingPrimary()
+    records = [_probe_record(), {**_probe_record(), "example_id": "q-2"}]
+    rows, _, _, _ = prepare_probe_pairs(
+        records,
+        query_source="natural",
+        negative_recipe=_recipe(tmp_path),
+        calibration=calibration,
+        primary_scorer=scorer,
+    )
+    assert len(rows) == 2
+    assert scorer.calls == 1
+    assert scorer.pairs == 4
 
 
 def test_hn1_bm25_contract_is_deterministic_and_fingerprint_pinned(tmp_path: Path) -> None:

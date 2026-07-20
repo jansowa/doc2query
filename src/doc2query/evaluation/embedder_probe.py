@@ -158,6 +158,7 @@ def _hn1_candidates(
     index: CorpusIndex,
     documents_path: Path,
     recipe: NegativeRecipe,
+    progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, list[NegativeCandidate]]:
     metadata = index.metadata
     if metadata.get("backend") != "bm25_sqlite":
@@ -166,7 +167,7 @@ def _hn1_candidates(
         raise ValueError("HN1 BM25 index fingerprint does not match the negative recipe")
     ranked: dict[str, list[tuple[str, int, float]]] = {}
     wanted: set[str] = set()
-    for record, query in prepared:
+    for prepared_index, (record, query) in enumerate(prepared, start=1):
         positives = {
             str(document["doc_id"])
             for document in record.get("positives", [])
@@ -184,6 +185,8 @@ def _hn1_candidates(
             )
         ranked[str(record["example_id"])] = candidates
         wanted.update(doc_id for doc_id, _rank, _score in candidates)
+        if progress is not None:
+            progress(prepared_index, len(prepared))
     texts: dict[str, str] = {}
     for document in read_records(documents_path):
         doc_id = str(document["doc_id"])
@@ -239,20 +242,16 @@ def prepare_probe_pairs(
             index=bm25_index,
             documents_path=documents_path,
             recipe=negative_recipe,
+            progress=progress,
         )
-    rows: list[dict[str, Any]] = []
-    audit_rows: list[dict[str, Any]] = []
-    selected: list[tuple[int, str, dict[str, Any]]] = []
-    policy_dropped_examples = 0
-    for prepared_index, (record, query) in enumerate(prepared, start=1):
-        if progress is not None:
-            progress(prepared_index, len(prepared))
-        positives = sorted(record.get("positives", []), key=lambda value: str(value["doc_id"]))
+    candidate_sets: list[tuple[dict[str, Any], str, list[NegativeCandidate]]] = []
+    for record, query in prepared:
         negatives = record.get("hard_negatives", [])
-        if not positives or (not negatives and negative_recipe.strategy != "hn1_bm25"):
+        if not record.get("positives") or (
+            not negatives and negative_recipe.strategy != "hn1_bm25"
+        ):
             continue
         example_id = str(record["example_id"])
-        passage = str(positives[0]["text"])
         if negative_recipe.strategy == "hn1_bm25":
             candidates = mined[example_id]
         else:
@@ -267,6 +266,43 @@ def prepare_probe_pairs(
                     sorted(negatives, key=lambda value: str(value["doc_id"]))
                 )
             ]
+        candidate_sets.append((record, query, candidates))
+    precomputed: list[float] | None = None
+    score_offsets: list[tuple[int, int]] = []
+    if negative_recipe.requires_filter:
+        if primary_scorer is None or calibration is None:
+            raise ValueError("filtered probe preparation requires scorer and calibration")
+        if primary_scorer.name != calibration.primary_judge_name:
+            raise ValueError("runtime primary reranker does not match calibration provenance")
+        pairs: list[tuple[str, str]] = []
+        for _record, query, candidates in candidate_sets:
+            start = len(pairs)
+            pairs.extend((query, candidate.text) for candidate in candidates)
+            score_offsets.append((start, len(pairs)))
+        precomputed = []
+        scoring_chunk_size = 2048
+        for start in range(0, len(pairs), scoring_chunk_size):
+            end = min(start + scoring_chunk_size, len(pairs))
+            precomputed.extend(primary_scorer.score_pairs(pairs[start:end]))
+            if progress is not None:
+                completed = max(1, round(len(candidate_sets) * end / len(pairs)))
+                progress(completed, len(candidate_sets))
+        if len(precomputed) != len(pairs):
+            raise ValueError("bulk primary reranker scoring returned an invalid result count")
+    rows: list[dict[str, Any]] = []
+    audit_rows: list[dict[str, Any]] = []
+    selected: list[tuple[int, str, dict[str, Any]]] = []
+    policy_dropped_examples = 0
+    for prepared_index, (record, query, candidates) in enumerate(candidate_sets, start=1):
+        if progress is not None and precomputed is None:
+            progress(prepared_index, len(candidate_sets))
+        positives = sorted(record.get("positives", []), key=lambda value: str(value["doc_id"]))
+        example_id = str(record["example_id"])
+        passage = str(positives[0]["text"])
+        candidate_scores = None
+        if precomputed is not None:
+            start, end = score_offsets[prepared_index - 1]
+            candidate_scores = precomputed[start:end]
         selection = select_negative(
             example_id=example_id,
             query=query,
@@ -274,6 +310,7 @@ def prepare_probe_pairs(
             recipe=negative_recipe,
             scorer=primary_scorer,
             calibration=calibration,
+            precomputed_scores=candidate_scores,
         )
         for audit in selection.audit_rows:
             audit_rows.append(

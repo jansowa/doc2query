@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 from doc2query.evaluation.p03_sensitivity import (
     ARM_NAMES,
@@ -14,9 +15,11 @@ from doc2query.evaluation.p03_sensitivity import (
     assert_sensitivity_compatible,
     common_cohort,
     generate_w05_queries,
+    load_preparation_arm_cache,
     load_sensitivity_config,
     mock_smoke,
     preflight,
+    write_preparation_arm_cache,
 )
 from doc2query.utils.records import read_records
 
@@ -83,6 +86,26 @@ def test_generation_resume_has_exactly_one_row_per_id(
     assert "[P03 generation/resume]" in progress
     assert "4/4 (100.0%)" in progress
     assert "eta=" in progress
+
+
+def test_preparation_arm_cache_is_resumable_and_checksum_pinned(tmp_path: Path) -> None:
+    cache = tmp_path / "arm"
+    contract = {"arm": "hn0_filter", "generation_fingerprint": "g" * 64}
+    rows = [{"example_id": "q-1", "query": "q", "negative": "n"}]
+    audits = [{"example_id": "q-1", "action": "paired"}]
+    report = {"output_examples": 1}
+    write_preparation_arm_cache(
+        cache,
+        contract=contract,
+        rows=rows,
+        audits=audits,
+        report=report,
+    )
+    assert load_preparation_arm_cache(cache, contract) == (rows, audits, report)
+    with (cache / "pairs.jsonl").open("a", encoding="utf-8") as handle:
+        handle.write("{}\n")
+    with pytest.raises(ValueError, match="checksum drift"):
+        load_preparation_arm_cache(cache, contract)
 
 
 def test_final_test_ids_are_rejected() -> None:
@@ -187,6 +210,19 @@ def test_preflight_without_model_loading_and_mock_smoke(tmp_path: Path) -> None:
     smoke = mock_smoke(tmp_path / "smoke")
     assert smoke["status"] == "passed"
     assert smoke["generation_resume"]["resumed_records"] == 2
+
+
+def test_p03_gpu_judge_preserves_frozen_identity() -> None:
+    cpu = yaml.safe_load(
+        Path("configs/reranker/primary_polish_roberta_v3.yaml").read_text(encoding="utf-8")
+    )
+    gpu = yaml.safe_load(
+        Path("configs/reranker/primary_polish_roberta_v3_p03_gpu.yaml").read_text(encoding="utf-8")
+    )
+    for field in ("name_or_path", "revision", "license", "max_length", "trust_remote_code"):
+        assert gpu[field] == cpu[field]
+    assert gpu["device"] == "cuda"
+    assert gpu["batch_size"] == 32
 
 
 def test_runner_help_and_shell_mock_smoke() -> None:

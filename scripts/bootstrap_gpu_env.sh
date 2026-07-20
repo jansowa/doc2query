@@ -60,6 +60,7 @@ except ImportError:
 expected = {
     "bitsandbytes": "0.49.2",
     "peft": "0.19.1",
+    "pl_core_news_lg": "3.8.0",
     "torch": "2.6.0",
     "transformers": "5.13.1",
     "trl": "0.29.1",
@@ -105,6 +106,7 @@ install_args=(
   --no-sources
   --torch-backend cu124
   --constraint configs/environment/gpu-cu124.constraints.txt
+  "https://github.com/explosion/spacy-models/releases/download/pl_core_news_lg-3.8.0/pl_core_news_lg-3.8.0-py3-none-any.whl"
 )
 if [[ "$MODE" == dry-run ]]; then
   install_args=(--dry-run "${install_args[@]}")
