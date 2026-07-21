@@ -273,9 +273,8 @@ def materialize_p05_cohort(
     if observed_eligible_hash != natural_manifest.get("eligible_pair_ids_sha256"):
         raise ValueError("eligible_pair_ids_sha256 does not match materializer inputs")
 
-    counts = {len(pair_ids) for pair_ids in pairs_by_doc.values()}
-    if counts != {expected_k}:
-        raise ValueError("inputs do not provide the explicit uniform K queries per passage")
+    if any(len(pair_ids) < expected_k for pair_ids in pairs_by_doc.values()):
+        raise ValueError("inputs do not provide enough queries for the explicit uniform K")
     passage_budget = int(budget["unique_passage_count"])
     if len(pairs_by_doc) < passage_budget:
         raise ValueError("P-04 budget exceeds the available common cohort")
@@ -292,7 +291,7 @@ def materialize_p05_cohort(
                     hashlib.sha256(f"{seed}:{doc_id}:{pair_id}".encode()).hexdigest(),
                     pair_id,
                 ),
-            )
+            )[:expected_k]
         )
     if len(ordered_pairs) != int(budget["pair_count"]):
         raise ValueError("materialized cohort does not match the P-04 pair budget")

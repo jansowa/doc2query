@@ -178,7 +178,13 @@ def main() -> int:
     eligible = {str(row["example_id"]) for row in natural_pairs} & {
         str(row["example_id"]) for row in synthetic_pairs
     }
-    eligible_ids = [example_id for example_id in ordered_ids if example_id in eligible]
+    eligible_ids = []
+    selected_docs: set[str] = set()
+    for example_id in ordered_ids:
+        doc_id = str(natural_by_id[example_id]["doc_id"])
+        if example_id in eligible and doc_id not in selected_docs:
+            eligible_ids.append(example_id)
+            selected_docs.add(doc_id)
     budget_count = len(eligible_ids) - len(eligible_ids) % 8
     if budget_count < 8:
         raise ValueError("dual-source HN0+filter eligible cohort is too small")

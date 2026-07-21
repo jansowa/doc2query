@@ -29,13 +29,20 @@ i finalnego rank10/embedder. D00–D12, Task 06 i finalne testy nie zostały
 uruchomione. Poniższe akapity zachowują chronologię wcześniejszej implementacji
 i blockerów; rozstrzygający bieżący stan P-03/P-04 opisują ich sekcje niżej.
 
-Pierwszy P-05 preflight przeszedł audyt kampanii (9 wymaganych ramion
-ukończonych, 3 jawnie odroczone), lecz planner poprawnie zwrócił zero komend
-z powodu braku rzeczywistej wspólnej materializacji. Audyt materializatora
-wykrył brak dowodu, że naturalne i W05 query przeszły ten sam HN0+filter/drop;
-walidacja wymaga teraz wspólnego hasha post-filter eligible ID. CPU scoring
-obu źródeł został uruchomiony, ale w chwili aktualizacji nie był zakończony.
-Nie uruchomiono probe ani `dev_screen`; szczegóły:
+P-05 preflight przeszedł audyt kampanii (9 wymaganych ramion ukończonych,
+3 jawnie odroczone). GPU eligibility scoring przypiętym primary zachował
+9965 naturalnych i 9973 syntetyczne rekordy. Po wspólnym przecięciu,
+deterministycznym K=1 per dokument i wyrównaniu pod 25%/50:50 powstały trzy
+ramiona po 9944 unikalne pary/dokumenty, fingerprint
+`d89b799a…df67b5c`. Mix ma dokładnie 1243+1243 rekordy w `dev_screen` oraz
+4972+4972 w pełnym prefiksie. Planner przechodzi bez blockerów i wskazuje
+wyłącznie zamrożony `dev_intrinsic_rank10`; `final_tests_used=[]`.
+
+Nie ma ukończonego probe ani pomiaru `dev_screen`: restart systemu przerwał
+pierwsze podejście bez artefaktów, a drugie zatrzymano po ostrzeżeniu o braku
+deterministycznego workspace cuBLAS. Gotowy runner przypina
+`CUBLAS_WORKSPACE_CONFIG=:4096:8`, pokazuje postęp i uruchamia tylko trzy
+25-procentowe runy seed 42. Szczegóły:
 [`task04_p05_dev_screen_2026-07-21.md`](../reports/blockers/task04_p05_dev_screen_2026-07-21.md).
 
 Centralny harness, zamrożone manifesty/ID, metryki i slice’y, raporty

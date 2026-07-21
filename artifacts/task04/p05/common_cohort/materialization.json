@@ -1,0 +1,84 @@
+{
+  "cohort_fingerprint": "d89b799ab4a9415fb14376d49164f7f8f748ad020f48eca1c56de8a40df67b5c",
+  "cohort_order": "sha256(seed:doc_id), then sha256(seed:doc_id:pair_id)",
+  "comparison_budget": {
+    "definition_version": "probe-budget-v1",
+    "pair_count": 9944,
+    "queries_per_passage": 1,
+    "token_count": 4608000,
+    "unique_passage_count": 9944
+  },
+  "final_tests_used": [],
+  "inputs": {
+    "budget": {
+      "path": "/media/jsowa/6aaaf1ac-2d6f-44c6-9a39-a59761abdadf/work/doc2query/reports/measurements/task04_p05_dev_screen/budget.k1.json",
+      "sha256": "048ba4fc0ad61f4b776cac19905af3e1c2cfb42840f94935394097fbb935b543"
+    },
+    "natural_pairs": {
+      "fingerprint_manifest_path": "/media/jsowa/6aaaf1ac-2d6f-44c6-9a39-a59761abdadf/work/doc2query/artifacts/task04/p05/eligible_k1/natural.fingerprint.json",
+      "fingerprint_manifest_sha256": "51acea9fadc2cd914ee8bf1ebff1c47f36f733f4f30e5d2a34f5ff475df0535d",
+      "path": "/media/jsowa/6aaaf1ac-2d6f-44c6-9a39-a59761abdadf/work/doc2query/artifacts/task04/p05/eligible_k1/natural.jsonl",
+      "sha256": "d428b4a2b796f540acf4318a73d67ff4e8c1dc698b92a26925ff8a4aa0079dd4"
+    },
+    "w05_generations": {
+      "fingerprint_manifest_path": "/media/jsowa/6aaaf1ac-2d6f-44c6-9a39-a59761abdadf/work/doc2query/artifacts/task04/p05/eligible_k1/w05.fingerprint.json",
+      "fingerprint_manifest_sha256": "0c8c0be351d500c0e983d9dfd9832b6eb4c1be89d499a8f3e328c36ee5a0cd7a",
+      "generator_id": "W05-1.5B-50K-8GB",
+      "path": "/media/jsowa/6aaaf1ac-2d6f-44c6-9a39-a59761abdadf/work/doc2query/artifacts/task04/p05/eligible_k1/w05.jsonl",
+      "sha256": "b981e41a41a578de4b5b3ca0e27ac5a72ae476053733fc58f3746d07167b1dfa"
+    }
+  },
+  "materialization_id": "task03-p05-common-cohort-v1",
+  "negative_recipe": {
+    "false_negative_policy": "drop",
+    "strategy": "HN0+filter"
+  },
+  "outputs": {
+    "gold_natural": {
+      "pair_count": 9944,
+      "path": "/media/jsowa/6aaaf1ac-2d6f-44c6-9a39-a59761abdadf/work/doc2query/artifacts/task04/p05/common_cohort/gold_natural.jsonl",
+      "queries_per_passage": 1,
+      "sha256": "c4ee9686f858baeabd5a25ff4f6e829e7f2210f48d3bf3082d72d696f5ecb84b",
+      "source_counts": {
+        "natural": 9944
+      },
+      "token_count": 4608000,
+      "unique_passage_count": 9944
+    },
+    "mixed_50_50": {
+      "pair_count": 9944,
+      "path": "/media/jsowa/6aaaf1ac-2d6f-44c6-9a39-a59761abdadf/work/doc2query/artifacts/task04/p05/common_cohort/mixed_50_50.jsonl",
+      "queries_per_passage": 1,
+      "sha256": "cf58a947fe9005bf41ee758945e0b6e32e96fa972ba9894c62e275fdbf59634b",
+      "source_counts": {
+        "natural": 4972,
+        "synthetic_w05": 4972
+      },
+      "token_count": 4608000,
+      "unique_passage_count": 9944
+    },
+    "w05_synthetic": {
+      "pair_count": 9944,
+      "path": "/media/jsowa/6aaaf1ac-2d6f-44c6-9a39-a59761abdadf/work/doc2query/artifacts/task04/p05/common_cohort/w05_synthetic.jsonl",
+      "queries_per_passage": 1,
+      "sha256": "bb97dcab016577699d4cacf9d2e8bcf1a140d98b196adbd35a0942daccc28297",
+      "source_counts": {
+        "synthetic_w05": 9944
+      },
+      "token_count": 4608000,
+      "unique_passage_count": 9944
+    }
+  },
+  "schema_version": 1,
+  "seed": 42,
+  "stage_pair_counts": {
+    "dev_confirm": {
+      "natural": 4972,
+      "synthetic_w05": 4972
+    },
+    "dev_screen": {
+      "natural": 1243,
+      "synthetic_w05": 1243
+    }
+  }
+}

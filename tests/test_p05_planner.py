@@ -118,6 +118,9 @@ def test_p05_plan_has_three_matched_arms_hn0_filter_and_required_controls(
     assert any("--max-steps 3" in command for command in plan["execution_commands"])
     assert any("--train-prefix-limit 100" in command for command in plan["execution_commands"])
     assert all(
+        "--test-subset dev_intrinsic_rank10" in command for command in plan["execution_commands"]
+    )
+    assert all(
         str(plan["artifacts"]["train_input"]) in command for command in plan["execution_commands"]
     )
     w05_commands = [

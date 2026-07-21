@@ -1,0 +1,26 @@
+{
+  "artifact_path": "/media/jsowa/6aaaf1ac-2d6f-44c6-9a39-a59761abdadf/work/doc2query/artifacts/task04/p05/eligible/natural.jsonl",
+  "calibration": {
+    "artifact_fingerprint": "9ee4280f18e684b0dc3bb7fd885801b5ae8821af758e2845ab349c559613b3f4",
+    "artifact_id": "pfn-dev-v1-b455711ec36526b2",
+    "comparison_operator": "greater_than_or_equal",
+    "fit_dataset_fingerprint": "12b86da10c73707a58a8793111afcca0424981d738667a04c228014780a02a1d",
+    "fit_split": "dev",
+    "primary_judge_name": "sdadas/polish-reranker-roberta-v3",
+    "primary_judge_revision": "e6471da541f4e7be33845b6d57248a8d8bde27e8",
+    "score_kind": "raw_pair_logit",
+    "selection_method": "query_macro_youden_j_maximum_with_highest_threshold_tie_break_on_frozen_dev",
+    "source_scores_sha256": "7a1f9f5949a26d3c09780ba30689fb259c1d20cd401a1e8860b8292461eef115",
+    "threshold": 8.617486953735352
+  },
+  "eligible_pair_ids_sha256": "5d289e4ff082de6ac9d3737dd36d57fd30e3e3bb07ccba8a8de34a61d4773599",
+  "final_tests_used": [],
+  "negative_recipe": {
+    "false_negative_policy": "drop",
+    "strategy": "HN0+filter"
+  },
+  "sha256": "9127a74cb7a5d7f4551bda6b4e270507dfd4283c32a3bd98638d16a1a5100431",
+  "splits": [
+    "train"
+  ]
+}

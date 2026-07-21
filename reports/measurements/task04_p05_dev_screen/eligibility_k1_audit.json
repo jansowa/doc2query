@@ -1,0 +1,19 @@
+{
+  "comparison_budget": {
+    "definition_version": "probe-budget-v1",
+    "pair_count": 9944,
+    "queries_per_passage": 1,
+    "token_count": 4608000,
+    "unique_passage_count": 9944
+  },
+  "dropped_divisibility_tail": 4,
+  "dropped_duplicate_passage_pairs": 12,
+  "eligible_pair_ids_sha256": "ce2ab55d5347314499d8bcb98aa6946329ef4f5f0900ded6eddf81b41a2f83fd",
+  "final_tests_used": [],
+  "input_pair_count": 9960,
+  "input_unique_passage_count": 9948,
+  "materialization_budget_count": 9944,
+  "schema_version": 1,
+  "selection": "first post-filter pair in pinned P-03 order per unique doc_id",
+  "status": "prepared"
+}

@@ -6,6 +6,8 @@ import hashlib
 import heapq
 import json
 import math
+import os
+import sys
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
@@ -50,6 +52,35 @@ from doc2query.utils.reproducibility import set_seed
 from doc2query.utils.tracking import collect_code_provenance
 
 QuerySource = Literal["natural", "copy_control", "synthetic"]
+
+
+def _progress_enabled() -> bool:
+    return os.environ.get("DOC2QUERY_PROGRESS", "").strip().lower() in {"1", "true", "yes"}
+
+
+def _progress(stage: str, current: int, total: int, started: float) -> None:
+    if not _progress_enabled():
+        return
+    percent = 100.0 * current / max(1, total)
+    elapsed = time.perf_counter() - started
+    print(
+        f"[{stage}] {current:,}/{total:,} ({percent:5.1f}%) elapsed={elapsed:.1f}s",
+        file=sys.stderr,
+        flush=True,
+    )
+
+
+def _progress_callback(stage: str) -> Callable[[int, int], None]:
+    started = time.perf_counter()
+    last = -1
+
+    def report(current: int, total: int) -> None:
+        nonlocal last
+        if current != last:
+            last = current
+            _progress(stage, current, total, started)
+
+    return report
 
 
 @dataclass(frozen=True)
@@ -446,6 +477,7 @@ def train_probe(
     losses = []
     started = time.perf_counter()
     optimizer.zero_grad(set_to_none=True)
+    report_every = max(1, recipe.max_steps // 20)
     for _step in range(recipe.max_steps):
         try:
             batch = next(iterator)
@@ -475,6 +507,9 @@ def train_probe(
         scheduler.step()
         optimizer.zero_grad(set_to_none=True)
         losses.append(float(loss.detach().cpu()))
+        completed_steps = _step + 1
+        if completed_steps == 1 or completed_steps % report_every == 0:
+            _progress("train", completed_steps, recipe.max_steps, started)
     adapter_dir = output_dir / "model"
     model.backbone.save_pretrained(adapter_dir, safe_serialization=True)
     tokenizer.save_pretrained(adapter_dir)
@@ -547,16 +582,22 @@ def _encode_batched(
     batch_size: int,
     device: torch.device,
 ) -> torch.Tensor:
-    chunks = [
-        _encode(
-            model,
-            tokenizer,
-            texts[start : start + batch_size],
-            max_length=max_length,
-            device=device,
+    chunks = []
+    started = time.perf_counter()
+    report_every = max(batch_size, math.ceil(len(texts) / 100 / batch_size) * batch_size)
+    for start in range(0, len(texts), batch_size):
+        chunks.append(
+            _encode(
+                model,
+                tokenizer,
+                texts[start : start + batch_size],
+                max_length=max_length,
+                device=device,
+            )
         )
-        for start in range(0, len(texts), batch_size)
-    ]
+        completed = min(start + batch_size, len(texts))
+        if completed == len(texts) or completed % report_every < batch_size:
+            _progress("encode_corpus", completed, len(texts), started)
     if not chunks:
         raise ValueError("cannot encode an empty corpus")
     return torch.cat(chunks)
@@ -608,7 +649,10 @@ def evaluate_probe(
     metric_rows: list[dict[str, float | int]] = []
     latencies: list[float] = []
     with JsonlWriter(output_dir / "corpus_retrieval_per_query.jsonl") as writer:
-        for record in records:
+        query_started = time.perf_counter()
+        query_total = len(records)
+        query_report_every = max(1, query_total // 100)
+        for query_index, record in enumerate(records, start=1):
             positives = record.get("positives", [])
             negatives = record.get("hard_negatives", [])
             if not positives:
@@ -655,6 +699,8 @@ def evaluate_probe(
             writer.write(row)
             per_query.append(row)
             metric_rows.append(metrics)
+            if query_index == query_total or query_index % query_report_every == 0:
+                _progress("evaluate_queries", query_index, query_total, query_started)
     aggregate = aggregate_query_metrics(metric_rows)
     summary = {
         "schema_version": 2,
@@ -743,6 +789,7 @@ def run_probe_experiment(
         generator_id=generator_id,
         bm25_index=bm25_index,
         documents_path=documents_path,
+        progress=(_progress_callback("filter_negatives") if _progress_enabled() else None),
     )
     train_summary = train_probe(
         pairs,

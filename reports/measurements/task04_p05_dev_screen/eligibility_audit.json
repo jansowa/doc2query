@@ -1,0 +1,100 @@
+{
+  "comparison_budget": {
+    "definition_version": "probe-budget-v1",
+    "pair_count": 9960,
+    "queries_per_passage": 1,
+    "token_count": 4608000,
+    "unique_passage_count": 9960
+  },
+  "eligible_pair_ids_sha256": "5d289e4ff082de6ac9d3737dd36d57fd30e3e3bb07ccba8a8de34a61d4773599",
+  "final_tests_used": [],
+  "input_sha256": {
+    "p03_common_cohort": "00f9e743b5fc20265391719b77f5a6da9c2c274819493824a0aaa8d31a8357a4",
+    "primary_judge_config": "703b32f688d08503bb6b0a19e8393d089934cd1150929b918a6f1b431bf0557b",
+    "probe_recipe": "3ba6114ef37652d2fa49bb788e61a7ff26d6af59ecad50f9697715d53dc1f00b",
+    "train": "154a490b471b6641bc25479d9ab0a57f68ea4e7b07d5d056cbaf94361ccb1be5",
+    "w05_generations": "deea302f690e62816629f5cf3e9796973de62ca964c0fa331f881263cf88b148"
+  },
+  "intersection_budget_count": 9960,
+  "natural_eligible_count": 9965,
+  "natural_false_negative_report": {
+    "actions": {
+      "dropped_false_negative": 6525,
+      "not_selected": 82141,
+      "paired": 9965
+    },
+    "candidate_count": 98631,
+    "generator_id": null,
+    "input_examples": 9973,
+    "output_examples": 9965,
+    "per_source": {
+      "natural": {
+        "candidate_count": 98631,
+        "possible_false_negative_count": 6525,
+        "possible_false_negative_rate": 0.06615567113787754,
+        "scored_candidate_count": 98631
+      }
+    },
+    "policy_dropped_examples": 8,
+    "possible_false_negative_count": 6525,
+    "possible_false_negative_rate": 0.06615567113787754,
+    "query_source": "natural",
+    "scored_candidate_count": 98631,
+    "selection_excluded_examples": 0,
+    "source_id": "natural"
+  },
+  "p03_common_count": 9973,
+  "probe_recipe": {
+    "batch_size": 8,
+    "learning_rate": 2e-05,
+    "loss": "in_batch_cross_entropy_with_paired_hard_negative",
+    "max_length": 192,
+    "max_steps": 1000,
+    "model_name_or_path": "sdadas/polish-reranker-base-ranknet",
+    "negative_recipe": {
+      "bm25_candidates": 32,
+      "bm25_index_fingerprint": "e5df243227e8e877550c283e2f7c882fa931ee38d849d39e8f2e2a51dc182119",
+      "calibration_artifact_fingerprint": "9ee4280f18e684b0dc3bb7fd885801b5ae8821af758e2845ab349c559613b3f4",
+      "calibration_artifact_id": "pfn-dev-v1-b455711ec36526b2",
+      "calibration_artifact_path": "artifacts/task02/pfn_dev_v1/calibration.json",
+      "false_negative_policy": "drop",
+      "strategy": "hn0_filter",
+      "version": "probe-negatives-v1"
+    },
+    "negatives_per_example": 1,
+    "normalize_embeddings": true,
+    "recipe_version": "probe-v1.1-p03",
+    "revision": "a7c66d41a8097ca02e75616d0951c941d94ff6a1",
+    "seed": 42,
+    "warmup_ratio": 0.05
+  },
+  "schema_version": 1,
+  "status": "prepared",
+  "synthetic_eligible_count": 9973,
+  "synthetic_false_negative_report": {
+    "actions": {
+      "dropped_false_negative": 8476,
+      "not_selected": 80182,
+      "paired": 9973
+    },
+    "candidate_count": 98631,
+    "generator_id": "W05-1.5B-50K-8GB",
+    "input_examples": 9973,
+    "output_examples": 9973,
+    "per_source": {
+      "W05-1.5B-50K-8GB": {
+        "candidate_count": 98631,
+        "possible_false_negative_count": 8476,
+        "possible_false_negative_rate": 0.08593647027810729,
+        "scored_candidate_count": 98631
+      }
+    },
+    "policy_dropped_examples": 0,
+    "possible_false_negative_count": 8476,
+    "possible_false_negative_rate": 0.08593647027810729,
+    "query_source": "synthetic",
+    "scored_candidate_count": 98631,
+    "selection_excluded_examples": 0,
+    "source_id": "W05-1.5B-50K-8GB"
+  }
+}
