@@ -14,7 +14,14 @@ from typing import Any
 import torch
 from torch.utils.data import Dataset, Sampler
 
-from doc2query.models.templates import BaselineName, normalize_completion, render_prompt
+from doc2query.data.style_labels import intent_applicable, label_query
+from doc2query.models.templates import (
+    BaselineName,
+    normalize_completion,
+    render_controlled_prompt,
+    render_prompt,
+)
+from doc2query.schemas import FocusMode, GenerationConfig, QueryControl, QueryForm, QueryIntent
 from doc2query.utils.records import read_records
 
 IGNORE_INDEX = -100
@@ -230,11 +237,57 @@ class CompletionOnlyCollator:
         }
 
 
-def _convert_record(record: dict[str, Any], baseline: BaselineName) -> dict[str, Any]:
+def _convert_record(
+    record: dict[str, Any],
+    baseline: BaselineName,
+    generation: GenerationConfig | None,
+) -> dict[str, Any] | None:
     if "passage" not in record or "query" not in record:
         raise ValueError("SFT input must contain inverted passage and query fields")
     item = dict(record)
-    item["prompt"] = render_prompt(str(record["passage"]), baseline)
+    if generation is not None and generation.controlled:
+        labels = label_query(str(record["query"]))
+        try:
+            form = QueryForm(str(record.get("query_form", labels.form.value)))
+        except ValueError:
+            form = QueryForm.UNKNOWN
+        try:
+            intent = QueryIntent(str(record.get("query_intent", labels.intent.value)))
+        except ValueError:
+            intent = QueryIntent.UNKNOWN
+        if record.get("intent_applicable") is False and intent != QueryIntent.UNKNOWN:
+            return None
+        focus_mode = generation.focus_modes[0]
+        focus_bucket = record.get("focus_bucket")
+        focus_sentence_id = record.get("focus_sentence_id")
+        if focus_mode == FocusMode.BUCKET and focus_bucket not in {
+            "beginning",
+            "middle",
+            "end",
+        }:
+            return None
+        if focus_mode in {FocusMode.MARKED_SENTENCE, FocusMode.SENTENCE_ID} and not isinstance(
+            focus_sentence_id, int
+        ):
+            return None
+        control = QueryControl(
+            form=form,
+            intent=intent,
+            intent_applicable=record.get("intent_applicable")
+            if isinstance(record.get("intent_applicable"), bool)
+            else intent_applicable(intent, str(record["passage"])),
+            focus_mode=focus_mode,
+            focus_bucket=focus_bucket if focus_mode == FocusMode.BUCKET else None,
+            focus_sentence_id=(
+                focus_sentence_id
+                if focus_mode in {FocusMode.MARKED_SENTENCE, FocusMode.SENTENCE_ID}
+                else None
+            ),
+        )
+        item["prompt"] = render_controlled_prompt(str(record["passage"]), control)
+        item["control"] = control.model_dump(mode="json")
+    else:
+        item["prompt"] = render_prompt(str(record["passage"]), baseline)
     item["completion"] = normalize_completion(str(record["query"]))
     return item
 
@@ -251,6 +304,7 @@ def prepare_datasets(
     weight_max: float,
     seed: int,
     batch_size: int,
+    generation: GenerationConfig | None = None,
     max_train_examples: int | None = None,
     max_eval_examples: int | None = None,
 ) -> PreparedDatasets:
@@ -275,13 +329,55 @@ def prepare_datasets(
             ).digest(),
         )[:limit]
 
-    train_records = capped(train_records, max_train_examples)
-    eval_records = capped(eval_records, max_eval_examples)
-    train = add_balance_buckets([_convert_record(item, baseline) for item in train_records])
-    evaluation = add_balance_buckets([_convert_record(item, baseline) for item in eval_records])
+    def eligible(
+        records: list[dict[str, Any]],
+    ) -> tuple[list[tuple[dict[str, Any], dict[str, Any]]], list[str], int]:
+        converted: list[tuple[dict[str, Any], dict[str, Any]]] = []
+        invalid_completion_ids: list[str] = []
+        focus_ineligible = 0
+        for source in records:
+            if "query" in source:
+                query = source["query"]
+                if (
+                    not isinstance(query, str)
+                    or not query.strip()
+                    or "\n" in query
+                    or "\r" in query
+                ):
+                    invalid_completion_ids.append(
+                        str(source.get("pair_id", source.get("example_id", "unknown")))
+                    )
+                    continue
+            item = _convert_record(source, baseline, generation)
+            if item is not None:
+                converted.append((source, item))
+            else:
+                focus_ineligible += 1
+        return converted, invalid_completion_ids, focus_ineligible
+
+    train_pairs, invalid_train_ids, focus_ineligible_train = eligible(train_records)
+    eval_pairs, invalid_eval_ids, focus_ineligible_eval = eligible(eval_records)
+    train_sources = capped([source for source, _ in train_pairs], max_train_examples)
+    eval_sources = capped([source for source, _ in eval_pairs], max_eval_examples)
+    train_ids = {id(source) for source in train_sources}
+    eval_ids = {id(source) for source in eval_sources}
+    train = add_balance_buckets([item for source, item in train_pairs if id(source) in train_ids])
+    evaluation = add_balance_buckets(
+        [item for source, item in eval_pairs if id(source) in eval_ids]
+    )
+    train_records = train_sources
+    eval_records = eval_sources
     if not train:
         raise ValueError(f"no training records found for split {train_split!r}")
     weights, report = compute_example_weights(train, minimum=weight_min, maximum=weight_max)
+    report["focus_ineligible_train_records"] = focus_ineligible_train
+    report["focus_ineligible_eval_records"] = focus_ineligible_eval
+    report["invalid_completion_train_records"] = len(invalid_train_ids)
+    report["invalid_completion_eval_records"] = len(invalid_eval_ids)
+    report["invalid_completion_examples"] = {
+        "train": invalid_train_ids[:20],
+        "evaluation": invalid_eval_ids[:20],
+    }
     for item, weight in zip(train, weights, strict=True):
         item["sample_weight"] = weight if strategy == "weighted" else 1.0
     if strategy == "balanced":

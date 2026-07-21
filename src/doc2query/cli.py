@@ -14,6 +14,8 @@ from doc2query.evaluation.corpus import load_corpus_index
 from doc2query.evaluation.embedder_probe import ProbeRecipe, run_probe_experiment
 from doc2query.evaluation.generator import run_checkpoint_evaluation
 from doc2query.evaluation.probe_negatives import ProbeNegativeBlocker
+from doc2query.evaluation.statistical_contract import StatisticalContract
+from doc2query.generation.runner import run_controlled_generation
 from doc2query.reranker.base import FrozenRerankerConfig
 from doc2query.reranker.load import load_frozen_reranker
 from doc2query.training.sft import run_sft
@@ -130,9 +132,16 @@ def train_reranker(
 
 
 @app.command()
-def generate(config: ConfigPath) -> None:
-    """Generate queries (implemented by a later task)."""
-    _pending(config, "generation")
+def generate(
+    config: ConfigPath,
+    output: Annotated[Path | None, typer.Option("--output", dir_okay=False)] = None,
+    adapter: Annotated[Path | None, typer.Option("--adapter", exists=True)] = None,
+) -> None:
+    """Generate controlled, deduplicated single-query sets from local inverted data."""
+    result = run_controlled_generation(
+        load_config(config), output_path=output, adapter_path=adapter
+    )
+    console.print_json(json.dumps(result))
 
 
 @preferences_app.command("build")
@@ -207,6 +216,9 @@ def evaluate_embedder(
     recipe_path: Annotated[Path, typer.Option("--recipe", exists=True, dir_okay=False)],
     output_dir: Annotated[Path, typer.Option("--output-dir")],
     corpus: Annotated[Path, typer.Option("--corpus", exists=True, dir_okay=False)],
+    comparison_contract_path: Annotated[
+        Path, typer.Option("--comparison-contract", exists=True, dir_okay=False)
+    ] = Path("configs/evaluation/comparison_contract_v1.yaml"),
     query_source: Annotated[str, typer.Option("--query-source")] = "natural",
     test_subset: Annotated[str, typer.Option("--test-subset")] = "test_embedder",
     holdout_manifest: Annotated[
@@ -242,6 +254,7 @@ def evaluate_embedder(
     if holdout_profile not in {"quick", "medium", "full"}:
         raise typer.BadParameter("holdout-profile must be quick, medium, or full")
     recipe = ProbeRecipe.from_dict(raw)
+    statistical_contract = StatisticalContract.load(comparison_contract_path)
     try:
         calibration = recipe.negative_recipe.load_calibration()
     except ProbeNegativeBlocker as exc:
@@ -275,6 +288,7 @@ def evaluate_embedder(
             output_dir=output_dir,
             recipe=recipe,
             query_source=query_source,  # type: ignore[arg-type]
+            statistical_contract=statistical_contract,
             synthetic_generations=synthetic_generations,
             train_limit=train_limit,
             documents_path=corpus,

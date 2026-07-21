@@ -46,6 +46,14 @@ htmlcov/
 /reports/
 /runs/
 
+# Versioned Task 04 ADRs are repository documentation, not runtime reports.
+!/reports/
+/reports/*
+!/reports/decisions/
+/reports/decisions/*
+!/reports/decisions/task04_p03_w05_negative_recipe.md
+!/reports/decisions/task04_p04_statistical_budget_contract.md
+
 # Editors and OS
 .idea/
 .vscode/

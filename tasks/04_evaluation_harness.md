@@ -4,7 +4,30 @@
 
 ## Status
 
-`IN PROGRESS`
+`IMPLEMENTED`
+
+Aktualny stan (21 lipca): Harness v1.1 P-01–P-04 jest zaimplementowany i ma
+testy CPU. P-03 został rzeczywiście zmierzony na 1 000 rekordów zamrożonego
+dev; wynik `statistically_separated` nie otworzył żadnego testu finalnego.
+HN1 BM25 było istotnie gorsze od HN0 i HN0+filter, natomiast HN0+filter nie
+było odróżnialne od HN0. ADR
+`reports/decisions/task04_p03_w05_negative_recipe.md` wybiera HN0+filter z
+polityką `drop` dla pierwszych porównań probe. Nie jest to wybór generatora
+ani domknięcie pełnej bramki HN przed Task 09.
+
+P-04 ma wersjonowany ADR `1.0.0` i kontrakt `task04-p04-v1`: główną metrykę
+finalną, guardraile non-inferiority, minimalny efekt `0.01`, seedy i successive
+halving, rozdzielone raportowanie wariancji treningowej i bootstrapu po query,
+czterowymiarowy budżet oraz jednorazowe otwarcie testów. Manifesty probe
+zapisują fingerprint ADR i budżet, a comparatory fail-closed odrzucają braki
+lub różnice wersji i budżetu.
+
+Task pozostaje `IMPLEMENTED`, nie `DONE`: nie wykonano pełnych porównywalnych
+probe natural/copy/generator, niezależnego BGE shadow judge, embeddingowych
+miar diversity, ocen ludzi dla co najmniej 300 przypadków, pełnych indeksów
+i finalnego rank10/embedder. D00–D12, Task 06 i finalne testy nie zostały
+uruchomione. Poniższe akapity zachowują chronologię wcześniejszej implementacji
+i blockerów; rozstrzygający bieżący stan P-03/P-04 opisują ich sekcje niżej.
 
 Centralny harness, zamrożone manifesty/ID, metryki i slice’y, raporty
 HTML/Markdown, ślepy eksport A/B, bootstrap oraz zamrożona recepta probe
@@ -14,9 +37,6 @@ zmierzone, zweryfikowane i przypięte. Dodano kompletny one-command runner
 P-03, który zamraża train ID, wznawia generację i trening, tworzy wspólną
 kohortę HN0/HN0+filter/HN1, zrównuje jawny budżet tokenów, ocenia wyłącznie
 zamrożony dev i wykonuje paired-query bootstrap przez dedykowany comparator.
-W05 pozostaje pomiarowo zablokowany, ponieważ projektowy cache nadal nie
-zawiera przypiętych bazowych wag Bielik 1.5B; dry-run zatrzymuje się przed
-generacją i nie omija gated access.
 Na lokalnej karcie 8 GB rzeczywiście oceniono W03, W05 i W06 w trybie
 deterministic oraz diverse na tym samym zamrożonym panelu 100 rekordów z co
 najmniej 10 hard negative’ami; wykonano też nieporównywalny 2-step smoke
@@ -45,9 +65,9 @@ zastępuje to nadal niewykonanych pełnych probe embedderów.
 
 Audyt z 18 lipca wykazał, że dotychczasowy kontrakt nie rozdziela rankingu
 w małej puli od retrievalu korpusowego, nie ma natywnego polskiego holdoutu
-i nie definiuje polityki fałszywych negatywów. Dlatego zadanie ponownie ma
-status `IN PROGRESS`, a wyniki W03/W05/W06 są diagnostyczne. Nie wolno na ich
-podstawie wybierać finalisty ani uruchamiać pierwszych porównawczych probe.
+i nie definiuje polityki fałszywych negatywów. Wyniki W03/W05/W06 pozostają
+diagnostyczne i nie wolno na ich podstawie wybierać finalisty; wykryte braki
+kontraktu zostały następnie zaadresowane przez P-01–P-04.
 
 19 lipca zaimplementowano P-01 Harness v1.1. Kontrakty
 `candidate_pool_ranking` i `corpus_retrieval` mają rozłączne prefiksy
@@ -75,8 +95,7 @@ dokumentami oraz trzy profile z rzeczywistymi hashami ID i fingerprintami.
 Audyt exact-match nie znalazł wspólnych query ani dokumentów z translated
 MS MARCO-PL; near-duplicate pozostaje jawnie `NOT MEASURED`. Manifest przeszedł
 pełne `--verify` i nie ma blockerów. Nie zbudowano indeksu ani nie uruchomiono
-probe. Stan ten był punktem wejścia do implementacji P-03; P-04 nadal
-pozostaje nierozpoczęte.
+probe. Stan ten był punktem wejścia do implementacji P-03.
 
 19 lipca zaimplementowano bezpieczną część P-03. Recepta
 `probe-v1.1-p03`/`probe-negatives-v1` definiuje deterministyczne HN0,
@@ -93,13 +112,10 @@ artefakt ma fingerprint `9ee4280f…3b3f4` i nie używa żadnego testu. Zamrożo
 `train-corpus-v1` zawiera 2 211 463 dokumenty; BM25 spaCy ma integrity check
 `ok` i fingerprint `e5df2432…2119`. Oba są przypięte w recepcie.
 
-Preflight ujawnił kolejny brak: W05 ma tylko generacje panelu testowego, z
-zerowym pokryciem train ID, zaś bazowych wag Bielik 1.5B nie ma w lokalnym
-cache. Dodany runner odtwarza brakujące train-query legalnie z checkpointu
-po dostępności przypiętego snapshotu; nie używa testu ani naturalnych query
-jako substytutu. HN0/HN0+filter/HN1 nadal nie uruchomiono i nie ma
-rozstrzygnięcia. Blocker:
-`reports/blockers/task04_p03_w05_sensitivity.md`. P-04 nie został rozpoczęty.
+Historyczny preflight wykrył brak train-query W05 i bazowych wag Bielik 1.5B.
+Runner odtworzył brakujące query legalnie z przypiętego checkpointu, bez użycia
+testu ani naturalnych query jako substytutu; późniejsze wznowienie domknęło
+HN0/HN0+filter/HN1, jak opisano w sekcji P-03.
 
 ## Harness v1.1 — blokery po audycie
 
@@ -153,7 +169,7 @@ near-duplicate pozostaje jawnie niezmierzony i nie jest zastępowany założenie
 Nie uruchomiono probe, benchmarku PIRB, pełnego indeksu ani żadnego wyniku
 eksperymentalnego. Kolejną bramką Harness v1.1 jest P-03.
 
-### P-03 — probe recipe v1 i false negatives — `IMPLEMENTED / MEASUREMENT IN PROGRESS`
+### P-03 — probe recipe v1 i false negatives — `MEASURED / ADR ACCEPTED`
 
 - dla naturalnych i syntetycznych query primary reranker flaguje odziedziczony
   negatyw jako `possible_false_negative` według progu kalibracyjnego z Task 02;
@@ -171,36 +187,22 @@ wyłącznie na dev i weryfikuje jego ID, fingerprint, fingerprint danych,
 SHA-256 score’ów, rewizję primary, przestrzeń score’u, operator, próg oraz
 metodę jego wyboru. HN1 dodatkowo wymaga przypiętego fingerprintu indeksu BM25.
 
-Dev-only kalibracja oraz train-corpus BM25 są gotowe i przypięte. Przypięty
-snapshot `speakleash/Bielik-1.5B-v3` revision
-`4b25049621bf3952a1fc9314c89773102eda0333` został legalnie skopiowany do
-projektowego cache i właściwy sensitivity check W05 rozpoczął generację.
-Wynik nie jest jeszcze dostępny. Gotowy runner
-`scripts/run_p03_w05_sensitivity.sh` wykonuje fail-closed preflight, zamraża
-deterministyczne train ID i fingerprint, generuje dokładnie jedno greedy query
-z checkpointu `runs/W05-1.5B-50K-8GB/checkpoint-3125` z resume bez duplikatów,
-materializuje wspólną kohortę legalnych negatywów, trenuje trzy ramiona z
-identycznym modelem/LR/batchem/seedem/max_length/max_steps i stałym padded
-token budgetem, wznawia trening oraz ocenia tylko `dev_intrinsic_rank10`.
-Dedykowany comparator zezwala na drift strategii HN i jej artefaktu BM25, ale
-odrzuca wszystkie pozostałe różnice kontraktu; raportuje paired-query
-bootstrap 95% CI, flag/drop rates, throughput i peak VRAM. Wynik istotny albo
-nierozstrzygalny automatycznie zapisuje ADR bez wyboru recepty. Mock smoke i
-testy kontraktowe są gotowe. Runner raportuje w konsoli i wspólnym logu
-postęp, throughput, czas i ETA generacji, przygotowania ramion, treningów
-probe i ewaluacji dev. Nie wolno uznać P-03 za pomiarowo zamknięte ani przejść
-do P-04 lub porównań generatorów przed zakończeniem właściwego runu.
+Dev-only kalibracja oraz train-corpus BM25 są gotowe i przypięte. Właściwy
+runner zakończył się kodem 0 i zapisał trzy ramiona oraz sparowany bootstrap
+w `reports/measurements/task04_p03_w05_sensitivity/`. Na 1 000 query HN1 było
+istotnie gorsze od obu pozostałych recept dla nDCG@10, MRR i hard-negative
+win rate. HN0+filter względem HN0 miało nDCG@10 `+0.00682`, 95% CI
+`[-0.00348, 0.01659]`, więc nie było statystycznie odróżnialne.
 
-Pierwsza próba zapisała komplet 10k generacji, lecz zatrzymała się przy HN1,
-bo `.venv-gpu` nie zawierało przypiętego przez indeks
-`pl_core_news_lg==3.8.0`. Zależność jest już częścią bootstrapu i przechodzi
-smoke. Przygotowanie zapisuje teraz osobny atomowy cache po każdym ramieniu.
-Utracone HN0+filter trzeba przeliczyć raz; zbiorczy, jawnie przypięty scoring
-GPU zachował wszystkie flagi na panelu zgodności i przyspieszył smoke około
-15× względem pierwotnej ścieżki. Szczegóły:
+ADR `reports/decisions/task04_p03_w05_negative_recipe.md` wybiera HN0+filter
+z polityką `drop` dla pierwszych porównań: zachowuje jakość dev w granicach
+niepewności i stosuje przypiętą ochronę przed false negative. HN1 jest w tym
+zakresie odrzucone. `final_tests_used=[]`; pomiar nie wybiera generatora.
+Pełna bramka HN0/HN0+filter/HN1/HN2/HN3 przed Task 09 pozostaje niewykonana.
+Historia wznowienia:
 [`task04_p03_runtime_recovery_2026-07-20.md`](../docs/experiments/task04_p03_runtime_recovery_2026-07-20.md).
 
-### P-04 — kontrakt statystyczny i budżetowy
+### P-04 — kontrakt statystyczny i budżetowy — `IMPLEMENTED`
 
 Przed pierwszym porównaniem utworzyć ADR z:
 
@@ -216,6 +218,14 @@ Przed pierwszym porównaniem utworzyć ADR z:
 Pipeline porównań musi cytować wersję ADR i odmawiać porównania niezgodnych
 definicji budżetu. Dopiero spełnienie P-01…P-04 zezwala na porównawcze probe,
 eksperymenty D00–D12 oraz Task 06.
+
+Gotowe są ADR
+`reports/decisions/task04_p04_statistical_budget_contract.md`, maszynowy
+kontrakt `configs/evaluation/comparison_contract_v1.yaml`, zapis wersji i
+fingerprintu ADR oraz czterowymiarowego budżetu w manifestach probe i wspólna
+walidacja fail-closed w comparatorach. Brak metadanych, różna wersja ADR,
+różna definicja budżetu lub różnica w tokenach, parach, unikalnych pasażach
+albo K blokuje porównanie. Nie uruchomiono przy tym żadnego probe ani testu.
 
 ## Cel
 

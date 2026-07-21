@@ -14,6 +14,7 @@ import yaml
 from doc2query.evaluation.corpus import load_corpus_index
 from doc2query.evaluation.embedder_probe import ProbeRecipe, run_probe_experiment
 from doc2query.evaluation.probe_negatives import ProbeNegativeBlocker
+from doc2query.evaluation.statistical_contract import StatisticalContract
 from doc2query.reranker.base import FrozenRerankerConfig
 from doc2query.reranker.load import load_frozen_reranker
 from doc2query.utils.records import write_json
@@ -22,6 +23,12 @@ from doc2query.utils.records import write_json
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--recipe", type=Path, required=True)
+    parser.add_argument(
+        "--comparison-contract",
+        type=Path,
+        default=Path("configs/evaluation/comparison_contract_v1.yaml"),
+        help="Versioned P-04 statistical and four-dimensional budget contract.",
+    )
     parser.add_argument("--train-input", type=Path, required=True)
     parser.add_argument("--frozen-manifest", type=Path, required=True)
     parser.add_argument("--test-subset", default="test_embedder")
@@ -76,6 +83,7 @@ def main() -> None:
     if not isinstance(raw, dict):
         raise ValueError("probe recipe must be a YAML mapping")
     recipe = ProbeRecipe.from_dict(raw)
+    statistical_contract = StatisticalContract.load(args.comparison_contract)
     if args.smoke_steps is not None:
         recipe = ProbeRecipe.from_dict(asdict(recipe) | {"max_steps": args.smoke_steps})
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -115,6 +123,7 @@ def main() -> None:
             output_dir=args.output_dir,
             recipe=recipe,
             query_source=args.query_source,
+            statistical_contract=statistical_contract,
             synthetic_generations=args.synthetic_generations,
             train_limit=args.train_limit,
             documents_path=args.corpus,

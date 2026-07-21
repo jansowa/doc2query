@@ -319,6 +319,7 @@ def run_sft(
         train_split=effective.data.train_split,
         eval_split=effective.data.eval_split,
         baseline=effective.training.baseline,
+        generation=effective.generation,
         strategy=effective.training.strategy,
         weight_min=effective.training.weight_min,
         weight_max=effective.training.weight_max,

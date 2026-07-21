@@ -36,9 +36,9 @@ uruchomiono.
 | [00](00_repository_bootstrap.md) | Bootstrap repozytorium i odtwarzalność | `DONE` | Szkielet projektu, środowisko, CLI, testy i rejestrowanie są gotowe. |
 | [01](01_data_contract_audit_and_splits.md) | Kontrakt danych, audyt, deduplikacja i splity | `IMPLEMENTED` | Pełny `msmarco_pl` przetworzono do zamrożonych splitów v1 i par doc2query bez leakage pozytywów. Dla rekordów z <10 negatywami przyjęto corpus retrieval oraz oznaczone, deterministyczne backfillowanie tylko w diagnostycznej puli. Pozostał raport tokenowych percentyli/HTML. |
 | [02](02_reranker_and_reward_proxies.md) | Zamrożone rerankery i proxy nagrody | `IMPLEMENTED` | Integracja, reward proxies i testy są gotowe; primary zmierzył pełny frozen dev, a query-macro próg Youdena `possible_false_negative` jest przypięty bez użycia testu. Pozostał pełny benchmark primary/shadow na dev/test z hard negative'ami. |
-| [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | W01–W05 pokrywają bazowy 1.5B LR/baseline, a W06 4.5B Instruct/50k pozostaje diagnostyczny. Wznawialna kolejka po P-03 mierzy siedem technicznych ramion base oraz pięć dopasowanych ramion 1.5B Instruct: trzy LR/10k, seed 43 i 50k. Nowych treningów z kolejki jeszcze nie wykonano; kolejka nie wybiera finalisty. P-04/probe pozostają wymagane przed wyborem i kolejną kampanią 4.5B. |
-| [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IN PROGRESS` | P-01/P-02 i implementacja P-03 są gotowe. Właściwy run zapisał komplet 10k generacji, ale pierwsza próba zatrzymała się przy HN1 z powodu brakującego `pl_core_news_lg==3.8.0`; model jest już przypięty w bootstrapie. Każde ramię przygotowania ma teraz osobny cache resume, a zgodny flagowo scoring GPU skraca powtórkę filtra. Wynik ani recepta HN nie są jeszcze dostępne; po wznowieniu nadal pozostaje P-04. |
-| [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `TODO` | Kod taksonomii i kontrolek może powstawać równolegle, ale eksperymenty D00–D12 wymagają ukończonego Harness v1.1 z Task 04. |
+| [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | W01–W05 pokrywają bazowy 1.5B LR/baseline, a W06 4.5B Instruct/50k pozostaje diagnostyczny. Działająca wznawialna kolejka mierzy siedem technicznych ramion base oraz pięć dopasowanych ramion 1.5B Instruct: trzy LR/10k, seed 43 i 50k. Loader jawnie odrzuca wadliwe wielowierszowe completion (1 train, 0 dev) i zapisuje audyt. Nowych treningów z kolejki jeszcze nie ukończono; kolejka nie wybiera finalisty. Porównawcze probe według P-04 pozostają wymagane przed wyborem i kolejną kampanią 4.5B. |
+| [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IMPLEMENTED` | P-01–P-04 i testy CPU są gotowe. P-03 zakończył się `statistically_separated`; ADR wybiera HN0+filter dla pierwszych probe i odrzuca HN1 w tym zakresie, bez wyboru generatora i bez otwarcia testów. P-04 przypina metryki, efekt praktyczny, seedy/halving, rozdzieloną wariancję, czterowymiarowy budżet i jednorazowy final test; comparatory fail-closed sprawdzają wersję/fingerprint ADR oraz budżet. Pozostają faktyczne porównawcze probe, shadow judge, human eval, pełne indeksy i bramki Fazy B; dlatego Task nie jest `DONE`. |
+| [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `IMPLEMENTED` | Gotowe są kontrakty i kod CPU: `form`/`intent`, evidence i F0–F3, controlled SFT/inference, retry/deduplikacja, multi-query JSON, concept coverage oraz top-N/MMR/coverage-aware. D00–D12, audyty 500/200, kalibracja per domena, human check i probe z CI pozostają niewykonane; mogą ruszyć dopiero po bieżącej kolejce i pierwszych probe zgodnych z P-04. |
 | [06](06_candidate_scoring_and_preference_data.md) | Scoring kandydatów i dane preferencyjne | `TODO` | Wymaga stabilnego checkpointu SFT, ukończonego Harness v1.1 oraz Task 02 i 05. |
 | [07](07_dpo_training.md) | DPO i continued-SFT control | `TODO` | Wymaga danych preferencyjnych z Task 06. |
 | [08](08_grpo_multiobjective_rl.md) | Wielokryterialny GRPO/RL | `OPTIONAL / BLOCKED` | Uruchamiać wyłącznie po spełnieniu bramki i zapisaniu decyzji `reports/decisions/enable_grpo.md`. |
@@ -53,35 +53,27 @@ Ten rejestr jest jedynym operacyjnym źródłem kolejności i statusów.
 pozostaje zapisem przesłanek i identyfikatorów P-xx, ale nie jest równoległym
 backlogiem. Zakres P-xx został przeniesiony do wskazanych plików zadań.
 
-1. **Teraz — Task 04 / Harness v1.1:** P-01/P-02 i implementacja P-03 są
-   gotowe. P-03 ma przypiętą dev-only kalibrację, train-corpus BM25 oraz
-   one-command runner. Właściwy pomiar rozpoczął wznawialną generację W05;
-   po jej zakończeniu runner wykona trzy diagnostyczne ramiona, a następnie
-   pozostanie P-04. Niedomknięte
-   W05/P-04 są blokerami pierwszego porównawczego probe.
-2. **Brama tanich baseline'ów — Task 03:** P-05 i P-06 na 1.5B. W06 pozostaje
+1. **Teraz — brama tanich baseline'ów / Task 03:** P-03 i P-04 Harness v1.1
+   są domknięte implementacyjnie. P-03 wybrał HN0+filter wyłącznie dla
+   pierwszych probe; pełna bramka HN przed Task 09 pozostaje niewykonana.
+   Działająca kolejka realizuje P-05/P-06 na 1.5B bez wyboru finalisty.
+2. **Po kolejce — porównawcze probe Task 04:** stosować wyłącznie kontrakt
+   `task04-p04-v1`, wspólny budżet i dev-only successive halving. Testy finalne
+   wolno otworzyć raz dopiero po zamrożeniu finalistów. W06 pozostaje
    eksploracyjnym dowodem wykonalności 4.5B/8 GB, a nie zgodą na dalszą
    kampanię skali.
-3. **Równolegle tylko implementacja Task 05:** można przygotowywać schematy,
-   `form`/`intent`, evidence i selektory z P-07, lecz D00–D12 czekają na v1.1.
+3. **Task 05:** implementacja CPU jest gotowa; D00–D12 pozostają niewykonane
+   do zakończenia kolejki baseline'ów i pierwszych probe zgodnych z P-04.
 4. **Po bramce:** eksperymenty Task 05, potem P-08 w Task 06 i Task 07.
 5. **Kampania:** Task 09 dopiero po baseline'ach, sensitivity check negatywów
    i pełnej bramce HN; Task 10 dopiero po finalnym ADR.
 6. **Opcjonalne:** Task 08, P-09 i Task 11 wyłącznie po własnych bramkach.
 
-Najbliższy jednoznaczny punkt wejścia dla kolejnej sesji to legalne
-uzupełnienie projektowego cache o przypięte modele, a następnie uruchomienie
-`HF_HOME="$PWD/.cache/huggingface" UV_CACHE_DIR="$PWD/.uv-cache"
-CUDA_VISIBLE_DEVICES=0 bash scripts/run_base_1_5b_campaign.sh`. Kolejka
-automatycznie tworzy projektowe `.venv-gpu` z przypiętym CUDA Torch, pobiera
-legalnie dostępne przypięte snapshoty, materializuje train-query W05 i
-wykonuje wyłącznie diagnostyczny HN0/HN0+filter/HN1 przed technicznymi runami
-base 1.5B oraz pięcioma dopasowanymi treningami 1.5B Instruct. Całe wyjście
-jest jednocześnie przesyłane do konsoli i logu, z postępem oraz ETA dla P-03.
-CPU-only `.venv` pozostaje środowiskiem testowym. Szczegóły i warunki są w
-[`Task 04`](04_evaluation_harness.md) oraz blockerze
-`reports/blockers/task04_p03_w05_sensitivity.md`. P-04 i porównawcze probe
-pozostają po tej bramce.
+Najbliższy jednoznaczny punkt wejścia to dokończenie już działającej,
+wznawialnej kolejki `scripts/run_base_1_5b_campaign.sh`; nie uruchamiać jej
+drugiej instancji. Po jej zakończeniu należy ocenić P-05/P-06, a pierwsze
+porównawcze probe przygotować wyłącznie według HN0+filter i kontraktu P-04
+`task04-p04-v1`. D00–D12 i Task 06 pozostają poza bieżącym krokiem.
 
 ## Kolejność bazowa
 

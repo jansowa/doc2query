@@ -4,7 +4,19 @@
 
 ## Status
 
-`TODO`
+`IMPLEMENTED`
+
+Kod, kontrakty, preset i tanie testy CPU są gotowe. Zaimplementowano rozdzielną
+taksonomię `form`/`intent` z abstention i `intent_applicable`, kompatybilny
+schemat evidence, focus F0–F3, kontrolowane SFT i inference, retry po
+deduplikacji, ścisły multi-query JSON z jawną drobną naprawą, model-free
+concept coverage oraz selektory top-N/MMR/coverage-aware. Nie uruchamiano
+modelu ani eksperymentów jakościowych.
+
+Do statusu `DONE` pozostają: ukończenie Harness v1.1/P-04, eksperymenty
+D00–D12 na wspólnych kandydatach i budżetach, kalibracja rozkładów naturalnych
+query per domena, ręczny audyt co najmniej 500 etykiet i około 200 ekstrakcji
+koncepcji, human check oraz porównawcze probe embeddera z CI.
 
 ## Cel
 

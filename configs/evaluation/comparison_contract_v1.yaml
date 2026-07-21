@@ -1,0 +1,79 @@
+schema_version: 1
+contract_version: task04-p04-v1
+adr:
+  id: ADR-task04-P04-statistical-budget
+  version: "1.0.0"
+  path: reports/decisions/task04_p04_statistical_budget_contract.md
+
+primary_metric:
+  name: corpus_ndcg_at_10
+  dataset: test_native_pl
+  profile: full
+  direction: higher_is_better
+
+minimum_practical_effect:
+  metric: corpus_ndcg_at_10
+  absolute: 0.01
+  decision_rule: lower_95ci_greater_than_or_equal_to_effect
+
+non_inferiority:
+  grounding:
+    metric: corpus_round_trip_at_20
+    dataset: dev_intrinsic
+    margin: 0.02
+    decision_rule: lower_95ci_greater_than_or_equal_to_negative_margin
+  answerability:
+    metric: sentence_level_source_hit
+    dataset: dev_intrinsic
+    margin: 0.02
+    decision_rule: lower_95ci_greater_than_or_equal_to_negative_margin
+  format:
+    metric: format_valid_rate
+    dataset: dev_intrinsic
+    margin: 0.005
+    decision_rule: lower_95ci_greater_than_or_equal_to_negative_margin
+
+successive_halving:
+  stages:
+    - name: dev_screen
+      seeds: [42]
+      budget_fraction: 0.25
+      keep_fraction: 0.5
+      evaluation_sets: [dev_intrinsic]
+    - name: dev_confirm
+      seeds: [42, 43, 44]
+      budget_fraction: 1.0
+      keep_fraction: 1.0
+      evaluation_sets: [dev_intrinsic]
+  tie_breaker: lower_training_variance_then_lower_generation_cost
+
+resampling:
+  training_variance_unit: independent_training_seed
+  training_summary: per_seed_values_mean_sample_sd_and_range
+  query_uncertainty_unit: query
+  query_bootstrap_samples: 10000
+  query_bootstrap_seed: 20260721
+  query_bootstrap_interval: paired_percentile_95
+  prohibition: never_pool_seed_variance_with_query_bootstrap
+
+budget:
+  definition_version: probe-budget-v1
+  required_equal_dimensions:
+    - token_count
+    - pair_count
+    - unique_passage_count
+    - queries_per_passage
+  token_count_definition: padded_training_token_ceiling_across_query_positive_and_paired_negative
+  pair_count_definition: materialized_query_positive_training_pairs_after_common_cohort_filtering
+  unique_passage_count_definition: unique_positive_doc_ids_in_the_materialized_training_pairs
+  queries_per_passage_definition: exact_uniform_K_after_deduplication
+  equality_rule: exact_match_on_all_dimensions
+
+data_access:
+  development_sets: [dev_intrinsic]
+  development_uses: [prompt_tuning, threshold_tuning, halving, finalist_selection]
+  forbidden_development_sets: [test_native_pl, test_translated_msmarco_pl, test_embedder]
+  final_test_openings: 1
+  final_test_sets: [test_native_pl, test_translated_msmarco_pl]
+  final_open_condition: finalists_configs_seeds_and_budget_manifests_frozen
+  after_final_open: report_all_results_no_retuning_or_reselection

@@ -58,6 +58,19 @@ def test_sft_help_documents_automatic_resume() -> None:
     assert "--resume-if-available" in result.stdout
 
 
+def test_generate_command_invokes_task05_pipeline(monkeypatch: object) -> None:
+    from pytest import MonkeyPatch
+
+    assert isinstance(monkeypatch, MonkeyPatch)
+    monkeypatch.setattr(
+        "doc2query.cli.run_controlled_generation",
+        lambda _config, **_kwargs: {"experiment_id": "task05-smoke", "generated": 4},
+    )
+    result = runner.invoke(app, ["generate", "--config", "configs/base.yaml"])
+    assert result.exit_code == 0
+    assert '"generated": 4' in result.stdout
+
+
 def test_embedder_help_exposes_native_holdout_profiles_without_loading_model() -> None:
     result = runner.invoke(app, ["evaluate", "embedder", "--help"])
     assert result.exit_code == 0

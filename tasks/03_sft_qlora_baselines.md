@@ -71,6 +71,10 @@ Kolejkę rozszerzono o pięć przypiętych, porównywalnych ramion
 base. To przygotowuje pomiary, ale nie deklaruje zwycięzcy bez P-04.
 Wyjście każdego etapu jest jednocześnie widoczne w terminalu i zapisywane do
 logu.
+Loader SFT odrzuca i raportuje niepuste query zawierające `LF`/`CR`, zamiast
+przerywać całą kolejkę. Audyt zamrożonego train v1 znalazł jeden taki rekord
+(`65018::1129729`) i zero w dev; rekord nie jest normalizowany ani używany do
+treningu, a licznik i identyfikator trafiają do `example_weights.json`.
 
 ## Cel
 

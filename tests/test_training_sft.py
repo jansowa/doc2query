@@ -10,7 +10,7 @@ from peft import PeftModel
 from transformers import LlamaConfig, LlamaForCausalLM, TrainingArguments
 
 from doc2query.models.lora import attach_lora, discover_linear_target_modules
-from doc2query.schemas import LoraConfig
+from doc2query.schemas import FocusMode, GenerationConfig, LoraConfig
 from doc2query.training.data import (
     IGNORE_INDEX,
     BalancedBatchSampler,
@@ -162,6 +162,88 @@ def test_dataset_caps_are_deterministic_by_pair_id(tmp_path: Path) -> None:
     assert [item["pair_id"] for item in first.train] == [item["pair_id"] for item in second.train]
     assert len(first.train) == 4
     assert first.fingerprint == second.fingerprint
+
+
+def test_dataset_rejects_and_reports_multiline_completion(tmp_path: Path) -> None:
+    path = tmp_path / "pairs.jsonl"
+    with JsonlWriter(path) as writer:
+        writer.write(
+            {
+                "pair_id": "bad::d0",
+                "passage": "Pasaż z uszkodzonym zapytaniem.",
+                "query": "pierwsza\rlinia",
+                "split": "train",
+            }
+        )
+        writer.write(
+            {
+                "pair_id": "good::d1",
+                "passage": "Pasaż z poprawnym zapytaniem.",
+                "query": "poprawne pytanie",
+                "split": "train",
+            }
+        )
+    prepared = prepare_datasets(
+        path,
+        eval_path=None,
+        train_split="train",
+        eval_split="dev",
+        baseline="b1",
+        strategy="ordinary",
+        weight_min=0.25,
+        weight_max=4.0,
+        seed=42,
+        batch_size=1,
+        max_train_examples=1,
+    )
+    assert [item["pair_id"] for item in prepared.train] == ["good::d1"]
+    assert prepared.weight_report["invalid_completion_train_records"] == 1
+    assert prepared.weight_report["invalid_completion_examples"]["train"] == ["bad::d0"]
+
+
+def test_controlled_sft_uses_focus_prompt_and_drops_uncertain_focus(tmp_path: Path) -> None:
+    path = tmp_path / "controlled.jsonl"
+    with JsonlWriter(path) as writer:
+        writer.write(
+            {
+                "pair_id": "q1::d1",
+                "passage": "Początek. Bilet kosztuje 40 zł.",
+                "query": "Ile kosztuje bilet?",
+                "query_form": "full_question",
+                "query_intent": "fact_lookup",
+                "focus_sentence_id": 1,
+                "focus_bucket": "end",
+                "split": "train",
+            }
+        )
+        writer.write(
+            {
+                "pair_id": "q2::d2",
+                "passage": "Brak pewnego zdania evidence.",
+                "query": "niepewne query",
+                "focus_sentence_id": None,
+                "split": "train",
+            }
+        )
+    prepared = prepare_datasets(
+        path,
+        eval_path=None,
+        train_split="train",
+        eval_split="dev",
+        baseline="b1",
+        strategy="ordinary",
+        weight_min=0.25,
+        weight_max=4.0,
+        seed=42,
+        batch_size=1,
+        generation=GenerationConfig(
+            controlled=True,
+            focus_modes=[FocusMode.MARKED_SENTENCE],
+        ),
+    )
+    assert len(prepared.train) == 1
+    assert "<FOCUS>Bilet kosztuje 40 zł.</FOCUS>" in prepared.train[0]["prompt"]
+    assert prepared.weight_report["focus_ineligible_train_records"] == 1
 
 
 def test_weighted_loss_matches_manual_per_example_calculation() -> None:

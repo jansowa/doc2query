@@ -9,6 +9,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from doc2query.data.focus_labels import assign_focus
+from doc2query.data.style_labels import intent_applicable, label_query
 from doc2query.data.validate import polish_confidence
 from doc2query.utils.records import JsonParquetWriter, read_records, write_json
 from doc2query.utils.tracking import collect_code_provenance
@@ -18,6 +20,7 @@ _SENTENCE = re.compile(r"(?<=[.!?])\s+")
 
 
 def query_style(query: str) -> str:
+    """Legacy combined label retained for existing frozen cache compatibility."""
     lowered = query.lower().strip()
     words = _TOKEN.findall(lowered)
     if lowered.startswith(("jak ", "w jaki sposób")):
@@ -55,6 +58,9 @@ def invert_doc2query_pairs(
         raise ValueError("max_positives_per_query must be positive")
     records = pairs = skipped = 0
     styles: Counter[str] = Counter()
+    forms: Counter[str] = Counter()
+    intents: Counter[str] = Counter()
+    focus_assignments = 0
     fingerprint = hashlib.sha256()
     with JsonParquetWriter(output_path) as writer:
         for record in read_records(input_path):
@@ -73,7 +79,12 @@ def invert_doc2query_pairs(
                 query = str(record["query"])
                 passage = str(positive["text"])
                 style = query_style(query)
+                labels = label_query(query)
+                focus = assign_focus(query, passage)
                 styles[style] += 1
+                forms[labels.form.value] += 1
+                intents[labels.intent.value] += 1
+                focus_assignments += focus.sentence_id is not None
                 pair = {
                     "pair_id": f"{record['example_id']}::{positive['doc_id']}",
                     "example_id": str(record["example_id"]),
@@ -81,8 +92,18 @@ def invert_doc2query_pairs(
                     "passage": passage,
                     "query": query,
                     "query_style": style,
-                    "focus_sentence_id": None,
-                    "focus_bucket": None,
+                    "query_form": labels.form.value,
+                    "query_intent": labels.intent.value,
+                    "form_confidence": labels.form_confidence,
+                    "intent_confidence": labels.intent_confidence,
+                    "intent_applicable": intent_applicable(labels.intent, passage),
+                    "focus_sentence_id": focus.sentence_id,
+                    "focus_bucket": focus.bucket,
+                    "evidence_sentence_ids": (
+                        [focus.sentence_id] if focus.sentence_id is not None else []
+                    ),
+                    "evidence_type": ("single_sentence" if focus.sentence_id is not None else None),
+                    "evidence_confidence": focus.confidence,
                     "content_lemma_overlap": lexical_overlap(query, passage),
                     "negative_doc_ids": negative_ids,
                     "positive_count": positive_count,
@@ -114,6 +135,10 @@ def invert_doc2query_pairs(
         "skipped_positives_due_to_cap": skipped,
         "max_positives_per_query": max_positives_per_query,
         "style_distribution": dict(styles),
+        "form_distribution": dict(forms),
+        "intent_distribution": dict(intents),
+        "focus_assignment_rate": focus_assignments / pairs if pairs else 0.0,
+        "taxonomy_version": "form-intent-rules-pl-v1",
         "fingerprint": fingerprint.hexdigest(),
         "output_path": str(output_path),
         "code": collect_code_provenance(),

@@ -7,6 +7,7 @@ import re
 import unicodedata
 from typing import Any
 
+from doc2query.generation.multiquery import parse_multiquery_json
 from doc2query.text.normalization import POLISH_STOPWORDS, SimplePolishNormalizer
 
 _PREFIX = re.compile(
@@ -35,16 +36,21 @@ def format_metrics(text: str, *, multi_query_json: bool = False) -> dict[str, An
     parsed: Any = None
     json_valid: bool | None = None
     if multi_query_json:
-        try:
-            parsed = json.loads(stripped)
-            json_valid = isinstance(parsed, list) and all(
-                isinstance(value, str) and value.strip() for value in parsed
-            )
-        except (json.JSONDecodeError, TypeError):
-            json_valid = False
+        result = parse_multiquery_json(stripped, allow_minor_repair=False)
+        parsed = result.completion
+        json_valid = result.valid
+        if not json_valid:
+            try:
+                legacy = json.loads(stripped)
+                json_valid = isinstance(legacy, list) and all(
+                    isinstance(value, str) and value.strip() for value in legacy
+                )
+                parsed = legacy if json_valid else None
+            except (json.JSONDecodeError, TypeError):
+                pass
     multiple = bool(_LIST.search(stripped) or stripped.count("\n") > 0)
-    if isinstance(parsed, list):
-        multiple = len(parsed) != 1
+    if parsed is not None:
+        multiple = False
     return {
         "empty": not stripped,
         "multiple_query": multiple,
@@ -57,7 +63,7 @@ def format_metrics(text: str, *, multi_query_json: bool = False) -> dict[str, An
         "json_valid": json_valid,
         "format_valid": bool(
             stripped
-            and not multiple
+            and (multi_query_json or not multiple)
             and not _PREFIX.search(stripped)
             and not _META.search(stripped)
             and not _invalid_character_count(stripped)

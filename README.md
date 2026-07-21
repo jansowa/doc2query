@@ -77,9 +77,11 @@ uv run doc2query evaluate generator --config configs/base.yaml
 uv run doc2query evaluate embedder --config configs/base.yaml
 ```
 
-Komendy `data validate` i `train sft` są zaimplementowane dla lokalnych
-artefaktów. Procedurę SFT/QLoRA, memory probe i resume opisuje
-[dokumentacja Task 03](docs/task03_sft_qlora.md). Komendy późniejszych etapów
+Komendy `data validate`, `train sft` i kontrolowane `generate` są
+zaimplementowane dla lokalnych artefaktów; `generate --adapter` obsługuje
+adapter PEFT i zapisuje bounded-retry/duplicate/invalid counters. Procedurę
+SFT/QLoRA, memory probe i resume opisuje
+[dokumentacja Task 03](docs/task03_sft_qlora.md). Komendy pozostałych etapów
 zachowują stabilne sygnatury, ale kończą się jasnym komunikatem, dopóki
 odpowiedni task nie dostarczy implementacji. Komenda `train reranker` pozostaje
 kompatybilnościowym stubem, który waliduje config,

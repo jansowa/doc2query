@@ -39,6 +39,10 @@ from doc2query.evaluation.retrieval import (
     aggregate_query_metrics,
     corpus_metrics_from_positive_ranks,
 )
+from doc2query.evaluation.statistical_contract import (
+    StatisticalContract,
+    build_budget_manifest,
+)
 from doc2query.evaluation.translationese import aggregate_translationese
 from doc2query.reranker.base import PairScorer
 from doc2query.utils.records import JsonlWriter, read_records, write_json
@@ -327,6 +331,7 @@ def prepare_probe_pairs(
         row = {
             "example_id": example_id,
             "query": query,
+            "positive_doc_id": str(positives[0]["doc_id"]),
             "positive": passage,
             "negative": selection.paired.text if selection.paired is not None else "",
             "negative_doc_id": (selection.paired.doc_id if selection.paired is not None else ""),
@@ -395,6 +400,7 @@ def train_probe(
     negative_contract: Mapping[str, Any],
     false_negative_report: Mapping[str, Any],
     negative_audit_rows: Sequence[dict[str, Any]],
+    statistical_contract: StatisticalContract,
 ) -> dict[str, Any]:
     if not rows:
         raise ValueError("probe training set is empty")
@@ -465,6 +471,24 @@ def train_probe(
     adapter_dir = output_dir / "model"
     model.backbone.save_pretrained(adapter_dir, safe_serialization=True)
     tokenizer.save_pretrained(adapter_dir)
+    passage_counts: dict[str, int] = {}
+    for row in rows:
+        passage_id = str(row["positive_doc_id"])
+        passage_counts[passage_id] = passage_counts.get(passage_id, 0) + 1
+    observed_k = set(passage_counts.values())
+    if len(observed_k) != 1:
+        raise ValueError("P-04 comparison budget requires a uniform K queries per passage")
+    comparison_budget = build_budget_manifest(
+        token_count=(
+            recipe.max_steps
+            * recipe.batch_size
+            * recipe.max_length
+            * (2 + recipe.negatives_per_example)
+        ),
+        pair_count=len(rows),
+        unique_passage_count=len(passage_counts),
+        queries_per_passage=observed_k.pop(),
+    )
     summary = {
         "schema_version": 1,
         "status": "measured",
@@ -473,6 +497,8 @@ def train_probe(
         "recipe_fingerprint": recipe.fingerprint,
         "recipe_version": recipe.recipe_version,
         "negative_contract": dict(negative_contract),
+        "statistical_contract": statistical_contract.reference(),
+        "comparison_budget": comparison_budget,
         "possible_false_negative_report": dict(false_negative_report),
         "train_fingerprint": train_fingerprint,
         "train_examples": len(rows),
@@ -540,6 +566,8 @@ def evaluate_probe(
     dataset_name: str = "test_translated_msmarco_pl",
     profile: str = "full",
     negative_contract: Mapping[str, Any],
+    statistical_contract: Mapping[str, Any],
+    comparison_budget: Mapping[str, Any],
 ) -> dict[str, Any]:
     from transformers import AutoTokenizer
 
@@ -632,6 +660,8 @@ def evaluate_probe(
         "recipe_fingerprint": recipe.fingerprint,
         "recipe_version": recipe.recipe_version,
         "negative_contract": dict(negative_contract),
+        "statistical_contract": dict(statistical_contract),
+        "comparison_budget": dict(comparison_budget),
         "query_count": len(per_query),
         "metrics": aggregate,
         "metric_candidate_count": {metric: len(corpus_ids) for metric in aggregate},
@@ -677,6 +707,7 @@ def run_probe_experiment(
     output_dir: Path,
     recipe: ProbeRecipe,
     query_source: QuerySource,
+    statistical_contract: StatisticalContract,
     synthetic_generations: Path | None = None,
     train_limit: int | None = None,
     documents_path: Path,
@@ -713,6 +744,7 @@ def run_probe_experiment(
         negative_contract=negative_contract,
         false_negative_report=false_negative_report,
         negative_audit_rows=negative_audit_rows,
+        statistical_contract=statistical_contract,
     )
     if (
         holdout_manifest is not None
@@ -754,6 +786,8 @@ def run_probe_experiment(
         dataset_name="test_translated_msmarco_pl",
         profile=translated_profile,
         negative_contract=negative_contract,
+        statistical_contract=train_summary["statistical_contract"],
+        comparison_budget=train_summary["comparison_budget"],
     )
     native: dict[str, Any]
     if holdout_manifest is None:
@@ -812,6 +846,8 @@ def run_probe_experiment(
                 dataset_name="test_native_pl",
                 profile=holdout_profile,
                 negative_contract=negative_contract,
+                statistical_contract=train_summary["statistical_contract"],
+                comparison_budget=train_summary["comparison_budget"],
             )
     report_status = "complete" if native.get("status") == "measured" else "incomplete"
     comparison_eligible = (
@@ -830,6 +866,8 @@ def run_probe_experiment(
         "recipe_version": recipe.recipe_version,
         "recipe_fingerprint": recipe.fingerprint,
         "negative_contract": negative_contract,
+        "statistical_contract": train_summary["statistical_contract"],
+        "comparison_budget": train_summary["comparison_budget"],
         "possible_false_negative_report": false_negative_report,
         "evaluation_sets": {
             "test_native_pl": native,

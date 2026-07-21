@@ -1,15 +1,101 @@
 """Validated configuration contracts shared by public commands."""
 
+from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class StrictModel(BaseModel):
     """Base model rejecting misspelled or unsupported fields."""
 
     model_config = ConfigDict(extra="forbid")
+
+
+class QueryForm(StrEnum):
+    FULL_QUESTION = "full_question"
+    KEYWORD_QUERY = "keyword_query"
+    UNKNOWN = "unknown"
+
+
+class QueryIntent(StrEnum):
+    FACT_LOOKUP = "fact_lookup"
+    DEFINITION = "definition"
+    ENTITY_LOOKUP = "entity_lookup"
+    PROCEDURE = "procedure"
+    COMPARISON = "comparison"
+    UNKNOWN = "unknown"
+
+
+class FocusMode(StrEnum):
+    NONE = "none"
+    BUCKET = "bucket"
+    MARKED_SENTENCE = "marked_sentence"
+    SENTENCE_ID = "sentence_id"
+
+
+class EvidenceType(StrEnum):
+    SINGLE_SENTENCE = "single_sentence"
+    MULTI_SENTENCE = "multi_sentence"
+    SECTION = "section"
+    GLOBAL = "global"
+
+
+class EvidenceAnnotation(StrictModel):
+    """Optional, forward-compatible evidence set; sentence IDs are zero-based."""
+
+    evidence_sentence_ids: list[int] = Field(default_factory=list)
+    evidence_type: EvidenceType | None = None
+    evidence_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+    @field_validator("evidence_sentence_ids")
+    @classmethod
+    def ids_are_unique_and_sorted(cls, value: list[int]) -> list[int]:
+        if any(item < 0 for item in value):
+            raise ValueError("evidence sentence IDs cannot be negative")
+        if value != sorted(set(value)):
+            raise ValueError("evidence sentence IDs must be unique and sorted")
+        return value
+
+
+class QueryControl(StrictModel):
+    form: QueryForm = QueryForm.UNKNOWN
+    intent: QueryIntent = QueryIntent.UNKNOWN
+    intent_applicable: bool | None = None
+    focus_mode: FocusMode = FocusMode.NONE
+    focus_bucket: Literal["beginning", "middle", "end"] | None = None
+    focus_sentence_id: int | None = Field(default=None, ge=0)
+    length: Literal["short", "medium"] = "medium"
+
+    @model_validator(mode="after")
+    def focus_fields_match_mode(self) -> "QueryControl":
+        if self.focus_mode == FocusMode.BUCKET and self.focus_bucket is None:
+            raise ValueError("bucket focus requires focus_bucket")
+        if self.focus_mode in {FocusMode.MARKED_SENTENCE, FocusMode.SENTENCE_ID} and (
+            self.focus_sentence_id is None
+        ):
+            raise ValueError("sentence focus requires focus_sentence_id")
+        return self
+
+
+class MultiQueryItem(StrictModel):
+    text: str = Field(min_length=1)
+    form: QueryForm
+    intent: QueryIntent = QueryIntent.UNKNOWN
+    focus_sentence_id: int | None = Field(default=None, ge=0)
+
+    @field_validator("text")
+    @classmethod
+    def single_line_query(cls, value: str) -> str:
+        normalized = " ".join(value.strip().split())
+        if not normalized or "\n" in value or "\r" in value:
+            raise ValueError("query must be a non-empty single line")
+        return normalized
+
+
+class MultiQueryCompletion(StrictModel):
+    queries: list[MultiQueryItem] = Field(min_length=1, max_length=64)
 
 
 class RunConfig(StrictModel):
@@ -141,11 +227,19 @@ class GenerationConfig(StrictModel):
     do_sample: bool = False
     temperature: float = Field(default=0.8, gt=0.0, le=5.0)
     top_p: float = Field(default=0.95, gt=0.0, le=1.0)
+    controlled: bool = False
+    target_query_count: int = Field(default=1, ge=1, le=64)
+    forms: list[QueryForm] = Field(default_factory=lambda: [QueryForm.UNKNOWN])
+    intents: list[QueryIntent] = Field(default_factory=lambda: [QueryIntent.UNKNOWN])
+    focus_modes: list[FocusMode] = Field(default_factory=lambda: [FocusMode.NONE])
+    max_attempts_per_query: int = Field(default=3, ge=1, le=20)
 
     @model_validator(mode="after")
     def greedy_has_single_output(self) -> "GenerationConfig":
         if not self.do_sample and self.num_return_sequences != 1:
             raise ValueError("greedy generation supports exactly one return sequence")
+        if not self.forms or not self.intents or not self.focus_modes:
+            raise ValueError("controlled generation axes cannot be empty")
         return self
 
 
