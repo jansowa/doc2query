@@ -442,6 +442,25 @@ def train_probe(
 ) -> dict[str, Any]:
     if not rows:
         raise ValueError("probe training set is empty")
+    resumed_summary = _resumable_train_summary(
+        output_dir,
+        rows=rows,
+        recipe=recipe,
+        query_source=query_source,
+        train_fingerprint=train_fingerprint,
+        negative_contract=negative_contract,
+        false_negative_report=false_negative_report,
+        statistical_contract=statistical_contract,
+    )
+    if resumed_summary is not None:
+        if _progress_enabled():
+            print(
+                f"[resume] training already complete: {output_dir / 'model'}; "
+                "continuing with evaluation",
+                file=sys.stderr,
+                flush=True,
+            )
+        return resumed_summary
     if output_dir.exists() and any(output_dir.iterdir()):
         raise FileExistsError(f"probe output is not empty: {output_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -558,6 +577,47 @@ def train_probe(
             writer.write(row)
     write_json(output_dir / "train_summary.json", summary)
     return summary
+
+
+def _resumable_train_summary(
+    output_dir: Path,
+    *,
+    rows: Sequence[dict[str, Any]],
+    recipe: ProbeRecipe,
+    query_source: QuerySource,
+    train_fingerprint: str,
+    negative_contract: Mapping[str, Any],
+    false_negative_report: Mapping[str, Any],
+    statistical_contract: StatisticalContract,
+) -> dict[str, Any] | None:
+    """Reuse a completed, identity-checked training stage after an interrupted evaluation."""
+    summary_path = output_dir / "train_summary.json"
+    model_path = output_dir / "model"
+    if not summary_path.is_file() or not model_path.is_dir() or not any(model_path.iterdir()):
+        return None
+    raw = json.loads(summary_path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError("probe resume train_summary.json must contain a JSON object")
+    expected = {
+        "schema_version": 1,
+        "status": "measured",
+        "query_source": query_source,
+        "recipe": asdict(recipe),
+        "recipe_fingerprint": recipe.fingerprint,
+        "recipe_version": recipe.recipe_version,
+        "negative_contract": dict(negative_contract),
+        "statistical_contract": statistical_contract.reference(),
+        "possible_false_negative_report": dict(false_negative_report),
+        "train_fingerprint": train_fingerprint,
+        "train_examples": len(rows),
+        "steps": recipe.max_steps,
+    }
+    mismatches = [key for key, value in expected.items() if raw.get(key) != value]
+    if mismatches:
+        raise ValueError(
+            "probe resume identity mismatch in train_summary.json: " + ", ".join(mismatches)
+        )
+    return raw
 
 
 def _encode(

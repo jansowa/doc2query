@@ -7,7 +7,8 @@ cd "$ROOT"
 PYTHON=${DOC2QUERY_PYTHON:-$ROOT/.venv-gpu/bin/python}
 LOG_DIR=$ROOT/logs/task04_p05_dev_screen
 RUN_ROOT=$ROOT/runs/task04_p05_dev_screen/dev_screen
-mkdir -p "$LOG_DIR" "$RUN_ROOT"
+INTERRUPTED_ROOT=$ROOT/runs/task04_p05_dev_screen/interrupted
+mkdir -p "$LOG_DIR" "$RUN_ROOT" "$INTERRUPTED_ROOT"
 
 export HF_HOME=$ROOT/.cache/huggingface
 export HF_HUB_OFFLINE=1
@@ -55,12 +56,26 @@ run_probe() {
   local output=$RUN_ROOT/${arm}-S42
   local log=$LOG_DIR/${arm}-S42.log
   if [[ -f $output/result.json ]]; then
+    "$PYTHON" -c 'import json, sys
+from pathlib import Path
+p=json.loads(Path(sys.argv[1]).read_text())
+if p.get("training", {}).get("status") != "measured":
+    raise SystemExit("completed probe result has no measured training stage")' "$output/result.json"
     printf '[skip] %s already complete: %s\n' "$arm" "$output/result.json"
     return 0
   fi
   if [[ -d $output ]] && find "$output" -mindepth 1 -print -quit | grep -q .; then
-    printf '[blocked] incomplete non-empty output requires inspection: %s\n' "$output" >&2
-    return 2
+    if [[ -f $output/train_summary.json && -d $output/model ]] \
+      && find "$output/model" -mindepth 1 -print -quit | grep -q .; then
+      printf '[resume] %s training is complete; restarting only its evaluation stage.\n' "$arm"
+    else
+      local stamp archive
+      stamp=$(date +%Y%m%dT%H%M%S)-$$
+      archive=$INTERRUPTED_ROOT/${arm}-S42-$stamp
+      mv "$output" "$archive"
+      printf '[restart] %s had no complete training checkpoint.\n' "$arm"
+      printf '[archive] partial output preserved at %s\n' "$archive"
+    fi
   fi
   printf '[start] %s %s\n' "$arm" "$(date --iso-8601=seconds)"
   "$PYTHON" scripts/train_probe_embedder.py \
@@ -75,7 +90,7 @@ run_probe() {
     --train-prefix-limit 2486 \
     --primary-judge-config configs/reranker/primary_polish_roberta_v3_p03_gpu.yaml \
     --output-dir "$output" \
-    "$@" 2>&1 | tee "$log"
+    "$@" 2>&1 | tee -a "$log"
   printf '[done] %s %s\n' "$arm" "$(date --iso-8601=seconds)"
 }
 

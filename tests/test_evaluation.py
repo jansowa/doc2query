@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +26,7 @@ from doc2query.evaluation.datasets import (
     verify_frozen_manifest,
 )
 from doc2query.evaluation.diversity import diversity_metrics
-from doc2query.evaluation.embedder_probe import prepare_probe_pairs
+from doc2query.evaluation.embedder_probe import ProbeRecipe, prepare_probe_pairs, train_probe
 from doc2query.evaluation.format import format_metrics
 from doc2query.evaluation.human import cohen_kappa, fleiss_kappa
 from doc2query.evaluation.intrinsic import evaluate_intrinsic_records
@@ -38,6 +39,7 @@ from doc2query.evaluation.retrieval import (
     validate_recall_cutoffs,
 )
 from doc2query.evaluation.slices import aggregate_slices
+from doc2query.evaluation.statistical_contract import StatisticalContract
 from doc2query.utils.records import JsonlWriter
 
 
@@ -233,6 +235,100 @@ def test_probe_controls_keep_sampling_identical(tmp_path: Path) -> None:
     assert len(synthetic) == 1
     assert synthetic[0]["positive"] == natural[0]["positive"]
     assert synthetic[0]["negative"] == natural[0]["negative"]
+
+
+def _completed_probe_training(
+    tmp_path: Path,
+) -> tuple[
+    Path,
+    list[dict[str, Any]],
+    ProbeRecipe,
+    StatisticalContract,
+    dict[str, Any],
+    dict[str, Any],
+]:
+    output = tmp_path / "probe"
+    model = output / "model"
+    model.mkdir(parents=True)
+    (model / "model.safetensors").write_bytes(b"fixture")
+    recipe = ProbeRecipe(
+        model_name_or_path="fixture/encoder",
+        revision="a" * 40,
+        recipe_version="probe-fixture-v1",
+        negative_recipe=NegativeRecipe(version=NEGATIVE_RECIPE_VERSION, strategy="hn0"),
+        max_steps=2,
+    )
+    contract = StatisticalContract(
+        payload={
+            "contract_version": "fixture-v1",
+            "adr": {
+                "id": "ADR-fixture",
+                "version": "v1",
+                "path": "reports/adr/fixture.md",
+                "sha256": "b" * 64,
+            },
+        },
+        fingerprint="c" * 64,
+    )
+    rows = [{"positive_doc_id": "d-1"}]
+    negative_contract = {"hard_negative_strategy": "hn0"}
+    false_negative_report = {"status": "not_applicable"}
+    summary = {
+        "schema_version": 1,
+        "status": "measured",
+        "query_source": "natural",
+        "recipe": asdict(recipe),
+        "recipe_fingerprint": recipe.fingerprint,
+        "recipe_version": recipe.recipe_version,
+        "negative_contract": negative_contract,
+        "statistical_contract": contract.reference(),
+        "possible_false_negative_report": false_negative_report,
+        "train_fingerprint": "d" * 64,
+        "train_examples": 1,
+        "steps": recipe.max_steps,
+    }
+    (output / "train_summary.json").write_text(json.dumps(summary), encoding="utf-8")
+    return output, rows, recipe, contract, negative_contract, false_negative_report
+
+
+def test_probe_resumes_completed_training_without_loading_model(tmp_path: Path) -> None:
+    output, rows, recipe, contract, negative_contract, false_negative_report = (
+        _completed_probe_training(tmp_path)
+    )
+    summary = train_probe(
+        rows,
+        recipe=recipe,
+        output_dir=output,
+        query_source="natural",
+        train_fingerprint="d" * 64,
+        negative_contract=negative_contract,
+        false_negative_report=false_negative_report,
+        negative_audit_rows=[],
+        statistical_contract=contract,
+    )
+    assert summary["recipe_fingerprint"] == recipe.fingerprint
+
+
+def test_probe_resume_rejects_recipe_identity_mismatch(tmp_path: Path) -> None:
+    output, rows, recipe, contract, negative_contract, false_negative_report = (
+        _completed_probe_training(tmp_path)
+    )
+    summary_path = output / "train_summary.json"
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    summary["recipe_fingerprint"] = "0" * 64
+    summary_path.write_text(json.dumps(summary), encoding="utf-8")
+    with pytest.raises(ValueError, match="recipe_fingerprint"):
+        train_probe(
+            rows,
+            recipe=recipe,
+            output_dir=output,
+            query_source="natural",
+            train_fingerprint="d" * 64,
+            negative_contract=negative_contract,
+            false_negative_report=false_negative_report,
+            negative_audit_rows=[],
+            statistical_contract=contract,
+        )
 
 
 def test_ranking_requires_probe_metric() -> None:

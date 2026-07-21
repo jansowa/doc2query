@@ -41,9 +41,14 @@ result. A later attempt was deliberately interrupted after CUDA reported a
 missing deterministic cuBLAS workspace setting; it is not a measurement.
 `scripts/run_p05_dev_screen.sh` now pins `CUBLAS_WORKSPACE_CONFIG=:4096:8`,
 shows progress for filtering, training, corpus encoding and query evaluation,
-and runs only the three seed-42 25% screens. No materialization-time result,
-probe measurement, promotion, or generator selection is claimed yet. S00 and
-S07 remain `required_unexecuted`.
+and runs only the three seed-42 25% screens. It is safe to invoke again after
+an interruption: validated completed arms are skipped, a completed training
+stage is identity-checked and reused while evaluation restarts, and output
+interrupted before a complete training summary is moved recoverably under
+`runs/task04_p05_dev_screen/interrupted/` before only that arm is restarted.
+Logs are appended across invocations. No materialization-time result, probe
+measurement, promotion, or generator selection is claimed yet. S00 and S07
+remain `required_unexecuted`.
 
 The older tentative 9,968-pair budget and the intermediate 9,960-pair
 eligibility budget are not comparison-authoritative. Only

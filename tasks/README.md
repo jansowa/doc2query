@@ -37,7 +37,7 @@ uruchomiono.
 | [01](01_data_contract_audit_and_splits.md) | Kontrakt danych, audyt, deduplikacja i splity | `IMPLEMENTED` | Pełny `msmarco_pl` przetworzono do zamrożonych splitów v1 i par doc2query bez leakage pozytywów. Dla rekordów z <10 negatywami przyjęto corpus retrieval oraz oznaczone, deterministyczne backfillowanie tylko w diagnostycznej puli. Pozostał raport tokenowych percentyli/HTML. |
 | [02](02_reranker_and_reward_proxies.md) | Zamrożone rerankery i proxy nagrody | `IMPLEMENTED` | Integracja, reward proxies i testy są gotowe; primary zmierzył pełny frozen dev, a query-macro próg Youdena `possible_false_negative` jest przypięty bez użycia testu. Pozostał pełny benchmark primary/shadow na dev/test z hard negative'ami. |
 | [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | Ukończono siedem ramion base oraz I01/I03 Instruct/10k; I03: eval loss `1.2006736994`, 7541 s, 1.326 przykładu/s, peak allocated/reserved 1.575/2.117 GiB i panel 100/100 valid. To techniczne sygnały bez retrieval/probe i bez wyboru finalisty. I02/I04/I05 pozostają `DEFERRED`, S00/S07 `required_unexecuted`; testy finalne są nieotwarte. |
-| [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IMPLEMENTED` | P-01–P-04 są gotowe, a P-03 przypina HN0+filter/drop. GPU eligibility i materializacja dały trzy identyczne kohorty po 9944 unikalne pary/dokumenty (K=1), mix 50/50 w prefiksie 25% i pełnym, fingerprint `d89b799a…df67b5c`; planner `dev_intrinsic_rank10` przechodzi bez blockerów. Nie ma ukończonego probe ani wyniku `dev_screen`; gotowy runner pokazuje postęp i uruchamia wyłącznie trzy runy seed 42 z deterministycznym cuBLAS. Testy finalne są nieotwarte. |
+| [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IMPLEMENTED` | P-01–P-04 są gotowe, a P-03 przypina HN0+filter/drop. GPU eligibility i materializacja dały trzy identyczne kohorty po 9944 unikalne pary/dokumenty (K=1), mix 50/50 w prefiksie 25% i pełnym, fingerprint `d89b799a…df67b5c`; planner `dev_intrinsic_rank10` przechodzi bez blockerów. Nie ma ukończonego probe ani wyniku `dev_screen`; runner pokazuje postęp, bezpiecznie wznawia ramiona po przerwaniu i uruchamia wyłącznie trzy runy seed 42 z deterministycznym cuBLAS. Testy finalne są nieotwarte. |
 | [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `IMPLEMENTED` | Gotowe są kontrakty i kod CPU: `form`/`intent`, evidence i F0–F3, controlled SFT/inference, retry/deduplikacja, multi-query JSON, concept coverage oraz top-N/MMR/coverage-aware. D00–D12, audyty 500/200, kalibracja per domena, human check i probe z CI pozostają niewykonane; mogą ruszyć dopiero po bieżącej kolejce i pierwszych probe zgodnych z P-04. |
 | [06](06_candidate_scoring_and_preference_data.md) | Scoring kandydatów i dane preferencyjne | `TODO` | Wymaga stabilnego checkpointu SFT, ukończonego Harness v1.1 oraz Task 02 i 05. |
 | [07](07_dpo_training.md) | DPO i continued-SFT control | `TODO` | Wymaga danych preferencyjnych z Task 06. |
@@ -72,6 +72,9 @@ backlogiem. Zakres P-xx został przeniesiony do wskazanych plików zadań.
 Najbliższy jednoznaczny punkt wejścia to samodzielne uruchomienie
 `scripts/run_p05_dev_screen.sh`. Runner ponownie waliduje planner, wykonuje
 tylko trzy probe seed 42 z prefiksem `dev_screen` 25% i pokazuje postęp.
+Ponowne wywołanie pomija gotowe ramiona; po ukończonym treningu wznawia
+ewaluację z zapisanego modelu, a wcześniejszy niepełny trening zachowuje w
+`runs/task04_p05_dev_screen/interrupted/` i ponawia tylko bieżące ramię.
 Po zakończeniu należy porównać wyniki według P-04; `dev_confirm` nie otwiera
 się automatycznie. I02/I04/I05 pozostają odroczone, S00/S07 wymagane i
 niewykonane, a D00–D12, Task 06 i wszystkie testy finalne pozostają poza
