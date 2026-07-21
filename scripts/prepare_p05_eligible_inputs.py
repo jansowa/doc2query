@@ -6,6 +6,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
+import time
+from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -39,6 +42,26 @@ def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
             writer.write(row)
 
 
+def _progress(stage: str) -> Callable[[int, int], None]:
+    started = time.monotonic()
+    last_completed = -1
+
+    def report(completed: int, total: int) -> None:
+        nonlocal last_completed
+        if completed == last_completed:
+            return
+        last_completed = completed
+        percent = 100.0 * completed / max(1, total)
+        elapsed = time.monotonic() - started
+        print(
+            f"[{stage}] {completed:,}/{total:,} examples ({percent:5.1f}%) elapsed={elapsed:.1f}s",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    return report
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--train-input", type=Path, required=True)
@@ -53,6 +76,8 @@ def main() -> int:
     parser.add_argument("--budget-output", type=Path, required=True)
     parser.add_argument("--audit-output", type=Path, required=True)
     args = parser.parse_args()
+
+    print("[preflight] loading pinned recipe and calibration", file=sys.stderr, flush=True)
 
     recipe_raw = yaml.safe_load(args.probe_recipe.read_text(encoding="utf-8"))
     judge_raw = yaml.safe_load(args.primary_judge_config.read_text(encoding="utf-8"))
@@ -113,14 +138,28 @@ def main() -> int:
         raise ValueError("P-03 common cohort is not fully present in W05 generations")
 
     ordered_natural = [natural_by_id[example_id] for example_id in ordered_ids]
+    print(
+        f"[preflight] loaded {len(ordered_natural):,} common examples; "
+        f"loading frozen judge on {judge.device}",
+        file=sys.stderr,
+        flush=True,
+    )
     scorer = load_frozen_reranker(judge)
+    print("[natural] scoring inherited hard negatives", file=sys.stderr, flush=True)
     natural_pairs, _, natural_report, _ = prepare_probe_pairs(
         ordered_natural,
         query_source="natural",
         negative_recipe=recipe.negative_recipe,
         calibration=calibration,
         primary_scorer=scorer,
+        progress=_progress("natural"),
     )
+    print(
+        f"[natural] eligible={len(natural_pairs):,}; phase complete",
+        file=sys.stderr,
+        flush=True,
+    )
+    print("[synthetic_w05] scoring inherited hard negatives", file=sys.stderr, flush=True)
     synthetic_pairs, _, synthetic_report, _ = prepare_probe_pairs(
         ordered_natural,
         query_source="synthetic",
@@ -129,6 +168,12 @@ def main() -> int:
         primary_scorer=scorer,
         synthetic_generations=args.w05_generations,
         generator_id=W05_GENERATOR_ID,
+        progress=_progress("synthetic_w05"),
+    )
+    print(
+        f"[synthetic_w05] eligible={len(synthetic_pairs):,}; phase complete",
+        file=sys.stderr,
+        flush=True,
     )
     eligible = {str(row["example_id"]) for row in natural_pairs} & {
         str(row["example_id"]) for row in synthetic_pairs
@@ -214,6 +259,11 @@ def main() -> int:
         "final_tests_used": [],
     }
     write_json(args.audit_output, audit)
+    print(
+        f"[done] common eligible budget={budget_count:,}; audit={args.audit_output}",
+        file=sys.stderr,
+        flush=True,
+    )
     print(json.dumps(audit, ensure_ascii=False, sort_keys=True))
     return 0
 
