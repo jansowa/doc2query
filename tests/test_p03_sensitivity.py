@@ -219,12 +219,15 @@ def test_completed_dev_evaluation_is_reused_only_when_contract_matches(tmp_path:
     with JsonlWriter(tmp_path / "dev_per_query.jsonl") as writer:
         writer.write({"example_id": "dev-1"})
         writer.write({"example_id": "dev-2"})
-    assert load_completed_dev_evaluation(
-        tmp_path,
-        records,
-        dev_fingerprint="d" * 64,
-        contract=contract,
-    ) == summary
+    assert (
+        load_completed_dev_evaluation(
+            tmp_path,
+            records,
+            dev_fingerprint="d" * 64,
+            contract=contract,
+        )
+        == summary
+    )
     summary["test_fingerprint"] = "x" * 64
     (tmp_path / "dev_summary.json").write_text(json.dumps(summary), encoding="utf-8")
     with pytest.raises(ValueError, match="test_fingerprint"):

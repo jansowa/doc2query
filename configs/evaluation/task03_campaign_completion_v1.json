@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "contract_id": "task03-campaign-completion-v1",
+  "decision_path": "docs/decisions/task03_instruct_campaign_early_stop_2026-07-21.md",
+  "decision_sha256": "3087c2740ec03c611b335392d3e7d5f26a4e946d37cc248cfa1c0e2e9bcfc023",
+  "required_arms": ["B01", "B02", "B03", "B04", "B05", "B06", "B07", "I01", "I03"],
+  "deferred_arms": ["I02", "I04", "I05"],
+  "final_tests_used": []
+}

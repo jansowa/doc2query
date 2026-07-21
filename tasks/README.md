@@ -36,8 +36,8 @@ uruchomiono.
 | [00](00_repository_bootstrap.md) | Bootstrap repozytorium i odtwarzalność | `DONE` | Szkielet projektu, środowisko, CLI, testy i rejestrowanie są gotowe. |
 | [01](01_data_contract_audit_and_splits.md) | Kontrakt danych, audyt, deduplikacja i splity | `IMPLEMENTED` | Pełny `msmarco_pl` przetworzono do zamrożonych splitów v1 i par doc2query bez leakage pozytywów. Dla rekordów z <10 negatywami przyjęto corpus retrieval oraz oznaczone, deterministyczne backfillowanie tylko w diagnostycznej puli. Pozostał raport tokenowych percentyli/HTML. |
 | [02](02_reranker_and_reward_proxies.md) | Zamrożone rerankery i proxy nagrody | `IMPLEMENTED` | Integracja, reward proxies i testy są gotowe; primary zmierzył pełny frozen dev, a query-macro próg Youdena `possible_false_negative` jest przypięty bez użycia testu. Pozostał pełny benchmark primary/shadow na dev/test z hard negative'ami. |
-| [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | Ukończono siedem technicznych ramion base oraz I01 Instruct/10k; I03 zakończył się po przyjęciu ADR early-stop, a I02/I04/I05 pozostają `DEFERRED`. Gotowe CPU-only tooling/preflight obejmuje audyt zakończenia, deterministyczny materializator wspólnej kohorty gold/W05/mix 50/50 i planner weryfikujący SHA-256. S00/S07 i porównawcze probe pozostają niewykonane; loss nie wybiera finalisty. |
-| [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IMPLEMENTED` | P-01–P-04 i testy CPU są gotowe. P-03 zakończył się `statistically_separated`; ADR wybiera HN0+filter/drop dla pierwszych probe i odrzuca HN1 w tym zakresie. Dev-only P-04 engine i materializator P-05 sprawdzają fingerprinty, wspólną kohortę, czterowymiarowy budżet i dokładne prefiksy 50/50; planner blokuje komendy przy braku lub driftcie manifestu. Rzeczywista materializacja, P-05/P-06, porównawcze probe, shadow judge, human eval i pełne indeksy pozostają niewykonane; Task nie jest `DONE`, a testy finalne są nieotwarte. |
+| [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | Ukończono siedem ramion base oraz I01/I03 Instruct/10k; I03: eval loss `1.2006736994`, 7541 s, 1.326 przykładu/s, peak allocated/reserved 1.575/2.117 GiB i panel 100/100 valid. To techniczne sygnały bez retrieval/probe i bez wyboru finalisty. I02/I04/I05 pozostają `DEFERRED`, S00/S07 `required_unexecuted`; testy finalne są nieotwarte. |
+| [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IMPLEMENTED` | P-01–P-04 są gotowe, a P-03 przypina HN0+filter/drop. Audyt kampanii przeszedł; plan-only P-05 zwrócił zero komend z powodu braku materializacji. Materializator wymaga teraz wspólnego, przeliczonego hasha post-filter ID dla natural/W05; CPU eligibility scoring trwał przy aktualizacji. Nie wykonano materializacji, probe ani `dev_screen`; P-05/P-06, shadow judge, human eval i pełne indeksy pozostają niewykonane. |
 | [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `IMPLEMENTED` | Gotowe są kontrakty i kod CPU: `form`/`intent`, evidence i F0–F3, controlled SFT/inference, retry/deduplikacja, multi-query JSON, concept coverage oraz top-N/MMR/coverage-aware. D00–D12, audyty 500/200, kalibracja per domena, human check i probe z CI pozostają niewykonane; mogą ruszyć dopiero po bieżącej kolejce i pierwszych probe zgodnych z P-04. |
 | [06](06_candidate_scoring_and_preference_data.md) | Scoring kandydatów i dane preferencyjne | `TODO` | Wymaga stabilnego checkpointu SFT, ukończonego Harness v1.1 oraz Task 02 i 05. |
 | [07](07_dpo_training.md) | DPO i continued-SFT control | `TODO` | Wymaga danych preferencyjnych z Task 06. |
@@ -69,13 +69,14 @@ backlogiem. Zakres P-xx został przeniesiony do wskazanych plików zadań.
    i pełnej bramce HN; Task 10 dopiero po finalnym ADR.
 6. **Opcjonalne:** Task 08, P-09 i Task 11 wyłącznie po własnych bramkach.
 
-Najbliższy jednoznaczny punkt wejścia to kontrolowane zatrzymanie I02 i
-dokończenie wyłącznie I03 przez zredukowaną, wznawialną kolejkę
-`scripts/run_base_1_5b_campaign.sh`; nie uruchamiać jej drugiej instancji.
-I02/I04/I05 pozostają jawnie odroczone zgodnie z ADR early-stop. Po I03 należy
-ocenić P-05/P-06, a pierwsze
-porównawcze probe przygotować wyłącznie według HN0+filter i kontraktu P-04
-`task04-p04-v1`. D00–D12 i Task 06 pozostają poza bieżącym krokiem.
+Najbliższy jednoznaczny punkt wejścia to dokończenie CPU eligibility scoring
+natural/W05, zweryfikowanie jego manifestu i dopiero potem deterministyczna
+materializacja wspólnej kohorty. Następnie planner P-05 ma zostać uruchomiony
+ponownie wyłącznie w trybie plan-only. Jeśli przejdzie bez blockerów, wolno
+wykonać tylko trzy probe seed 42 z prefiksem `dev_screen` 25%; `dev_confirm`
+nie otwiera się automatycznie. I02/I04/I05 pozostają odroczone, S00/S07
+wymagane i niewykonane, a D00–D12, Task 06 i wszystkie testy finalne pozostają
+poza bieżącym krokiem.
 
 ## Kolejność bazowa
 

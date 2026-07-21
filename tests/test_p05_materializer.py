@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, TypedDict
@@ -73,7 +74,18 @@ def _fixture(tmp_path: Path, *, count: int = 8) -> MaterializerPaths:
     _write_jsonl(w05, w05_rows)
     natural_fingerprint = tmp_path / "inputs" / "natural.fingerprint.json"
     w05_fingerprint = tmp_path / "inputs" / "w05.fingerprint.json"
-    common = {"splits": ["train", "dev"], "final_tests_used": []}
+    canonical_ids = json.dumps(
+        sorted(row["pair_id"] for row in natural_rows),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    common = {
+        "splits": ["train", "dev"],
+        "final_tests_used": [],
+        "negative_recipe": {"strategy": "HN0+filter", "false_negative_policy": "drop"},
+        "eligible_pair_ids_sha256": hashlib.sha256(canonical_ids.encode()).hexdigest(),
+    }
     _write_json(
         natural_fingerprint,
         common | {"artifact_path": str(natural.resolve()), "sha256": sha256_file(natural)},
@@ -193,9 +205,7 @@ def test_explicit_parquet_outputs_are_supported(tmp_path: Path) -> None:
     paths["mixed_output_path"] = tmp_path / "out" / "mixed.parquet"
     manifest = _materialize(paths)
     assert len(list(read_records(paths["gold_output_path"]))) == 8
-    assert manifest["outputs"]["mixed_50_50"]["sha256"] == sha256_file(
-        paths["mixed_output_path"]
-    )
+    assert manifest["outputs"]["mixed_50_50"]["sha256"] == sha256_file(paths["mixed_output_path"])
 
 
 @pytest.mark.parametrize("failure", ["duplicate", "missing_query"])
@@ -220,6 +230,15 @@ def test_fingerprint_drift_fails_closed(tmp_path: Path) -> None:
         paths["natural_pairs_path"].read_text() + "\n", encoding="utf-8"
     )
     with pytest.raises(ValueError, match="fingerprint drift"):
+        _materialize(paths)
+
+
+def test_missing_hn0_filter_eligibility_proof_fails_closed(tmp_path: Path) -> None:
+    paths = _fixture(tmp_path)
+    fingerprint = json.loads(paths["natural_fingerprint_path"].read_text())
+    fingerprint.pop("eligible_pair_ids_sha256")
+    _write_json(paths["natural_fingerprint_path"], fingerprint)
+    with pytest.raises(ValueError, match="eligible_pair_ids_sha256"):
         _materialize(paths)
 
 

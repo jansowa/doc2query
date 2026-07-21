@@ -790,9 +790,7 @@ def train_sensitivity_probe(
         torch.set_rng_state(state["torch_rng_state"].cpu())
         cuda_rng_states = state.get("cuda_rng_states")
         if torch.cuda.is_available() and cuda_rng_states is not None:
-            torch.cuda.set_rng_state_all(
-    [rng_state.cpu() for rng_state in cuda_rng_states]
-)
+            torch.cuda.set_rng_state_all([rng_state.cpu() for rng_state in cuda_rng_states])
     losses: list[float] = []
     started = time.perf_counter()
     strategy = str(contract["hard_negative_strategy"])

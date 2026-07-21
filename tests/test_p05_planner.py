@@ -118,8 +118,7 @@ def test_p05_plan_has_three_matched_arms_hn0_filter_and_required_controls(
     assert any("--max-steps 3" in command for command in plan["execution_commands"])
     assert any("--train-prefix-limit 100" in command for command in plan["execution_commands"])
     assert all(
-        str(plan["artifacts"]["train_input"]) in command
-        for command in plan["execution_commands"]
+        str(plan["artifacts"]["train_input"]) in command for command in plan["execution_commands"]
     )
     w05_commands = [
         run["command"]
@@ -134,12 +133,10 @@ def test_p05_plan_has_three_matched_arms_hn0_filter_and_required_controls(
         for run in arm["runs"]
     ]
     assert all(
-        str(plan["artifacts"]["w05_synthetic_generations"]) in command
-        for command in w05_commands
+        str(plan["artifacts"]["w05_synthetic_generations"]) in command for command in w05_commands
     )
     assert all(
-        str(plan["artifacts"]["mixed_50_50_generations"]) in command
-        for command in mixed_commands
+        str(plan["artifacts"]["mixed_50_50_generations"]) in command for command in mixed_commands
     )
     assert plan["final_tests_used"] == []
 

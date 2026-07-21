@@ -1,0 +1,359 @@
+{
+  "arms": [
+    {
+      "arm_id": "P05-GOLD-NATURAL",
+      "description": "natural-only gold-data control",
+      "full_comparison_budget": {
+        "definition_version": "probe-budget-v1",
+        "pair_count": 9968,
+        "queries_per_passage": 1,
+        "token_count": 4608000,
+        "unique_passage_count": 9968
+      },
+      "runs": [
+        {
+          "budget_fraction": 0.25,
+          "command": null,
+          "comparison_budget": {
+            "definition_version": "probe-budget-v1",
+            "pair_count": 2492,
+            "queries_per_passage": 1,
+            "token_count": 1152000,
+            "unique_passage_count": 2492
+          },
+          "evaluation_sets": [
+            "dev_intrinsic"
+          ],
+          "false_negative_policy": "drop",
+          "final_tests_used": [],
+          "max_steps": 250,
+          "negative_recipe": "HN0+filter",
+          "output_dir": "runs/task04_p05_dev_screen/dev_screen/P05-GOLD-NATURAL-S42",
+          "seed": 42,
+          "stage": "dev_screen"
+        },
+        {
+          "budget_fraction": 1.0,
+          "command": null,
+          "comparison_budget": {
+            "definition_version": "probe-budget-v1",
+            "pair_count": 9968,
+            "queries_per_passage": 1,
+            "token_count": 4608000,
+            "unique_passage_count": 9968
+          },
+          "evaluation_sets": [
+            "dev_intrinsic"
+          ],
+          "false_negative_policy": "drop",
+          "final_tests_used": [],
+          "max_steps": 1000,
+          "negative_recipe": "HN0+filter",
+          "output_dir": "runs/task04_p05_dev_screen/dev_confirm/P05-GOLD-NATURAL-S42",
+          "seed": 42,
+          "stage": "dev_confirm"
+        },
+        {
+          "budget_fraction": 1.0,
+          "command": null,
+          "comparison_budget": {
+            "definition_version": "probe-budget-v1",
+            "pair_count": 9968,
+            "queries_per_passage": 1,
+            "token_count": 4608000,
+            "unique_passage_count": 9968
+          },
+          "evaluation_sets": [
+            "dev_intrinsic"
+          ],
+          "false_negative_policy": "drop",
+          "final_tests_used": [],
+          "max_steps": 1000,
+          "negative_recipe": "HN0+filter",
+          "output_dir": "runs/task04_p05_dev_screen/dev_confirm/P05-GOLD-NATURAL-S43",
+          "seed": 43,
+          "stage": "dev_confirm"
+        },
+        {
+          "budget_fraction": 1.0,
+          "command": null,
+          "comparison_budget": {
+            "definition_version": "probe-budget-v1",
+            "pair_count": 9968,
+            "queries_per_passage": 1,
+            "token_count": 4608000,
+            "unique_passage_count": 9968
+          },
+          "evaluation_sets": [
+            "dev_intrinsic"
+          ],
+          "false_negative_policy": "drop",
+          "final_tests_used": [],
+          "max_steps": 1000,
+          "negative_recipe": "HN0+filter",
+          "output_dir": "runs/task04_p05_dev_screen/dev_confirm/P05-GOLD-NATURAL-S44",
+          "seed": 44,
+          "stage": "dev_confirm"
+        }
+      ],
+      "source_mix": {
+        "natural": 1.0
+      }
+    },
+    {
+      "arm_id": "P05-W05-SYNTHETIC",
+      "description": "W05 synthetic-only",
+      "full_comparison_budget": {
+        "definition_version": "probe-budget-v1",
+        "pair_count": 9968,
+        "queries_per_passage": 1,
+        "token_count": 4608000,
+        "unique_passage_count": 9968
+      },
+      "runs": [
+        {
+          "budget_fraction": 0.25,
+          "command": null,
+          "comparison_budget": {
+            "definition_version": "probe-budget-v1",
+            "pair_count": 2492,
+            "queries_per_passage": 1,
+            "token_count": 1152000,
+            "unique_passage_count": 2492
+          },
+          "evaluation_sets": [
+            "dev_intrinsic"
+          ],
+          "false_negative_policy": "drop",
+          "final_tests_used": [],
+          "max_steps": 250,
+          "negative_recipe": "HN0+filter",
+          "output_dir": "runs/task04_p05_dev_screen/dev_screen/P05-W05-SYNTHETIC-S42",
+          "seed": 42,
+          "stage": "dev_screen"
+        },
+        {
+          "budget_fraction": 1.0,
+          "command": null,
+          "comparison_budget": {
+            "definition_version": "probe-budget-v1",
+            "pair_count": 9968,
+            "queries_per_passage": 1,
+            "token_count": 4608000,
+            "unique_passage_count": 9968
+          },
+          "evaluation_sets": [
+            "dev_intrinsic"
+          ],
+          "false_negative_policy": "drop",
+          "final_tests_used": [],
+          "max_steps": 1000,
+          "negative_recipe": "HN0+filter",
+          "output_dir": "runs/task04_p05_dev_screen/dev_confirm/P05-W05-SYNTHETIC-S42",
+          "seed": 42,
+          "stage": "dev_confirm"
+        },
+        {
+          "budget_fraction": 1.0,
+          "command": null,
+          "comparison_budget": {
+            "definition_version": "probe-budget-v1",
+            "pair_count": 9968,
+            "queries_per_passage": 1,
+            "token_count": 4608000,
+            "unique_passage_count": 9968
+          },
+          "evaluation_sets": [
+            "dev_intrinsic"
+          ],
+          "false_negative_policy": "drop",
+          "final_tests_used": [],
+          "max_steps": 1000,
+          "negative_recipe": "HN0+filter",
+          "output_dir": "runs/task04_p05_dev_screen/dev_confirm/P05-W05-SYNTHETIC-S43",
+          "seed": 43,
+          "stage": "dev_confirm"
+        },
+        {
+          "budget_fraction": 1.0,
+          "command": null,
+          "comparison_budget": {
+            "definition_version": "probe-budget-v1",
+            "pair_count": 9968,
+            "queries_per_passage": 1,
+            "token_count": 4608000,
+            "unique_passage_count": 9968
+          },
+          "evaluation_sets": [
+            "dev_intrinsic"
+          ],
+          "false_negative_policy": "drop",
+          "final_tests_used": [],
+          "max_steps": 1000,
+          "negative_recipe": "HN0+filter",
+          "output_dir": "runs/task04_p05_dev_screen/dev_confirm/P05-W05-SYNTHETIC-S44",
+          "seed": 44,
+          "stage": "dev_confirm"
+        }
+      ],
+      "source_mix": {
+        "synthetic_w05": 1.0
+      }
+    },
+    {
+      "arm_id": "P05-MIXED50",
+      "description": "natural+synthetic 50/50 materialized mixture",
+      "full_comparison_budget": {
+        "definition_version": "probe-budget-v1",
+        "pair_count": 9968,
+        "queries_per_passage": 1,
+        "token_count": 4608000,
+        "unique_passage_count": 9968
+      },
+      "runs": [
+        {
+          "budget_fraction": 0.25,
+          "command": null,
+          "comparison_budget": {
+            "definition_version": "probe-budget-v1",
+            "pair_count": 2492,
+            "queries_per_passage": 1,
+            "token_count": 1152000,
+            "unique_passage_count": 2492
+          },
+          "evaluation_sets": [
+            "dev_intrinsic"
+          ],
+          "false_negative_policy": "drop",
+          "final_tests_used": [],
+          "max_steps": 250,
+          "negative_recipe": "HN0+filter",
+          "output_dir": "runs/task04_p05_dev_screen/dev_screen/P05-MIXED50-S42",
+          "seed": 42,
+          "stage": "dev_screen"
+        },
+        {
+          "budget_fraction": 1.0,
+          "command": null,
+          "comparison_budget": {
+            "definition_version": "probe-budget-v1",
+            "pair_count": 9968,
+            "queries_per_passage": 1,
+            "token_count": 4608000,
+            "unique_passage_count": 9968
+          },
+          "evaluation_sets": [
+            "dev_intrinsic"
+          ],
+          "false_negative_policy": "drop",
+          "final_tests_used": [],
+          "max_steps": 1000,
+          "negative_recipe": "HN0+filter",
+          "output_dir": "runs/task04_p05_dev_screen/dev_confirm/P05-MIXED50-S42",
+          "seed": 42,
+          "stage": "dev_confirm"
+        },
+        {
+          "budget_fraction": 1.0,
+          "command": null,
+          "comparison_budget": {
+            "definition_version": "probe-budget-v1",
+            "pair_count": 9968,
+            "queries_per_passage": 1,
+            "token_count": 4608000,
+            "unique_passage_count": 9968
+          },
+          "evaluation_sets": [
+            "dev_intrinsic"
+          ],
+          "false_negative_policy": "drop",
+          "final_tests_used": [],
+          "max_steps": 1000,
+          "negative_recipe": "HN0+filter",
+          "output_dir": "runs/task04_p05_dev_screen/dev_confirm/P05-MIXED50-S43",
+          "seed": 43,
+          "stage": "dev_confirm"
+        },
+        {
+          "budget_fraction": 1.0,
+          "command": null,
+          "comparison_budget": {
+            "definition_version": "probe-budget-v1",
+            "pair_count": 9968,
+            "queries_per_passage": 1,
+            "token_count": 4608000,
+            "unique_passage_count": 9968
+          },
+          "evaluation_sets": [
+            "dev_intrinsic"
+          ],
+          "false_negative_policy": "drop",
+          "final_tests_used": [],
+          "max_steps": 1000,
+          "negative_recipe": "HN0+filter",
+          "output_dir": "runs/task04_p05_dev_screen/dev_confirm/P05-MIXED50-S44",
+          "seed": 44,
+          "stage": "dev_confirm"
+        }
+      ],
+      "source_mix": {
+        "natural": 0.5,
+        "synthetic_w05": 0.5
+      }
+    }
+  ],
+  "artifacts": {
+    "corpus": "data/processed/v1/documents.parquet",
+    "frozen_dev_manifest": "data/processed/v1/evaluation/task04-v1/manifest.json",
+    "primary_judge_config": "configs/reranker/primary_polish_roberta_v3_p03_gpu.yaml",
+    "probe_recipe": "configs/evaluation/probe_v1.yaml",
+    "w05_adapter": "runs/W05-1.5B-50K-8GB/adapter"
+  },
+  "blockers": [
+    "missing required P-05 artifact: mixed_50_50_generations",
+    "missing required P-05 artifact: p05_materialization_manifest",
+    "missing required P-05 artifact: train_input",
+    "missing required P-05 artifact: w05_synthetic_generations"
+  ],
+  "execution_commands": [],
+  "execution_performed": false,
+  "execution_ready": false,
+  "final_tests_used": [],
+  "full_comparison_budget": {
+    "definition_version": "probe-budget-v1",
+    "pair_count": 9968,
+    "queries_per_passage": 1,
+    "token_count": 4608000,
+    "unique_passage_count": 9968
+  },
+  "mode": "plan_only",
+  "negative_recipe": {
+    "false_negative_policy": "drop",
+    "strategy": "HN0+filter"
+  },
+  "plan_id": "task03-p05-first-probe-matrix-v1",
+  "required_unexecuted_controls": [
+    {
+      "id": "S00-zero-shot",
+      "status": "required_unexecuted"
+    },
+    {
+      "id": "S00-few-shot",
+      "status": "required_unexecuted"
+    },
+    {
+      "id": "S07-polish-seq2seq",
+      "status": "required_unexecuted"
+    }
+  ],
+  "schema_version": 1,
+  "statistical_contract": {
+    "adr_fingerprint": "2f978f482e304c17ee72d5604a278ab0db1e0090d006902de5069c94d303d968",
+    "adr_id": "ADR-task04-P04-statistical-budget",
+    "adr_path": "reports/decisions/task04_p04_statistical_budget_contract.md",
+    "adr_version": "1.0.0",
+    "contract_fingerprint": "e2afd9b03a0e6e55b896dff76e1c0df00f0b7fc1d7eddbcb014e85470c273c19",
+    "contract_version": "task04-p04-v1"
+  },
+  "winner_selected": false
+}

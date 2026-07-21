@@ -1,0 +1,7 @@
+{
+  "definition_version": "probe-budget-v1",
+  "pair_count": 9968,
+  "queries_per_passage": 1,
+  "token_count": 4608000,
+  "unique_passage_count": 9968
+}

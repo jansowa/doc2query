@@ -14,6 +14,11 @@ Each fingerprint manifest must contain `artifact_path`, the artifact `sha256`,
 `splits` restricted to `train`/`dev`, and `final_tests_used: []`. The W05
 manifest additionally requires `generator_id: W05-1.5B-50K-8GB` and
 `source_data_sha256` equal to the canonical natural-pairs SHA-256.
+Both manifests must also prove that the inputs are the same post-filter
+eligible cohort by declaring HN0+filter/drop and the same
+`eligible_pair_ids_sha256`; the materializer recomputes that hash from the
+actual pair IDs. Unfiltered natural/W05 inputs therefore fail closed instead
+of merely labeling an unfiltered cohort as HN0+filter.
 
 Example shape (paths are intentionally placeholders, not commands to run now):
 

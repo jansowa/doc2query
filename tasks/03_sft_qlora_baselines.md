@@ -99,6 +99,17 @@ budżetem P-04. To nie jest wykonanie P-05/P-06: S00 i S07 są wymagane,
 lecz niewykonane, a porównawcze probe i testy finalne pozostają nieotwarte.
 Status zadania pozostaje `IMPLEMENTED`.
 
+I03 zakończył się kodem 0 po 625 krokach. Z istniejących artefaktów
+train/dev odczytano eval loss `1.2006736994`, czas `7541.0831 s`, throughput
+`1.326 przykładu/s` oraz peak VRAM allocated/reserved `1.575/2.117 GiB`.
+Panel greedy ma 100/100 poprawnych formatów, 100 unikalnych outputów i 8/100
+normalized exact match. I03 ma niższy techniczny loss niż I01 i dopasowane
+W01/W03, ale nie wykonano retrieval ani probe, więc nie wybrano generatora.
+Pełne zestawienie:
+[`task03_i03_result_2026-07-21.md`](../docs/experiments/task03_i03_result_2026-07-21.md).
+I02/I04/I05 pozostają `DEFERRED`, S00/S07 `required_unexecuted`, a testy
+finalne są nieotwarte.
+
 Do preflightu dodano deterministyczny materializator wspólnej kohorty P-05.
 Weryfikuje jawne fingerprinty naturalnych par i generacji W05, odrzuca finalne
 testy, buduje jeden seedowany porządek `doc_id/pair_id` i zapisuje osobne

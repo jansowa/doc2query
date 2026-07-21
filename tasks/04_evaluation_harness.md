@@ -29,6 +29,15 @@ i finalnego rank10/embedder. D00–D12, Task 06 i finalne testy nie zostały
 uruchomione. Poniższe akapity zachowują chronologię wcześniejszej implementacji
 i blockerów; rozstrzygający bieżący stan P-03/P-04 opisują ich sekcje niżej.
 
+Pierwszy P-05 preflight przeszedł audyt kampanii (9 wymaganych ramion
+ukończonych, 3 jawnie odroczone), lecz planner poprawnie zwrócił zero komend
+z powodu braku rzeczywistej wspólnej materializacji. Audyt materializatora
+wykrył brak dowodu, że naturalne i W05 query przeszły ten sam HN0+filter/drop;
+walidacja wymaga teraz wspólnego hasha post-filter eligible ID. CPU scoring
+obu źródeł został uruchomiony, ale w chwili aktualizacji nie był zakończony.
+Nie uruchomiono probe ani `dev_screen`; szczegóły:
+[`task04_p05_dev_screen_2026-07-21.md`](../reports/blockers/task04_p05_dev_screen_2026-07-21.md).
+
 Centralny harness, zamrożone manifesty/ID, metryki i slice’y, raporty
 HTML/Markdown, ślepy eksport A/B, bootstrap oraz zamrożona recepta probe
 embeddera są zaimplementowane i przetestowane. P-03 ma gotowy kod i testy

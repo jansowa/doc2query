@@ -21,6 +21,10 @@ from doc2query.evaluation.campaign_audit import (
 def _fixture_root(tmp_path: Path) -> Path:
     root = tmp_path / "campaign"
     shutil.copytree(Path("configs"), root / "configs")
+    decision = Path("docs/decisions/task03_instruct_campaign_early_stop_2026-07-21.md")
+    target = root / decision
+    target.parent.mkdir(parents=True)
+    shutil.copy2(decision, target)
     return root
 
 
@@ -107,7 +111,8 @@ def test_campaign_retry_success_supersedes_old_failure_and_loss_is_not_selected(
 ) -> None:
     root = _fixture_root(tmp_path)
     rows: list[tuple[str, str, str, str]] = []
-    for index, name in enumerate((*BASE_ARM_CONFIGS, *INSTRUCT_ARM_CONFIGS)):
+    required = (*BASE_ARM_CONFIGS, INSTRUCT_ARM_CONFIGS[0], INSTRUCT_ARM_CONFIGS[2])
+    for index, name in enumerate(required):
         step, _ = _complete_arm(root, name)
         if index == 0:
             rows.append(("2026-01-01T00:00:00Z", "2026-01-01T00:01:00Z", step, "1"))
@@ -120,8 +125,24 @@ def test_campaign_retry_success_supersedes_old_failure_and_loss_is_not_selected(
     assert report["complete"] is True
     assert report["arms"][0]["attempt_count"] == 2
     assert report["arms"][0]["state"] == "completed"
+    assert report["state_counts"]["deferred"] == 3
     assert report["selection_performed"] is False
     assert "loss" not in report["arms"][0]["contract"]
+
+
+def test_generation_schema_additions_do_not_invalidate_research_contract(tmp_path: Path) -> None:
+    root = _fixture_root(tmp_path)
+    step, run_dir = _complete_arm(root, BASE_ARM_CONFIGS[0])
+    manifest_path = run_dir / "run_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["config"]["generation"].pop("controlled")
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    status = root / "status.tsv"
+    _write_status(status, [("2026-01-01", "2026-01-02", step, "0")])
+
+    report = audit_campaign(root, status_path=status)
+
+    assert report["arms"][0]["state"] == "completed"
 
 
 def test_missing_running_failed_and_config_drift_are_fail_closed(tmp_path: Path) -> None:
@@ -181,7 +202,7 @@ def test_auditor_writes_nothing_without_explicit_output_and_check_complete_fails
     _write_status(status, [])
     report = audit_campaign(root, status_path=status)
     write_campaign_audit(report)
-    assert sorted(path.name for path in root.iterdir()) == ["configs", "status.tsv"]
+    assert sorted(path.name for path in root.iterdir()) == ["configs", "docs", "status.tsv"]
 
     result = subprocess.run(
         [

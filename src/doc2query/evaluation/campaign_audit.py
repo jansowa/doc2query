@@ -15,7 +15,9 @@ from typing import Any, Literal
 from doc2query.config import load_config
 from doc2query.schemas import AppConfig
 
-ArmState = Literal["completed", "running", "failed-retriable", "missing", "invalid"]
+ArmState = Literal["completed", "deferred", "running", "failed-retriable", "missing", "invalid"]
+
+CAMPAIGN_COMPLETION_CONTRACT = Path("configs/evaluation/task03_campaign_completion_v1.json")
 
 BASE_ARM_CONFIGS = (
     "b01_1_5b_10k_l768_lr2e4_s42.yaml",
@@ -58,6 +60,13 @@ class StatusAttempt:
 def _canonical_fingerprint(value: Mapping[str, Any]) -> str:
     payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _research_config_fingerprint(value: Mapping[str, Any]) -> str:
+    """Fingerprint fields that define the run, excluding the discovered data hash."""
+    return _canonical_fingerprint(
+        {key: item for key, item in value.items() if key != "dataset_fingerprint"}
+    )
 
 
 def parse_status_tsv(path: Path) -> tuple[list[StatusAttempt], list[str]]:
@@ -151,14 +160,12 @@ def _adapter_complete(path: Path) -> bool:
 
 
 def _expected_contract(config: AppConfig) -> dict[str, Any]:
-    config_payload = config.model_dump(mode="json")
     effective_batch = (
         config.training.per_device_train_batch_size * config.training.gradient_accumulation_steps
     )
-    return {
+    contract = {
         "experiment_id": config.run.experiment_id,
         "dataset_fingerprint": config.data.fingerprint,
-        "config_fingerprint": _canonical_fingerprint(config_payload),
         "model_name": config.model.name_or_path,
         "model_revision": config.model.revision,
         "seed": config.run.seed,
@@ -171,6 +178,7 @@ def _expected_contract(config: AppConfig) -> dict[str, Any]:
         "effective_batch": effective_batch,
         "max_steps": config.training.max_steps,
     }
+    return {**contract, "research_config_fingerprint": _research_config_fingerprint(contract)}
 
 
 def _artifact_contract(config: AppConfig, run_dir: Path) -> tuple[dict[str, Any], list[str]]:
@@ -189,10 +197,9 @@ def _artifact_contract(config: AppConfig, run_dir: Path) -> tuple[dict[str, Any]
     if not isinstance(manifest_config, Mapping):
         errors.append("run_manifest.config must be an object")
         return observed, errors
-    observed = {
+    observed_contract = {
         "experiment_id": manifest.get("experiment_id"),
         "dataset_fingerprint": manifest.get("dataset_fingerprint"),
-        "config_fingerprint": _canonical_fingerprint(manifest_config),
         "model_name": _nested(manifest_config, "model", "name_or_path"),
         "model_revision": _nested(manifest_config, "model", "revision"),
         "seed": manifest.get("seed"),
@@ -204,6 +211,10 @@ def _artifact_contract(config: AppConfig, run_dir: Path) -> tuple[dict[str, Any]
         "lora_dropout": _nested(manifest_config, "lora", "dropout"),
         "effective_batch": _effective_batch(manifest_config),
         "max_steps": _nested(manifest_config, "training", "max_steps"),
+    }
+    observed = {
+        **observed_contract,
+        "research_config_fingerprint": _research_config_fingerprint(observed_contract),
     }
     for field, expected_value in expected.items():
         if field == "dataset_fingerprint" and expected_value is None:
@@ -344,8 +355,65 @@ def audit_campaign(root: Path, *, status_path: Path | None = None) -> dict[str, 
     configs = [load_config(config_dir / name) for name in BASE_ARM_CONFIGS]
     instruct = [load_config(config_dir / name) for name in INSTRUCT_ARM_CONFIGS]
     matched = [load_config(config_dir / name) for name in MATCHED_BASE_CONFIGS]
+    completion_contract_path = root / CAMPAIGN_COMPLETION_CONTRACT
+    completion_errors: list[str] = []
+    completion_contract = _json_mapping(
+        completion_contract_path, completion_errors, "campaign completion contract"
+    )
+    required_arms: set[str] = set()
+    deferred_arms: set[str] = set()
+    decision_provenance: dict[str, Any] = {}
+    if completion_contract is not None:
+        if completion_contract.get("schema_version") != 1:
+            completion_errors.append("campaign completion contract schema_version must be 1")
+        if completion_contract.get("contract_id") != "task03-campaign-completion-v1":
+            completion_errors.append("unexpected campaign completion contract_id")
+        if completion_contract.get("final_tests_used") != []:
+            completion_errors.append(
+                "campaign completion contract must declare final_tests_used=[]"
+            )
+        required_raw = completion_contract.get("required_arms")
+        deferred_raw = completion_contract.get("deferred_arms")
+        if not isinstance(required_raw, list) or not all(
+            isinstance(item, str) for item in required_raw
+        ):
+            completion_errors.append("campaign completion contract requires string required_arms")
+        else:
+            required_arms = set(required_raw)
+        if not isinstance(deferred_raw, list) or not all(
+            isinstance(item, str) for item in deferred_raw
+        ):
+            completion_errors.append("campaign completion contract requires string deferred_arms")
+        else:
+            deferred_arms = set(deferred_raw)
+        expected_arms = {f"B{index:02d}" for index in range(1, 8)} | {
+            f"I{index:02d}" for index in range(1, 6)
+        }
+        if required_arms & deferred_arms or required_arms | deferred_arms != expected_arms:
+            completion_errors.append("required/deferred arms must partition all 12 campaign arms")
+        decision_path_raw = completion_contract.get("decision_path")
+        decision_sha = completion_contract.get("decision_sha256")
+        if not isinstance(decision_path_raw, str) or not isinstance(decision_sha, str):
+            completion_errors.append(
+                "campaign completion contract requires decision path and SHA-256"
+            )
+        else:
+            decision_path = root / decision_path_raw
+            observed_sha = (
+                hashlib.sha256(decision_path.read_bytes()).hexdigest()
+                if decision_path.is_file()
+                else None
+            )
+            if observed_sha != decision_sha:
+                completion_errors.append("campaign early-stop decision SHA-256 drift")
+            decision_provenance = {
+                "path": decision_path_raw,
+                "sha256": observed_sha,
+                "expected_sha256": decision_sha,
+            }
     global_errors = [
         *status_errors,
+        *completion_errors,
         *_single_factor_errors(configs, load_config(config_dir / "w03_1_5b_10k_lr2e4_seed42.yaml")),
         *_matched_instruct_errors(instruct, matched),
     ]
@@ -355,12 +423,19 @@ def audit_campaign(root: Path, *, status_path: Path | None = None) -> dict[str, 
         (*BASE_ARM_CONFIGS, *INSTRUCT_ARM_CONFIGS), (*configs, *instruct), strict=True
     ):
         step_name = f"train-{Path(config_name).stem}"
+        arm_id = config.run.experiment_id.split("-", 1)[0]
         history = by_name.get(step_name, [])
         latest = history[-1] if history else None
         state: ArmState
         errors: list[str] = []
         observed: dict[str, Any] = {}
-        if active_step == step_name and (latest is None or latest.exit_code is not None):
+        if arm_id in deferred_arms:
+            if any(attempt.exit_code == 0 for attempt in history):
+                state = "invalid"
+                errors.append("arm completed despite pinned early-stop deferral")
+            else:
+                state = "deferred"
+        elif active_step == step_name and (latest is None or latest.exit_code is not None):
             state = "running"
         elif latest is None:
             state = "missing"
@@ -373,7 +448,7 @@ def audit_campaign(root: Path, *, status_path: Path | None = None) -> dict[str, 
             state = "invalid" if errors else "completed"
         arms.append(
             {
-                "arm_id": config.run.experiment_id.split("-", 1)[0],
+                "arm_id": arm_id,
                 "experiment_id": config.run.experiment_id,
                 "config_path": str(Path("configs/experiments") / config_name),
                 "run_dir": str(config.run.output_dir),
@@ -386,8 +461,12 @@ def audit_campaign(root: Path, *, status_path: Path | None = None) -> dict[str, 
                 "errors": errors,
             }
         )
+    states_by_arm = {str(arm["arm_id"]): arm["state"] for arm in arms}
     complete = (
-        not queue_active and not global_errors and all(arm["state"] == "completed" for arm in arms)
+        not queue_active
+        and not global_errors
+        and all(states_by_arm.get(arm_id) == "completed" for arm_id in required_arms)
+        and all(states_by_arm.get(arm_id) == "deferred" for arm_id in deferred_arms)
     )
     return {
         "schema_version": 1,
@@ -395,13 +474,31 @@ def audit_campaign(root: Path, *, status_path: Path | None = None) -> dict[str, 
         "selection_performed": False,
         "selection_metric": None,
         "complete": complete,
+        "completion_contract": {
+            "path": str(CAMPAIGN_COMPLETION_CONTRACT),
+            "sha256": (
+                hashlib.sha256(completion_contract_path.read_bytes()).hexdigest()
+                if completion_contract_path.is_file()
+                else None
+            ),
+            "required_arms": sorted(required_arms),
+            "deferred_arms": sorted(deferred_arms),
+            "decision": decision_provenance,
+        },
         "status_path": str(status),
         "expected_arm_count": 12,
         "queue_active": queue_active,
         "active_step": active_step,
         "state_counts": {
             state: sum(arm["state"] == state for arm in arms)
-            for state in ("completed", "running", "failed-retriable", "missing", "invalid")
+            for state in (
+                "completed",
+                "deferred",
+                "running",
+                "failed-retriable",
+                "missing",
+                "invalid",
+            )
         },
         "global_errors": global_errors,
         "arms": arms,

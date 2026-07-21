@@ -19,6 +19,7 @@ from doc2query.utils.records import JsonlWriter, JsonParquetWriter, read_records
 
 MATERIALIZATION_SCHEMA_VERSION = 1
 W05_GENERATOR_ID = "W05-1.5B-50K-8GB"
+P05_NEGATIVE_RECIPE = {"strategy": "HN0+filter", "false_negative_policy": "drop"}
 _ALLOWED_SPLITS = {"train", "dev"}
 _FORBIDDEN_DATASET_NAMES = {
     "test_native_pl",
@@ -86,6 +87,15 @@ def _validate_fingerprint_manifest(
     expected = raw.get("sha256")
     if not isinstance(expected, str) or expected != sha256_file(artifact_path):
         raise ValueError(f"{label} fingerprint drift")
+    if raw.get("negative_recipe") != P05_NEGATIVE_RECIPE:
+        raise ValueError(f"{label} must prove HN0+filter/drop eligibility")
+    eligible_hash = raw.get("eligible_pair_ids_sha256")
+    if (
+        not isinstance(eligible_hash, str)
+        or len(eligible_hash) != 64
+        or any(character not in "0123456789abcdef" for character in eligible_hash)
+    ):
+        raise ValueError(f"{label} requires eligible_pair_ids_sha256")
     return raw
 
 
@@ -206,7 +216,7 @@ def materialize_p05_cohort(
         raise ValueError("queries_per_passage must be positive")
     expected_k = queries_per_passage or 1
 
-    _validate_fingerprint_manifest(
+    natural_manifest = _validate_fingerprint_manifest(
         natural_fingerprint_path, artifact_path=natural_pairs_path, label="natural fingerprint"
     )
     w05_manifest = _validate_fingerprint_manifest(
@@ -217,6 +227,10 @@ def materialize_p05_cohort(
         raise ValueError("W05 fingerprint manifest has an incompatible generator_id")
     if w05_manifest.get("source_data_sha256") != natural_sha:
         raise ValueError("W05 provenance does not match the canonical natural pairs")
+    if w05_manifest.get("eligible_pair_ids_sha256") != natural_manifest.get(
+        "eligible_pair_ids_sha256"
+    ):
+        raise ValueError("natural/W05 HN0+filter eligible cohort drift")
     budget = _validate_budget(_load_object(budget_path, "P-04 budget"), expected_k)
 
     natural_by_pair: dict[str, dict[str, Any]] = {}
@@ -255,6 +269,9 @@ def materialize_p05_cohort(
     if set(w05_by_pair) != set(natural_by_pair):
         missing = sorted(set(natural_by_pair) - set(w05_by_pair))
         raise ValueError(f"missing W05 query for natural pair_id: {missing[0]}")
+    observed_eligible_hash = _canonical_hash(sorted(natural_by_pair))
+    if observed_eligible_hash != natural_manifest.get("eligible_pair_ids_sha256"):
+        raise ValueError("eligible_pair_ids_sha256 does not match materializer inputs")
 
     counts = {len(pair_ids) for pair_ids in pairs_by_doc.values()}
     if counts != {expected_k}:
@@ -316,9 +333,7 @@ def materialize_p05_cohort(
             | {
                 "generated": natural_query if use_natural else synthetic_query,
                 "query_source": "natural" if use_natural else "synthetic_w05",
-                "generator_id": (
-                    "natural-gold" if use_natural else W05_GENERATOR_ID
-                ),
+                "generator_id": ("natural-gold" if use_natural else W05_GENERATOR_ID),
             }
         )
         cohort_items.append(
@@ -387,7 +402,7 @@ def materialize_p05_cohort(
         "cohort_fingerprint": _canonical_hash(cohort_items),
         "cohort_order": "sha256(seed:doc_id), then sha256(seed:doc_id:pair_id)",
         "comparison_budget": budget,
-        "negative_recipe": {"strategy": "HN0+filter", "false_negative_policy": "drop"},
+        "negative_recipe": P05_NEGATIVE_RECIPE,
         "final_tests_used": [],
     }
     write_json(manifest_output_path, manifest)
