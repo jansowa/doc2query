@@ -975,6 +975,41 @@ def evaluate_probe_on_dev(
     return summary
 
 
+def load_completed_dev_evaluation(
+    output_dir: Path,
+    records: Sequence[dict[str, Any]],
+    *,
+    dev_fingerprint: str,
+    contract: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    """Reuse a complete dev evaluation only after validating its full contract."""
+    summary_path = output_dir / "dev_summary.json"
+    rows_path = output_dir / "dev_per_query.jsonl"
+    if not summary_path.exists() and not rows_path.exists():
+        return None
+    if not summary_path.is_file() or not rows_path.is_file():
+        raise ValueError(f"partial P-03 dev evaluation cache: {output_dir}")
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    expected_ids = [str(record["example_id"]) for record in records]
+    rows = list(read_records(rows_path))
+    actual_ids = [str(row.get("example_id", "")) for row in rows]
+    checks = {
+        "schema_version": summary.get("schema_version") == 1,
+        "status": summary.get("status") == "measured",
+        "scope": summary.get("scope") == "task04-p03-dev-only-sensitivity",
+        "dataset_name": summary.get("dataset_name") == "dev_intrinsic_rank10",
+        "test_fingerprint": summary.get("test_fingerprint") == dev_fingerprint,
+        "query_count": summary.get("query_count") == len(expected_ids),
+        "sensitivity_contract": summary.get("sensitivity_contract") == dict(contract),
+        "final_tests_used": summary.get("final_tests_used") == [],
+        "ordered_query_ids": actual_ids == expected_ids,
+    }
+    failed = [name for name, valid in checks.items() if not valid]
+    if failed:
+        raise ValueError("P-03 dev evaluation cache drift: " + ", ".join(failed))
+    return cast(dict[str, Any], summary)
+
+
 def _metric_map(path: Path, metric: str) -> dict[str, float]:
     return {
         str(row["example_id"]): float(row[metric])

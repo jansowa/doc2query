@@ -15,13 +15,14 @@ from doc2query.evaluation.p03_sensitivity import (
     assert_sensitivity_compatible,
     common_cohort,
     generate_w05_queries,
+    load_completed_dev_evaluation,
     load_preparation_arm_cache,
     load_sensitivity_config,
     mock_smoke,
     preflight,
     write_preparation_arm_cache,
 )
-from doc2query.utils.records import read_records
+from doc2query.utils.records import JsonlWriter, read_records
 
 
 def _records() -> list[dict[str, Any]]:
@@ -199,6 +200,40 @@ def test_sensitivity_comparator_allows_only_negative_strategy_drift() -> None:
     changed["learning_rate"] = 1e-4
     with pytest.raises(ValueError, match="learning_rate"):
         assert_sensitivity_compatible(_contract("hn0"), changed)
+
+
+def test_completed_dev_evaluation_is_reused_only_when_contract_matches(tmp_path: Path) -> None:
+    records = [{"example_id": "dev-1"}, {"example_id": "dev-2"}]
+    contract = _contract("hn0")
+    summary = {
+        "schema_version": 1,
+        "status": "measured",
+        "scope": "task04-p03-dev-only-sensitivity",
+        "dataset_name": "dev_intrinsic_rank10",
+        "test_fingerprint": "d" * 64,
+        "query_count": 2,
+        "sensitivity_contract": contract,
+        "final_tests_used": [],
+    }
+    (tmp_path / "dev_summary.json").write_text(json.dumps(summary), encoding="utf-8")
+    with JsonlWriter(tmp_path / "dev_per_query.jsonl") as writer:
+        writer.write({"example_id": "dev-1"})
+        writer.write({"example_id": "dev-2"})
+    assert load_completed_dev_evaluation(
+        tmp_path,
+        records,
+        dev_fingerprint="d" * 64,
+        contract=contract,
+    ) == summary
+    summary["test_fingerprint"] = "x" * 64
+    (tmp_path / "dev_summary.json").write_text(json.dumps(summary), encoding="utf-8")
+    with pytest.raises(ValueError, match="test_fingerprint"):
+        load_completed_dev_evaluation(
+            tmp_path,
+            records,
+            dev_fingerprint="d" * 64,
+            contract=contract,
+        )
 
 
 def test_preflight_without_model_loading_and_mock_smoke(tmp_path: Path) -> None:

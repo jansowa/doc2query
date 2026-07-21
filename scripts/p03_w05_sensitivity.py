@@ -24,6 +24,7 @@ from doc2query.evaluation.p03_sensitivity import (
     evaluate_probe_on_dev,
     freeze_train_cohort,
     generate_w05_queries,
+    load_completed_dev_evaluation,
     load_preparation_arm_cache,
     load_sensitivity_config,
     materialize_selected_train,
@@ -407,14 +408,28 @@ def run(config_path: Path, root: Path) -> dict[str, Any]:
             contract=contract,
             checkpoint_steps=int(probe_block["checkpoint_steps"]),
         )
-        evaluate_probe_on_dev(
-            arm_dir / "model",
+        cached_evaluation = load_completed_dev_evaluation(
+            arm_dir,
             dev_records,
-            recipe=recipe,
-            output_dir=arm_dir,
             dev_fingerprint=dev_fingerprint,
             contract=contract,
         )
+        if cached_evaluation is None:
+            evaluate_probe_on_dev(
+                arm_dir / "model",
+                dev_records,
+                recipe=recipe,
+                output_dir=arm_dir,
+                dev_fingerprint=dev_fingerprint,
+                contract=contract,
+            )
+        else:
+            print(
+                f"[P03 {arm}] verified complete dev evaluation reused; "
+                "no model inference executed.",
+                file=sys.stderr,
+                flush=True,
+            )
         arm_eval_dirs[arm] = arm_dir
         print(
             f"[P03 {arm}] probe training/evaluation complete.",
