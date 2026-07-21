@@ -278,3 +278,10 @@ def test_runner_help_and_shell_mock_smoke() -> None:
     assert smoke_result.returncode == 0, smoke_result.stderr
     payload = json.loads(smoke_result.stdout)
     assert payload["mock_only"] is True
+
+
+def test_runner_never_overwrites_the_accepted_negative_recipe_adr() -> None:
+    source = (Path(__file__).parents[1] / "scripts/p03_w05_sensitivity.py").read_text(
+        encoding="utf-8"
+    )
+    assert "reports/decisions/task04_p03_w05_negative_recipe.md" not in source

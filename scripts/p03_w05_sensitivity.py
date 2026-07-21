@@ -36,7 +36,6 @@ from doc2query.evaluation.p03_sensitivity import (
     token_budget,
     train_sensitivity_probe,
     write_preparation_arm_cache,
-    write_sensitivity_adr,
 )
 from doc2query.reranker.base import FrozenRerankerConfig
 from doc2query.reranker.load import load_frozen_reranker
@@ -447,10 +446,6 @@ def run(config_path: Path, root: Path) -> dict[str, Any]:
     )
     comparison["artifact_path"] = str(comparison_path)
     write_json(comparison_path, comparison)
-    write_sensitivity_adr(
-        root / "reports/decisions/task04_p03_w05_negative_recipe.md",
-        comparison,
-    )
     _markdown_report(
         report_dir / "report.md",
         generation=generation,
