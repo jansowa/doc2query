@@ -111,6 +111,13 @@ def test_base_campaign_help_dry_run_and_order() -> None:
     first_training = source.index('for config in "${configs[@]}"')
     instruct_training = source.index('for config in "${instruct_configs[@]}"')
     assert p03 < memory < first_training < instruct_training
+    runnable = source.split("instruct_configs=(", 1)[1].split(")", 1)[0]
+    assert "i01_1_5b_instruct_10k_lr1e4_s42.yaml" in runnable
+    assert "i03_1_5b_instruct_10k_lr2e4_s42.yaml" in runnable
+    assert "i02_1_5b_instruct_10k_lr5e5_s42.yaml" not in runnable
+    assert "i04_1_5b_instruct_10k_lr1e4_s43.yaml" not in runnable
+    assert "i05_1_5b_instruct_50k_lr1e4_s42.yaml" not in runnable
+    assert "DEFERRED" in source
 
 
 def test_base_campaign_uses_pinned_project_gpu_environment() -> None:

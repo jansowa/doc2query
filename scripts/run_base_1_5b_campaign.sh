@@ -45,8 +45,11 @@ configs=(
 
 instruct_configs=(
   configs/experiments/i01_1_5b_instruct_10k_lr1e4_s42.yaml
-  configs/experiments/i02_1_5b_instruct_10k_lr5e5_s42.yaml
   configs/experiments/i03_1_5b_instruct_10k_lr2e4_s42.yaml
+)
+
+deferred_instruct_configs=(
+  configs/experiments/i02_1_5b_instruct_10k_lr5e5_s42.yaml
   configs/experiments/i04_1_5b_instruct_10k_lr1e4_s43.yaml
   configs/experiments/i05_1_5b_instruct_50k_lr1e4_s42.yaml
 )
@@ -222,9 +225,11 @@ for config in "${configs[@]}"; do
     --resume-if-available
 done
 
-# Matched base-vs-instruct training arms. They deliberately keep the same B1
-# prompt/completion format so the starting checkpoint is the only model
-# factor. Selection still requires the later P-04 probe contract.
+# The measured I01 arm and one remaining high-information LR arm deliberately
+# keep the same B1 prompt/completion format as base. I02, I04 and I05 were
+# deferred by the 2026-07-21 early-stop ADR: the low LR was already dominated,
+# a second seed is premature before downstream screening, and a 50k expansion
+# must not precede selection of the Instruct LR. P-04 probe remains required.
 for config in "${instruct_configs[@]}"; do
   record_step "train-$(basename "$config" .yaml)" \
     "$PYTHON" scripts/train_sft.py \
@@ -232,5 +237,10 @@ for config in "${instruct_configs[@]}"; do
     --resume-if-available
 done
 
-printf '[%s] Base/instruct 1.5B technical queue complete. No winner was selected; P-04/probe remains required.\n' \
+for config in "${deferred_instruct_configs[@]}"; do
+  printf '[%s] DEFERRED %s per Task 03 early-stop ADR; no training command executed.\n' \
+    "$(date --iso-8601=seconds)" "$(basename "$config" .yaml)" | tee -a "$LOG"
+done
+
+printf '[%s] Reduced base/instruct 1.5B technical queue complete. No winner was selected; P-04/probe remains required.\n' \
   "$(date --iso-8601=seconds)" | tee -a "$LOG"

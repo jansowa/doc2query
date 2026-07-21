@@ -32,16 +32,19 @@ They are reused and never restarted.
 4. Run seven resumable 10k single-factor technical ablations against W03:
    length 768, length 1024, rank 16, rank 32, attention-only LoRA, effective
    batch 32 and LoRA dropout 0.
-5. Run five matched Instruct arms: the same 10k LR sweep
-   (`1e-4`, `5e-5`, `2e-4`), the seed-43 replication at `1e-4`, and the same
-   50k `1e-4` baseline as W05.
+5. Run the matched Instruct I01 arm at 10k/LR `1e-4`, followed only by the
+   high-information I03 arm at 10k/LR `2e-4`.
+6. Report I02 (10k/LR `5e-5`), I04 (seed 43) and I05 (50k) as deferred without
+   executing their training commands. The measured early-stop rationale is
+   recorded in
+   [`task03_instruct_campaign_early_stop_2026-07-21.md`](../decisions/task03_instruct_campaign_early_stop_2026-07-21.md).
 
 All new SFT runs use the same base revision, deterministic 10k selection,
 seed 42, LR 2e-4, B1 prompt and completion-only loss. Rank runs preserve
 `alpha/r=2`. The attention-only run keeps rank 8 so that target modules are
 the only changed factor.
 
-The queue intentionally does not pick two 50k finalists. Eval loss is logged
+The reduced queue intentionally does not pick a 50k Instruct finalist. Eval loss is logged
 but is not an allowed final selection metric. P-04 and comparable probe
 measurements must select finalists before expensive 50k/multi-seed expansion.
 Base and Instruct use the identical B1 prompt-completion contract, so the

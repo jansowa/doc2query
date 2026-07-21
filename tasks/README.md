@@ -36,7 +36,7 @@ uruchomiono.
 | [00](00_repository_bootstrap.md) | Bootstrap repozytorium i odtwarzalność | `DONE` | Szkielet projektu, środowisko, CLI, testy i rejestrowanie są gotowe. |
 | [01](01_data_contract_audit_and_splits.md) | Kontrakt danych, audyt, deduplikacja i splity | `IMPLEMENTED` | Pełny `msmarco_pl` przetworzono do zamrożonych splitów v1 i par doc2query bez leakage pozytywów. Dla rekordów z <10 negatywami przyjęto corpus retrieval oraz oznaczone, deterministyczne backfillowanie tylko w diagnostycznej puli. Pozostał raport tokenowych percentyli/HTML. |
 | [02](02_reranker_and_reward_proxies.md) | Zamrożone rerankery i proxy nagrody | `IMPLEMENTED` | Integracja, reward proxies i testy są gotowe; primary zmierzył pełny frozen dev, a query-macro próg Youdena `possible_false_negative` jest przypięty bez użycia testu. Pozostał pełny benchmark primary/shadow na dev/test z hard negative'ami. |
-| [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | W01–W05 pokrywają bazowy 1.5B LR/baseline, a W06 4.5B Instruct/50k pozostaje diagnostyczny. Działająca wznawialna kolejka mierzy siedem technicznych ramion base oraz pięć dopasowanych ramion 1.5B Instruct: trzy LR/10k, seed 43 i 50k. Loader jawnie odrzuca wadliwe wielowierszowe completion (1 train, 0 dev) i zapisuje audyt. Nowych treningów z kolejki jeszcze nie ukończono; kolejka nie wybiera finalisty. Porównawcze probe według P-04 pozostają wymagane przed wyborem i kolejną kampanią 4.5B. |
+| [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | Ukończono siedem technicznych ramion base oraz I01 Instruct/10k. Base LR `5e-5`, attention-only, efektywny batch 32 i dropout 0 były słabsze w eval loss; 768/1024 nie poprawiły wyniku. I01 uzyskał 1,2225 wobec 1,2640 dla dopasowanego W01, ale nie jest to wynik downstream. Decyzja early-stop pozostawia do uruchomienia tylko I03/10k/LR `2e-4`; I02, I04 i I05 są odroczone do bramki P-04. Loader odrzuca wadliwe wielowierszowe completion (1 train, 0 dev). Kolejka nie wybiera finalisty. |
 | [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IMPLEMENTED` | P-01–P-04 i testy CPU są gotowe. P-03 zakończył się `statistically_separated`; ADR wybiera HN0+filter dla pierwszych probe i odrzuca HN1 w tym zakresie, bez wyboru generatora i bez otwarcia testów. P-04 przypina metryki, efekt praktyczny, seedy/halving, rozdzieloną wariancję, czterowymiarowy budżet i jednorazowy final test; comparatory fail-closed sprawdzają wersję/fingerprint ADR oraz budżet. Pozostają faktyczne porównawcze probe, shadow judge, human eval, pełne indeksy i bramki Fazy B; dlatego Task nie jest `DONE`. |
 | [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `IMPLEMENTED` | Gotowe są kontrakty i kod CPU: `form`/`intent`, evidence i F0–F3, controlled SFT/inference, retry/deduplikacja, multi-query JSON, concept coverage oraz top-N/MMR/coverage-aware. D00–D12, audyty 500/200, kalibracja per domena, human check i probe z CI pozostają niewykonane; mogą ruszyć dopiero po bieżącej kolejce i pierwszych probe zgodnych z P-04. |
 | [06](06_candidate_scoring_and_preference_data.md) | Scoring kandydatów i dane preferencyjne | `TODO` | Wymaga stabilnego checkpointu SFT, ukończonego Harness v1.1 oraz Task 02 i 05. |
@@ -69,9 +69,11 @@ backlogiem. Zakres P-xx został przeniesiony do wskazanych plików zadań.
    i pełnej bramce HN; Task 10 dopiero po finalnym ADR.
 6. **Opcjonalne:** Task 08, P-09 i Task 11 wyłącznie po własnych bramkach.
 
-Najbliższy jednoznaczny punkt wejścia to dokończenie już działającej,
-wznawialnej kolejki `scripts/run_base_1_5b_campaign.sh`; nie uruchamiać jej
-drugiej instancji. Po jej zakończeniu należy ocenić P-05/P-06, a pierwsze
+Najbliższy jednoznaczny punkt wejścia to kontrolowane zatrzymanie I02 i
+dokończenie wyłącznie I03 przez zredukowaną, wznawialną kolejkę
+`scripts/run_base_1_5b_campaign.sh`; nie uruchamiać jej drugiej instancji.
+I02/I04/I05 pozostają jawnie odroczone zgodnie z ADR early-stop. Po I03 należy
+ocenić P-05/P-06, a pierwsze
 porównawcze probe przygotować wyłącznie według HN0+filter i kontraktu P-04
 `task04-p04-v1`. D00–D12 i Task 06 pozostają poza bieżącym krokiem.
 

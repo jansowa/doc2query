@@ -76,6 +76,20 @@ przerywać całą kolejkę. Audyt zamrożonego train v1 znalazł jeden taki reko
 (`65018::1129729`) i zero w dev; rekord nie jest normalizowany ani używany do
 treningu, a licznik i identyfikator trafiają do `example_weights.json`.
 
+21 lipca siedem technicznych ramion base oraz I01 Instruct/10k zostało
+ukończonych. Ablacje base potwierdziły malejącą wartość dalszej pełnej
+macierzy: LR `5e-5` dał eval loss 1,2914 wobec 1,2640 dla `1e-4` i 1,2505
+dla `2e-4`; attention-only, efektywny batch 32 i dropout 0 również pogorszyły
+loss, a długości 768/1024 nie poprawiły W03. I01 Instruct przy `1e-4`
+uzyskał 1,2225 na tym samym zbiorze i kontrakcie completion-only, ale ten
+sygnał nie zastępuje intrinsic retrieval ani probe.
+
+ADR early-stop redukuje pozostałą kolejkę do I03 Instruct/10k/LR `2e-4`.
+I02/LR `5e-5` ma zostać przerwany, I04/seed 43 odroczony do wyboru kandydata,
+a I05/50k do wyboru LR i przejścia dev screen P-04. Nie jest to wybór modelu
+ani zgoda na finalne testy. Uzasadnienie:
+[`task03_instruct_campaign_early_stop_2026-07-21.md`](../docs/decisions/task03_instruct_campaign_early_stop_2026-07-21.md).
+
 ## Cel
 
 Zaimplementować stabilny trening passage→query i uruchomić serię tanich baseline’ów, zanim projekt przejdzie do DPO lub RL.
