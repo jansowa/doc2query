@@ -74,6 +74,16 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--train-limit", type=int)
     parser.add_argument(
+        "--seed",
+        type=int,
+        help="Explicit P-04 training-seed override recorded in the resolved recipe.",
+    )
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        help="Explicit preregistered P-04 halving-stage step budget.",
+    )
+    parser.add_argument(
         "--smoke-steps",
         type=int,
         help="Explicit smoke override; outputs are not comparable to frozen full-budget runs.",
@@ -84,8 +94,17 @@ def main() -> None:
         raise ValueError("probe recipe must be a YAML mapping")
     recipe = ProbeRecipe.from_dict(raw)
     statistical_contract = StatisticalContract.load(args.comparison_contract)
+    recipe_updates: dict[str, Any] = {}
     if args.smoke_steps is not None:
-        recipe = ProbeRecipe.from_dict(asdict(recipe) | {"max_steps": args.smoke_steps})
+        recipe_updates["max_steps"] = args.smoke_steps
+    if args.seed is not None:
+        recipe_updates["seed"] = args.seed
+    if args.max_steps is not None:
+        if args.max_steps < 1:
+            raise ValueError("--max-steps must be positive")
+        recipe_updates["max_steps"] = args.max_steps
+    if recipe_updates:
+        recipe = ProbeRecipe.from_dict(asdict(recipe) | recipe_updates)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     models_loaded = False
     corpus_index = None

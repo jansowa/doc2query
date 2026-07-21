@@ -90,6 +90,15 @@ a I05/50k do wyboru LR i przejścia dev screen P-04. Nie jest to wybór modelu
 ani zgoda na finalne testy. Uzasadnienie:
 [`task03_instruct_campaign_early_stop_2026-07-21.md`](../docs/decisions/task03_instruct_campaign_early_stop_2026-07-21.md).
 
+21 lipca przygotowano wyłącznie CPU/read-only tooling preflight po kampanii:
+audytor append-only `status.tsv` poprawnie rozstrzyga retry, sprawdza komplet
+B01–B07/I01–I05 oraz kontrakty configów i artefaktów, ale nie rankuje ramion
+i nie używa eval loss. Planner pierwszej macierzy P-05 obejmuje gold natural,
+W05 synthetic-only i mieszankę 50/50, wszystkie z HN0+filter i wspólnym
+budżetem P-04. To nie jest wykonanie P-05/P-06: S00 i S07 są wymagane,
+lecz niewykonane, a porównawcze probe i testy finalne pozostają nieotwarte.
+Status zadania pozostaje `IMPLEMENTED`.
+
 ## Cel
 
 Zaimplementować stabilny trening passage→query i uruchomić serię tanich baseline’ów, zanim projekt przejdzie do DPO lub RL.

@@ -4,6 +4,7 @@ adr:
   id: ADR-task04-P04-statistical-budget
   version: "1.0.0"
   path: reports/decisions/task04_p04_statistical_budget_contract.md
+  sha256: 2f978f482e304c17ee72d5604a278ab0db1e0090d006902de5069c94d303d968
 
 primary_metric:
   name: corpus_ndcg_at_10

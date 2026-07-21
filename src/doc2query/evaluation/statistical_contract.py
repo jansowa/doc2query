@@ -24,6 +24,7 @@ CONTRACT_REFERENCE_FIELDS = (
     "contract_fingerprint",
     "adr_id",
     "adr_version",
+    "adr_fingerprint",
 )
 
 
@@ -59,15 +60,33 @@ class StatisticalContract:
             raise ValueError("P-04 comparison contract requires an ADR mapping")
         _non_empty_string(adr.get("id"), field="adr.id")
         _non_empty_string(adr.get("version"), field="adr.version")
-        _non_empty_string(adr.get("path"), field="adr.path")
+        adr_path_value = _non_empty_string(adr.get("path"), field="adr.path")
+        expected_adr_fingerprint = _non_empty_string(adr.get("sha256"), field="adr.sha256")
+        config_path = path.resolve()
+        project_root = next(
+            (parent for parent in config_path.parents if (parent / "AGENTS.md").is_file()),
+            None,
+        )
+        if project_root is None:
+            raise ValueError("cannot resolve project root for P-04 ADR verification")
+        adr_path = project_root / adr_path_value
+        if not adr_path.is_file():
+            raise ValueError(f"P-04 ADR file is missing: {adr_path}")
+        actual_adr_fingerprint = hashlib.sha256(adr_path.read_bytes()).hexdigest()
+        if actual_adr_fingerprint != expected_adr_fingerprint:
+            raise ValueError("P-04 ADR fingerprint does not match the preregistered contract")
         primary = raw.get("primary_metric")
         if not isinstance(primary, Mapping) or primary.get("name") != "corpus_ndcg_at_10":
             raise ValueError("P-04 primary metric must be corpus_ndcg_at_10")
         if primary.get("dataset") != "test_native_pl" or primary.get("profile") != "full":
             raise ValueError("P-04 primary metric must use full test_native_pl")
         practical = raw.get("minimum_practical_effect")
-        if not isinstance(practical, Mapping) or float(practical.get("absolute", 0.0)) <= 0:
-            raise ValueError("P-04 requires a positive minimum practical effect")
+        if (
+            not isinstance(practical, Mapping)
+            or practical.get("metric") != "corpus_ndcg_at_10"
+            or float(practical.get("absolute", 0.0)) != 0.01
+        ):
+            raise ValueError("P-04 corpus_ndcg_at_10 practical effect must be exactly 0.01")
         non_inferiority = raw.get("non_inferiority")
         if not isinstance(non_inferiority, Mapping) or set(non_inferiority) != {
             "grounding",
@@ -77,9 +96,19 @@ class StatisticalContract:
             raise ValueError(
                 "P-04 requires grounding, answerability and format non-inferiority rules"
             )
-        for name, rule in non_inferiority.items():
-            if not isinstance(rule, Mapping) or float(rule.get("margin", 0.0)) <= 0:
-                raise ValueError(f"P-04 non-inferiority rule {name} needs a positive margin")
+        expected_guardrails = {
+            "grounding": ("corpus_round_trip_at_20", 0.02),
+            "answerability": ("sentence_level_source_hit", 0.02),
+            "format": ("format_valid_rate", 0.005),
+        }
+        for name, (metric, margin) in expected_guardrails.items():
+            rule = non_inferiority[name]
+            if (
+                not isinstance(rule, Mapping)
+                or rule.get("metric") != metric
+                or float(rule.get("margin", 0.0)) != margin
+            ):
+                raise ValueError(f"P-04 non-inferiority rule {name} drifted")
         resampling = raw.get("resampling")
         if not isinstance(resampling, Mapping):
             raise ValueError("P-04 requires separate resampling rules")
@@ -87,10 +116,33 @@ class StatisticalContract:
             raise ValueError("P-04 training variance must be reported across independent seeds")
         if resampling.get("query_uncertainty_unit") != "query":
             raise ValueError("P-04 bootstrap uncertainty must use query as its unit")
+        if (
+            resampling.get("training_summary") != "per_seed_values_mean_sample_sd_and_range"
+            or resampling.get("query_bootstrap_samples") != 10_000
+            or resampling.get("query_bootstrap_seed") != 20_260_721
+            or resampling.get("prohibition") != "never_pool_seed_variance_with_query_bootstrap"
+        ):
+            raise ValueError("P-04 seed/bootstrap reporting contract drifted")
         halving = raw.get("successive_halving")
         stages = halving.get("stages") if isinstance(halving, Mapping) else None
-        if not isinstance(stages, list) or len(stages) < 2:
-            raise ValueError("P-04 requires at least two successive-halving stages")
+        expected_stages = [
+            {
+                "name": "dev_screen",
+                "seeds": [42],
+                "budget_fraction": 0.25,
+                "keep_fraction": 0.5,
+                "evaluation_sets": ["dev_intrinsic"],
+            },
+            {
+                "name": "dev_confirm",
+                "seeds": [42, 43, 44],
+                "budget_fraction": 1.0,
+                "keep_fraction": 1.0,
+                "evaluation_sets": ["dev_intrinsic"],
+            },
+        ]
+        if stages != expected_stages:
+            raise ValueError("P-04 successive-halving stages drifted")
         budget = raw.get("budget")
         if not isinstance(budget, Mapping):
             raise ValueError("P-04 requires a budget mapping")
@@ -112,6 +164,7 @@ class StatisticalContract:
             "adr_id": str(adr["id"]),
             "adr_version": str(adr["version"]),
             "adr_path": str(adr["path"]),
+            "adr_fingerprint": str(adr["sha256"]),
         }
 
 

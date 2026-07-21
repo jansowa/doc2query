@@ -227,6 +227,15 @@ walidacja fail-closed w comparatorach. Brak metadanych, różna wersja ADR,
 różna definicja budżetu lub różnica w tokenach, parach, unikalnych pasażach
 albo K blokuje porównanie. Nie uruchomiono przy tym żadnego probe ani testu.
 
+21 lipca dodano CPU-only decision/preflight engine dla `dev_screen` i
+`dev_confirm`. Weryfikuje plik oraz fingerprint ADR, komplet seedów, osobne
+wartości/mean/sample SD/range, paired-query bootstrap bez mieszania wariancji,
+minimalny efekt i trzy guardraile. Braki zwracają `incomplete`; pozostałe
+statusy to `eligible`, `non_inferior_only` albo `rejected`. Engine nie czyta
+finalnych testów i nie deklaruje niewykonanych wyników. Jest to wyłącznie
+tooling: kampania, P-05/P-06 i porównawcze probe nadal są niewykonane, więc
+Task pozostaje `IMPLEMENTED`, nie `DONE`.
+
 ## Cel
 
 Zbudować centralny system ewaluacji generatora oraz end-to-end wpływu syntetycznych query na embedder.
