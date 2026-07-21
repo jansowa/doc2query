@@ -787,10 +787,12 @@ def train_sensitivity_probe(
         optimizer.load_state_dict(state["optimizer"])
         scheduler.load_state_dict(state["scheduler"])
         previous_elapsed = float(state.get("elapsed_seconds", 0.0))
-        torch.set_rng_state(state["torch_rng_state"])
+        torch.set_rng_state(state["torch_rng_state"].cpu())
         cuda_rng_states = state.get("cuda_rng_states")
         if torch.cuda.is_available() and cuda_rng_states is not None:
-            torch.cuda.set_rng_state_all(cuda_rng_states)
+            torch.cuda.set_rng_state_all(
+    [rng_state.cpu() for rng_state in cuda_rng_states]
+)
     losses: list[float] = []
     started = time.perf_counter()
     strategy = str(contract["hard_negative_strategy"])
