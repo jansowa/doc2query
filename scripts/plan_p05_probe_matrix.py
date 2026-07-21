@@ -32,7 +32,7 @@ def main() -> int:
     parser.add_argument("--w05-adapter", type=Path, required=True)
     parser.add_argument("--w05-synthetic-generations", type=Path, required=True)
     parser.add_argument("--mixed-50-50-generations", type=Path, required=True)
-    parser.add_argument("--mixed-50-50-manifest", type=Path, required=True)
+    parser.add_argument("--p05-materialization-manifest", type=Path, required=True)
     parser.add_argument("--output-root", type=Path, default=Path("runs/p05_probe_matrix"))
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -46,7 +46,7 @@ def main() -> int:
         "w05_adapter": args.w05_adapter,
         "w05_synthetic_generations": args.w05_synthetic_generations,
         "mixed_50_50_generations": args.mixed_50_50_generations,
-        "mixed_50_50_manifest": args.mixed_50_50_manifest,
+        "p05_materialization_manifest": args.p05_materialization_manifest,
     }
     plan = build_p05_plan(
         campaign_audit=campaign,

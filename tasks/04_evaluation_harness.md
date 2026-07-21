@@ -236,6 +236,13 @@ finalnych testów i nie deklaruje niewykonanych wyników. Jest to wyłącznie
 tooling: kampania, P-05/P-06 i porównawcze probe nadal są niewykonane, więc
 Task pozostaje `IMPLEMENTED`, nie `DONE`.
 
+Dodano CPU-only materializację wejść pierwszej macierzy P-05 zgodną z
+`task04-p04-v1`. Trzy ramiona dzielą jedną kohortę i wszystkie cztery wymiary
+budżetu, a mix ma dokładne 50/50 również w prefiksie 25%. Manifest zapisuje
+SHA-256, provenance W05, HN0+filter/drop i `final_tests_used=[]`; planner usuwa
+komendy przy braku lub driftcie manifestu albo pliku. Nie zmaterializowano
+rzeczywistych danych i nie uruchomiono kampanii, P-05/P-06 ani probe.
+
 ## Cel
 
 Zbudować centralny system ewaluacji generatora oraz end-to-end wpływu syntetycznych query na embedder.

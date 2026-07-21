@@ -10,6 +10,11 @@ from typing import Any
 
 import yaml
 
+from doc2query.evaluation.corpus import sha256_file
+from doc2query.evaluation.p05_materializer import (
+    MATERIALIZATION_SCHEMA_VERSION,
+    W05_GENERATOR_ID,
+)
 from doc2query.evaluation.statistical_contract import (
     BUDGET_DEFINITION_VERSION,
     BUDGET_FIELDS,
@@ -98,31 +103,97 @@ def _validate_w05_adapter(path: Path | None, errors: list[str]) -> None:
         errors.append("w05_adapter is incomplete")
 
 
-def _validate_mixture_manifest(
-    path: Path | None, comparison_budget: Mapping[str, Any], errors: list[str]
+def _validate_materialization_manifest(
+    path: Path | None,
+    artifacts: Mapping[str, Path],
+    comparison_budget: Mapping[str, Any],
+    errors: list[str],
 ) -> None:
     if path is None or not path.is_file():
         return
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
-        errors.append("mixed_50_50_manifest is invalid JSON")
+        errors.append("p05_materialization_manifest is invalid JSON")
         return
     if not isinstance(raw, Mapping):
-        errors.append("mixed_50_50_manifest must be a JSON object")
+        errors.append("p05_materialization_manifest must be a JSON object")
         return
+    if raw.get("schema_version") != MATERIALIZATION_SCHEMA_VERSION:
+        errors.append("p05_materialization_manifest has an unsupported schema")
+    if raw.get("materialization_id") != "task03-p05-common-cohort-v1":
+        errors.append("p05_materialization_manifest has an incompatible materialization_id")
+    cohort_fingerprint = raw.get("cohort_fingerprint")
+    if (
+        not isinstance(cohort_fingerprint, str)
+        or len(cohort_fingerprint) != 64
+        or any(character not in "0123456789abcdef" for character in cohort_fingerprint)
+    ):
+        errors.append("p05_materialization_manifest requires a SHA-256 cohort fingerprint")
+    if not isinstance(raw.get("seed"), int):
+        errors.append("p05_materialization_manifest requires an integer seed")
+    if raw.get("final_tests_used") != []:
+        errors.append("p05_materialization_manifest must declare final_tests_used=[]")
+    if raw.get("comparison_budget") != comparison_budget:
+        errors.append("p05_materialization_manifest P-04 budget drift")
+    if raw.get("negative_recipe") != {
+        "strategy": "HN0+filter",
+        "false_negative_policy": "drop",
+    }:
+        errors.append("p05_materialization_manifest must pin HN0+filter/drop")
     half = int(comparison_budget.get("pair_count", 0)) // 2
-    if raw.get("natural_pair_count") != half or raw.get("synthetic_pair_count") != half:
-        errors.append("mixed_50_50_manifest does not prove an exact 50/50 pair allocation")
-    if raw.get("synthetic_generator_id") != "W05-1.5B-50K-8GB":
-        errors.append("mixed_50_50_manifest does not pin W05 synthetic provenance")
     stage_counts = raw.get("stage_pair_counts")
     expected_stages = {
         "dev_screen": {"natural": half // 4, "synthetic_w05": half // 4},
         "dev_confirm": {"natural": half, "synthetic_w05": half},
     }
     if stage_counts != expected_stages:
-        errors.append("mixed_50_50_manifest does not prove 50/50 successive-halving prefixes")
+        errors.append("p05_materialization_manifest does not prove 50/50 halving prefixes")
+    outputs = raw.get("outputs")
+    if not isinstance(outputs, Mapping):
+        errors.append("p05_materialization_manifest requires outputs")
+        return
+    output_keys = {
+        "train_input": "gold_natural",
+        "w05_synthetic_generations": "w05_synthetic",
+        "mixed_50_50_generations": "mixed_50_50",
+    }
+    expected_source_counts = {
+        "gold_natural": {"natural": int(comparison_budget.get("pair_count", 0))},
+        "w05_synthetic": {"synthetic_w05": int(comparison_budget.get("pair_count", 0))},
+        "mixed_50_50": {"natural": half, "synthetic_w05": half},
+    }
+    for artifact_key, output_key in output_keys.items():
+        artifact_path = artifacts.get(artifact_key)
+        output = outputs.get(output_key)
+        if artifact_path is None or not artifact_path.is_file() or not isinstance(output, Mapping):
+            errors.append(f"p05_materialization_manifest missing output {output_key}")
+            continue
+        declared_path = output.get("path")
+        if (
+            not isinstance(declared_path, str)
+            or Path(declared_path).resolve() != artifact_path.resolve()
+        ):
+            errors.append(f"p05 materialized path drift: {artifact_key}")
+        expected_sha = output.get("sha256")
+        if not isinstance(expected_sha, str) or expected_sha != sha256_file(artifact_path):
+            errors.append(f"p05 materialized SHA-256 drift: {artifact_key}")
+        for field in BUDGET_FIELDS:
+            if output.get(field) != comparison_budget.get(field):
+                errors.append(f"p05 materialized budget drift: {artifact_key}.{field}")
+        if output.get("source_counts") != expected_source_counts[output_key]:
+            errors.append(f"p05 materialized source-count drift: {artifact_key}")
+    synthetic = outputs.get("w05_synthetic")
+    inputs = raw.get("inputs")
+    w05_input = inputs.get("w05_generations") if isinstance(inputs, Mapping) else None
+    if (
+        not isinstance(synthetic, Mapping)
+        or synthetic.get("source_counts")
+        != {"synthetic_w05": int(comparison_budget.get("pair_count", 0))}
+        or not isinstance(w05_input, Mapping)
+        or w05_input.get("generator_id") != W05_GENERATOR_ID
+    ):
+        errors.append("p05_materialization_manifest does not pin W05 provenance")
 
 
 def build_p05_plan(
@@ -149,7 +220,7 @@ def build_p05_plan(
         "w05_adapter",
         "w05_synthetic_generations",
         "mixed_50_50_generations",
-        "mixed_50_50_manifest",
+        "p05_materialization_manifest",
     )
     normalized_artifacts: dict[str, str] = {}
     for name in required_artifacts:
@@ -160,7 +231,9 @@ def build_p05_plan(
             normalized_artifacts[name] = str(path)
     full_steps, _ = _probe_recipe_steps_and_tokens(artifacts.get("probe_recipe"), budget, errors)
     _validate_w05_adapter(artifacts.get("w05_adapter"), errors)
-    _validate_mixture_manifest(artifacts.get("mixed_50_50_manifest"), budget, errors)
+    _validate_materialization_manifest(
+        artifacts.get("p05_materialization_manifest"), artifacts, budget, errors
+    )
 
     reference = contract.reference()
     arms = (
@@ -220,7 +293,7 @@ def build_p05_plan(
                     str(seed),
                     "--max-steps",
                     str(stage_steps),
-                    "--train-limit",
+                    "--train-prefix-limit",
                     str(stage_budget["pair_count"]),
                     "--primary-judge-config",
                     normalized_artifacts.get("primary_judge_config", "<primary_judge_config>"),

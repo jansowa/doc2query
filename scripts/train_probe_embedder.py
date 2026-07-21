@@ -74,6 +74,11 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--train-limit", type=int)
     parser.add_argument(
+        "--train-prefix-limit",
+        type=int,
+        help="Use the exact ordered prefix of a pre-materialized common cohort.",
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         help="Explicit P-04 training-seed override recorded in the resolved recipe.",
@@ -89,6 +94,8 @@ def main() -> None:
         help="Explicit smoke override; outputs are not comparable to frozen full-budget runs.",
     )
     args = parser.parse_args()
+    if args.train_limit is not None and args.train_prefix_limit is not None:
+        raise ValueError("--train-limit and --train-prefix-limit are mutually exclusive")
     raw = yaml.safe_load(args.recipe.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError("probe recipe must be a YAML mapping")
@@ -145,6 +152,7 @@ def main() -> None:
             statistical_contract=statistical_contract,
             synthetic_generations=args.synthetic_generations,
             train_limit=args.train_limit,
+            train_prefix_limit=args.train_prefix_limit,
             documents_path=args.corpus,
             holdout_manifest=args.holdout_manifest,
             native_documents_path=args.native_corpus,

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
+from doc2query.evaluation.corpus import sha256_file
 from doc2query.evaluation.p05_planner import build_p05_plan
 from doc2query.evaluation.statistical_contract import StatisticalContract, build_budget_manifest
 
@@ -18,7 +20,7 @@ def _artifacts(tmp_path: Path) -> dict[str, Path]:
         "w05_adapter",
         "w05_synthetic_generations",
         "mixed_50_50_generations",
-        "mixed_50_50_manifest",
+        "p05_materialization_manifest",
     ):
         path = tmp_path / "artifacts" / name
         if name == "w05_adapter":
@@ -29,22 +31,45 @@ def _artifacts(tmp_path: Path) -> dict[str, Path]:
             path.parent.mkdir(parents=True, exist_ok=True)
             if name == "probe_recipe":
                 content = "max_steps: 12\nbatch_size: 1\nmax_length: 40\nnegatives_per_example: 1\n"
-            elif name == "mixed_50_50_manifest":
-                content = json.dumps(
-                    {
-                        "natural_pair_count": 200,
-                        "synthetic_pair_count": 200,
-                        "synthetic_generator_id": "W05-1.5B-50K-8GB",
-                        "stage_pair_counts": {
-                            "dev_screen": {"natural": 50, "synthetic_w05": 50},
-                            "dev_confirm": {"natural": 200, "synthetic_w05": 200},
-                        },
-                    }
-                )
             else:
                 content = "fixture\n"
             path.write_text(content, encoding="utf-8")
         values[name] = path
+    manifest: dict[str, Any] = {
+        "schema_version": 1,
+        "materialization_id": "task03-p05-common-cohort-v1",
+        "seed": 42,
+        "cohort_fingerprint": "c" * 64,
+        "final_tests_used": [],
+        "comparison_budget": _budget(),
+        "negative_recipe": {"strategy": "HN0+filter", "false_negative_policy": "drop"},
+        "inputs": {"w05_generations": {"generator_id": "W05-1.5B-50K-8GB"}},
+        "stage_pair_counts": {
+            "dev_screen": {"natural": 50, "synthetic_w05": 50},
+            "dev_confirm": {"natural": 200, "synthetic_w05": 200},
+        },
+        "outputs": {},
+    }
+    for artifact_key, output_key, counts in (
+        ("train_input", "gold_natural", {"natural": 400}),
+        ("w05_synthetic_generations", "w05_synthetic", {"synthetic_w05": 400}),
+        (
+            "mixed_50_50_generations",
+            "mixed_50_50",
+            {"natural": 200, "synthetic_w05": 200},
+        ),
+    ):
+        artifact = values[artifact_key]
+        manifest["outputs"][output_key] = {
+            "path": str(artifact.resolve()),
+            "sha256": sha256_file(artifact),
+            "token_count": 1440,
+            "pair_count": 400,
+            "unique_passage_count": 400,
+            "queries_per_passage": 1,
+            "source_counts": counts,
+        }
+    values["p05_materialization_manifest"].write_text(json.dumps(manifest), encoding="utf-8")
     return values
 
 
@@ -91,7 +116,31 @@ def test_p05_plan_has_three_matched_arms_hn0_filter_and_required_controls(
     assert len(plan["execution_commands"]) == 12
     assert any("--seed 43" in command for command in plan["execution_commands"])
     assert any("--max-steps 3" in command for command in plan["execution_commands"])
-    assert any("--train-limit 100" in command for command in plan["execution_commands"])
+    assert any("--train-prefix-limit 100" in command for command in plan["execution_commands"])
+    assert all(
+        str(plan["artifacts"]["train_input"]) in command
+        for command in plan["execution_commands"]
+    )
+    w05_commands = [
+        run["command"]
+        for arm in plan["arms"]
+        if arm["arm_id"] == "P05-W05-SYNTHETIC"
+        for run in arm["runs"]
+    ]
+    mixed_commands = [
+        run["command"]
+        for arm in plan["arms"]
+        if arm["arm_id"] == "P05-MIXED50"
+        for run in arm["runs"]
+    ]
+    assert all(
+        str(plan["artifacts"]["w05_synthetic_generations"]) in command
+        for command in w05_commands
+    )
+    assert all(
+        str(plan["artifacts"]["mixed_50_50_generations"]) in command
+        for command in mixed_commands
+    )
     assert plan["final_tests_used"] == []
 
 
@@ -114,3 +163,16 @@ def test_incomplete_campaign_missing_artifact_and_bad_budget_block_commands(
     assert any("campaign" in blocker for blocker in plan["blockers"])
     assert any("w05_synthetic_generations" in blocker for blocker in plan["blockers"])
     assert any("divisible" in blocker for blocker in plan["blockers"])
+
+
+def test_materialized_artifact_sha_drift_blocks_commands(tmp_path: Path) -> None:
+    artifacts = _artifacts(tmp_path)
+    artifacts["mixed_50_50_generations"].write_text("drift\n", encoding="utf-8")
+    plan = build_p05_plan(
+        campaign_audit={"complete": True, "selection_performed": False},
+        contract=StatisticalContract.load(Path("configs/evaluation/comparison_contract_v1.yaml")),
+        comparison_budget=_budget(),
+        artifacts=artifacts,
+    )
+    assert plan["execution_commands"] == []
+    assert any("SHA-256 drift" in blocker for blocker in plan["blockers"])

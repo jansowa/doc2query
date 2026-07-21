@@ -99,6 +99,14 @@ budżetem P-04. To nie jest wykonanie P-05/P-06: S00 i S07 są wymagane,
 lecz niewykonane, a porównawcze probe i testy finalne pozostają nieotwarte.
 Status zadania pozostaje `IMPLEMENTED`.
 
+Do preflightu dodano deterministyczny materializator wspólnej kohorty P-05.
+Weryfikuje jawne fingerprinty naturalnych par i generacji W05, odrzuca finalne
+testy, buduje jeden seedowany porządek `doc_id/pair_id` i zapisuje osobne
+artefakty gold, W05 oraz 50/50. Prefiks `dev_screen` i pełny `dev_confirm`
+zachowują dokładne proporcje bez duplikowania rekordów. Planner ufa wyłącznie
+manifestowi z pasującymi SHA-256. Jest to nadal wyłącznie tooling/preflight:
+nie wykonano rzeczywistej materializacji, P-05/P-06, S00/S07 ani probe.
+
 ## Cel
 
 Zaimplementować stabilny trening passage→query i uruchomić serię tanich baseline’ów, zanim projekt przejdzie do DPO lub RL.

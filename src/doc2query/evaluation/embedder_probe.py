@@ -225,13 +225,20 @@ def prepare_probe_pairs(
     primary_scorer: PairScorer | None,
     synthetic_generations: Path | None = None,
     limit: int | None = None,
+    prefix_limit: int | None = None,
     generator_id: str | None = None,
     bm25_index: CorpusIndex | None = None,
     documents_path: Path | None = None,
     progress: Callable[[int, int], None] | None = None,
 ) -> tuple[list[dict[str, Any]], str, dict[str, Any], list[dict[str, Any]]]:
+    if limit is not None and prefix_limit is not None:
+        raise ValueError("probe limit and prefix_limit are mutually exclusive")
+    if prefix_limit is not None and prefix_limit < 1:
+        raise ValueError("probe prefix_limit must be positive")
     synthetic = _synthetic_map(synthetic_generations)
     materialized = list(records)
+    if prefix_limit is not None:
+        materialized = materialized[:prefix_limit]
     prepared: list[tuple[dict[str, Any], str]] = []
     for record in materialized:
         query = _query_for_record(record, query_source=query_source, synthetic=synthetic)
@@ -710,6 +717,7 @@ def run_probe_experiment(
     statistical_contract: StatisticalContract,
     synthetic_generations: Path | None = None,
     train_limit: int | None = None,
+    train_prefix_limit: int | None = None,
     documents_path: Path,
     holdout_manifest: Path | None = None,
     native_documents_path: Path | None = None,
@@ -731,6 +739,7 @@ def run_probe_experiment(
         primary_scorer=primary_scorer,
         synthetic_generations=synthetic_generations,
         limit=train_limit,
+        prefix_limit=train_prefix_limit,
         generator_id=generator_id,
         bm25_index=bm25_index,
         documents_path=documents_path,
