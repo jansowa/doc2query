@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
+import torch
 
+import doc2query.evaluation.embedder_probe as embedder_probe
 from doc2query.evaluation.bootstrap import assert_same_test_fingerprint, paired_bootstrap
 from doc2query.evaluation.comparison import compare_generator_runs, rank_variants
 from doc2query.evaluation.corpus import (
@@ -329,6 +331,47 @@ def test_probe_resume_rejects_recipe_identity_mismatch(tmp_path: Path) -> None:
             negative_audit_rows=[],
             statistical_contract=contract,
         )
+
+
+def test_corpus_encoding_cache_reuses_completed_shards(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_encode(
+        _model: Any,
+        _tokenizer: Any,
+        texts: list[str],
+        *,
+        max_length: int,
+        device: torch.device,
+    ) -> torch.Tensor:
+        del max_length, device
+        calls.append(texts)
+        return torch.tensor([[float(text)] for text in texts])
+
+    monkeypatch.setattr(embedder_probe, "_encode", fake_encode)
+    arguments = {
+        "model": cast(Any, object()),
+        "tokenizer": object(),
+        "texts": ["1", "2", "3", "4", "5"],
+        "max_length": 8,
+        "batch_size": 2,
+        "device": torch.device("cpu"),
+        "cache_dir": tmp_path / "cache",
+        "cache_identity": {"fixture": "v1"},
+    }
+    first = embedder_probe._encode_batched(**arguments)
+    assert calls == [["1", "2"], ["3", "4"], ["5"]]
+
+    def fail_encode(*_args: Any, **_kwargs: Any) -> torch.Tensor:
+        raise AssertionError("completed embedding shards must be reused")
+
+    monkeypatch.setattr(embedder_probe, "_encode", fail_encode)
+    second = embedder_probe._encode_batched(**arguments)
+    assert torch.equal(first, second)
+    with pytest.raises(ValueError, match="identity mismatch"):
+        embedder_probe._encode_batched(**(arguments | {"cache_identity": {"fixture": "v2"}}))
 
 
 def test_ranking_requires_probe_metric() -> None:

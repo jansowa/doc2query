@@ -50,6 +50,20 @@ Logs are appended across invocations. No materialization-time result, probe
 measurement, promotion, or generator selection is claimed yet. S00 and S07
 remain `required_unexecuted`.
 
+Resume audit on 2026-07-22 found that the first implementation still repeated
+`filter_negatives` before accepting the completed training summary and did not
+persist corpus encodings. The observed third invocation therefore rescored
+2,486 examples and the earlier interrupted encoding progress (6% of 2,404,263
+documents) was not recoverable. This was a real resumability defect, not a new
+training run. The corrected path accepts the existing identity-checked
+training artifact before pair preparation, so it skips both filtering and
+training. Corpus embeddings are now stored as atomic approximately 1% shards,
+and query retrieval rows are flushed individually behind an identity manifest.
+On restart, valid shards and the valid query prefix are reused; mismatched
+recipe, model, corpus or test fingerprints fail closed. The existing gold
+training artifact passed the new resume check. No GPU measurement was run as
+part of this correction.
+
 The older tentative 9,968-pair budget and the intermediate 9,960-pair
 eligibility budget are not comparison-authoritative. Only
 `reports/measurements/task04_p05_dev_screen/budget.k1.json` may be used by the

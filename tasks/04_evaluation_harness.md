@@ -43,10 +43,13 @@ pierwsze podejście bez artefaktów, a drugie zatrzymano po ostrzeżeniu o braku
 deterministycznego workspace cuBLAS. Gotowy runner przypina
 `CUBLAS_WORKSPACE_CONFIG=:4096:8`, pokazuje postęp i uruchamia tylko trzy
 25-procentowe runy seed 42. Jest wznawialny: waliduje i pomija ukończone
-ramiona, po zapisaniu modelu i `train_summary.json` kontynuuje od ewaluacji,
-a wcześniejszy niepełny trening archiwizuje bez usuwania i ponawia wyłącznie
-bieżące ramię. Logi są dopisywane, więc historia kolejnych uruchomień zostaje
-zachowana. Szczegóły:
+ramiona, a po zapisaniu modelu i `train_summary.json` pomija również scoring
+`filter_negatives` oraz trening. Kodowanie korpusu zapisuje atomowe shardy co
+około 1%, a ocenę query dopisuje po każdym rekordzie; oba etapy wykorzystują
+przy wznowieniu wyłącznie artefakty o zgodnej tożsamości. Wcześniejszy
+niepełny trening archiwizuje bez usuwania i ponawia wyłącznie bieżące ramię.
+Logi są dopisywane, więc historia kolejnych uruchomień zostaje zachowana.
+Szczegóły:
 [`task04_p05_dev_screen_2026-07-21.md`](../reports/blockers/task04_p05_dev_screen_2026-07-21.md).
 
 Centralny harness, zamrożone manifesty/ID, metryki i slice’y, raporty

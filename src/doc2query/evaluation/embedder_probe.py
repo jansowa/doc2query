@@ -591,6 +591,37 @@ def _resumable_train_summary(
     statistical_contract: StatisticalContract,
 ) -> dict[str, Any] | None:
     """Reuse a completed, identity-checked training stage after an interrupted evaluation."""
+    raw = _completed_train_summary(
+        output_dir,
+        recipe=recipe,
+        query_source=query_source,
+        negative_contract=negative_contract,
+        statistical_contract=statistical_contract,
+    )
+    if raw is None:
+        return None
+    expected = {
+        "possible_false_negative_report": dict(false_negative_report),
+        "train_fingerprint": train_fingerprint,
+        "train_examples": len(rows),
+    }
+    mismatches = [key for key, value in expected.items() if raw.get(key) != value]
+    if mismatches:
+        raise ValueError(
+            "probe resume identity mismatch in train_summary.json: " + ", ".join(mismatches)
+        )
+    return raw
+
+
+def _completed_train_summary(
+    output_dir: Path,
+    *,
+    recipe: ProbeRecipe,
+    query_source: QuerySource,
+    negative_contract: Mapping[str, Any],
+    statistical_contract: StatisticalContract,
+) -> dict[str, Any] | None:
+    """Load a completed training stage without repeating expensive pair scoring."""
     summary_path = output_dir / "train_summary.json"
     model_path = output_dir / "model"
     if not summary_path.is_file() or not model_path.is_dir() or not any(model_path.iterdir()):
@@ -607,9 +638,6 @@ def _resumable_train_summary(
         "recipe_version": recipe.recipe_version,
         "negative_contract": dict(negative_contract),
         "statistical_contract": statistical_contract.reference(),
-        "possible_false_negative_report": dict(false_negative_report),
-        "train_fingerprint": train_fingerprint,
-        "train_examples": len(rows),
         "steps": recipe.max_steps,
     }
     mismatches = [key for key, value in expected.items() if raw.get(key) != value]
@@ -641,26 +669,85 @@ def _encode_batched(
     max_length: int,
     batch_size: int,
     device: torch.device,
+    cache_dir: Path | None = None,
+    cache_identity: Mapping[str, Any] | None = None,
 ) -> torch.Tensor:
-    chunks = []
-    started = time.perf_counter()
-    report_every = max(batch_size, math.ceil(len(texts) / 100 / batch_size) * batch_size)
-    for start in range(0, len(texts), batch_size):
-        chunks.append(
-            _encode(
-                model,
-                tokenizer,
-                texts[start : start + batch_size],
-                max_length=max_length,
-                device=device,
-            )
-        )
-        completed = min(start + batch_size, len(texts))
-        if completed == len(texts) or completed % report_every < batch_size:
-            _progress("encode_corpus", completed, len(texts), started)
-    if not chunks:
+    if not texts:
         raise ValueError("cannot encode an empty corpus")
+    if (cache_dir is None) != (cache_identity is None):
+        raise ValueError("embedding cache directory and identity must be supplied together")
+    started = time.perf_counter()
+    chunk_size = max(batch_size, math.ceil(len(texts) / 100 / batch_size) * batch_size)
+    if cache_dir is not None and cache_identity is not None:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = cache_dir / "manifest.json"
+        expected_manifest = {
+            "schema_version": 1,
+            "status": "in_progress",
+            "row_count": len(texts),
+            "chunk_size": chunk_size,
+            "identity": dict(cache_identity),
+        }
+        if manifest_path.is_file():
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if manifest != expected_manifest:
+                raise ValueError("corpus embedding resume cache identity mismatch")
+        else:
+            unexpected = list(cache_dir.glob("chunk-*.pt"))
+            if unexpected:
+                raise ValueError("corpus embedding cache has shards but no identity manifest")
+            temporary = cache_dir / "manifest.json.tmp"
+            write_json(temporary, expected_manifest)
+            os.replace(temporary, manifest_path)
+    chunks: list[torch.Tensor] = []
+    for chunk_index, chunk_start in enumerate(range(0, len(texts), chunk_size)):
+        chunk_end = min(chunk_start + chunk_size, len(texts))
+        shard = cache_dir / f"chunk-{chunk_index:05d}.pt" if cache_dir is not None else None
+        if shard is not None and shard.is_file():
+            chunk = torch.load(shard, map_location="cpu", weights_only=True)
+            if not isinstance(chunk, torch.Tensor) or chunk.ndim != 2:
+                raise ValueError(f"invalid corpus embedding cache shard: {shard}")
+            if chunk.shape[0] != chunk_end - chunk_start:
+                raise ValueError(f"corpus embedding cache shard has wrong row count: {shard}")
+            if _progress_enabled():
+                print(
+                    f"[resume] encode_corpus shard {chunk_index + 1} reused",
+                    file=sys.stderr,
+                    flush=True,
+                )
+        else:
+            batch_chunks = []
+            for start in range(chunk_start, chunk_end, batch_size):
+                batch_chunks.append(
+                    _encode(
+                        model,
+                        tokenizer,
+                        texts[start : min(start + batch_size, chunk_end)],
+                        max_length=max_length,
+                        device=device,
+                    )
+                )
+            chunk = torch.cat(batch_chunks)
+            if shard is not None:
+                temporary_shard = shard.with_suffix(".pt.tmp")
+                torch.save(chunk, temporary_shard)
+                os.replace(temporary_shard, shard)
+        chunks.append(chunk)
+        _progress("encode_corpus", chunk_end, len(texts), started)
     return torch.cat(chunks)
+
+
+def _path_tree_fingerprint(path: Path) -> str:
+    digest = hashlib.sha256()
+    files = sorted(candidate for candidate in path.rglob("*") if candidate.is_file())
+    if not files:
+        raise ValueError(f"cannot fingerprint empty model directory: {path}")
+    for candidate in files:
+        digest.update(str(candidate.relative_to(path)).encode())
+        digest.update(b"\0")
+        digest.update(sha256_file(candidate).encode())
+        digest.update(b"\n")
+    return digest.hexdigest()
 
 
 def evaluate_probe(
@@ -695,6 +782,12 @@ def evaluate_probe(
     if len(corpus_ids) < 100:
         raise ValueError("corpus_retrieval requires at least 100 documents for Recall@100")
     corpus_index = {doc_id: index for index, doc_id in enumerate(corpus_ids)}
+    corpus_sha256 = sha256_file(documents_path)
+    model_fingerprint = _path_tree_fingerprint(model_path)
+    corpus_ids_digest = hashlib.sha256()
+    for doc_id in corpus_ids:
+        corpus_ids_digest.update(doc_id.encode())
+        corpus_ids_digest.update(b"\n")
     index_started = time.perf_counter()
     corpus_embeddings = _encode_batched(
         model,
@@ -703,20 +796,75 @@ def evaluate_probe(
         max_length=recipe.max_length,
         batch_size=recipe.batch_size,
         device=device,
+        cache_dir=output_dir / "corpus_embedding_cache",
+        cache_identity={
+            "recipe_fingerprint": recipe.fingerprint,
+            "model_fingerprint": model_fingerprint,
+            "corpus_sha256": corpus_sha256,
+            "corpus_ids_sha256": corpus_ids_digest.hexdigest(),
+        },
     )
     index_seconds = time.perf_counter() - index_started
-    per_query: list[dict[str, Any]] = []
-    metric_rows: list[dict[str, float | int]] = []
-    latencies: list[float] = []
-    with JsonlWriter(output_dir / "corpus_retrieval_per_query.jsonl") as writer:
+    evaluable_records = [record for record in records if record.get("positives")]
+    per_query_path = output_dir / "corpus_retrieval_per_query.jsonl"
+    checkpoint_path = output_dir / "corpus_retrieval_checkpoint.json"
+    checkpoint = {
+        "schema_version": 1,
+        "status": "in_progress",
+        "dataset_name": dataset_name,
+        "profile": profile,
+        "test_fingerprint": test_fingerprint,
+        "recipe_fingerprint": recipe.fingerprint,
+        "model_fingerprint": model_fingerprint,
+        "corpus_sha256": corpus_sha256,
+        "query_count": len(evaluable_records),
+    }
+    if checkpoint_path.is_file():
+        existing_checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+        if existing_checkpoint != checkpoint:
+            raise ValueError("corpus retrieval resume checkpoint identity mismatch")
+    else:
+        if per_query_path.is_file() and per_query_path.stat().st_size:
+            raise ValueError("corpus retrieval rows exist without a resume checkpoint")
+        temporary_checkpoint = checkpoint_path.with_suffix(".json.tmp")
+        write_json(temporary_checkpoint, checkpoint)
+        os.replace(temporary_checkpoint, checkpoint_path)
+    per_query = list(read_records(per_query_path)) if per_query_path.is_file() else []
+    expected_ids = [str(record["example_id"]) for record in evaluable_records]
+    resumed_ids = [str(row.get("example_id")) for row in per_query]
+    if resumed_ids != expected_ids[: len(resumed_ids)]:
+        raise ValueError("corpus retrieval resume rows are not the expected query prefix")
+    if len(per_query) > len(evaluable_records):
+        raise ValueError("corpus retrieval resume has more rows than expected")
+    metric_rows: list[dict[str, float | int]] = [
+        {
+            key: value
+            for key, value in row.items()
+            if key.startswith("corpus_") and isinstance(value, (int, float))
+        }
+        for row in per_query
+    ]
+    latencies = [
+        float(row["latency_seconds"])
+        for row in per_query
+        if isinstance(row.get("latency_seconds"), (int, float))
+    ]
+    if per_query and _progress_enabled():
+        print(
+            f"[resume] evaluate_queries {len(per_query):,}/{len(evaluable_records):,} reused",
+            file=sys.stderr,
+            flush=True,
+        )
+    with per_query_path.open("a", encoding="utf-8") as writer:
         query_started = time.perf_counter()
-        query_total = len(records)
+        query_total = len(evaluable_records)
         query_report_every = max(1, query_total // 100)
-        for query_index, record in enumerate(records, start=1):
+        for query_index, record in enumerate(
+            evaluable_records[len(per_query) :],
+            start=len(per_query) + 1,
+        ):
             positives = record.get("positives", [])
             negatives = record.get("hard_negatives", [])
-            if not positives:
-                continue
             started = time.perf_counter()
             query_embedding = _encode(
                 model,
@@ -755,8 +903,10 @@ def evaluate_probe(
                 "pool_hard_negative_win_rate": (
                     sum(pairwise_wins) / len(pairwise_wins) if pairwise_wins else None
                 ),
+                "latency_seconds": latencies[-1],
             }
-            writer.write(row)
+            writer.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+            writer.flush()
             per_query.append(row)
             metric_rows.append(metrics)
             if query_index == query_total or query_index % query_report_every == 0:
@@ -781,7 +931,7 @@ def evaluate_probe(
         "latency_seconds_per_query": sum(latencies) / len(latencies) if latencies else None,
         "corpus_candidate_count": len(corpus_ids),
         "corpus_path": str(documents_path),
-        "corpus_sha256": sha256_file(documents_path),
+        "corpus_sha256": corpus_sha256,
         "candidate_pool_diagnostics": {
             "pool_hard_negative_win_rate": (
                 sum(
@@ -837,31 +987,50 @@ def run_probe_experiment(
         "probe_recipe_version": recipe.recipe_version,
         "probe_recipe_fingerprint": recipe.fingerprint,
     }
-    pairs, train_fingerprint, false_negative_report, negative_audit_rows = prepare_probe_pairs(
-        read_records(train_path),
-        query_source=query_source,
-        negative_recipe=recipe.negative_recipe,
-        calibration=calibration,
-        primary_scorer=primary_scorer,
-        synthetic_generations=synthetic_generations,
-        limit=train_limit,
-        prefix_limit=train_prefix_limit,
-        generator_id=generator_id,
-        bm25_index=bm25_index,
-        documents_path=documents_path,
-        progress=(_progress_callback("filter_negatives") if _progress_enabled() else None),
-    )
-    train_summary = train_probe(
-        pairs,
+    train_summary = _completed_train_summary(
+        output_dir,
         recipe=recipe,
-        output_dir=output_dir,
         query_source=query_source,
-        train_fingerprint=train_fingerprint,
         negative_contract=negative_contract,
-        false_negative_report=false_negative_report,
-        negative_audit_rows=negative_audit_rows,
         statistical_contract=statistical_contract,
     )
+    if train_summary is None:
+        pairs, train_fingerprint, false_negative_report, negative_audit_rows = prepare_probe_pairs(
+            read_records(train_path),
+            query_source=query_source,
+            negative_recipe=recipe.negative_recipe,
+            calibration=calibration,
+            primary_scorer=primary_scorer,
+            synthetic_generations=synthetic_generations,
+            limit=train_limit,
+            prefix_limit=train_prefix_limit,
+            generator_id=generator_id,
+            bm25_index=bm25_index,
+            documents_path=documents_path,
+            progress=(_progress_callback("filter_negatives") if _progress_enabled() else None),
+        )
+        train_summary = train_probe(
+            pairs,
+            recipe=recipe,
+            output_dir=output_dir,
+            query_source=query_source,
+            train_fingerprint=train_fingerprint,
+            negative_contract=negative_contract,
+            false_negative_report=false_negative_report,
+            negative_audit_rows=negative_audit_rows,
+            statistical_contract=statistical_contract,
+        )
+    else:
+        report = train_summary.get("possible_false_negative_report")
+        if not isinstance(report, Mapping):
+            raise ValueError("resumed probe training has no false-negative report")
+        false_negative_report = dict(report)
+        if _progress_enabled():
+            print(
+                "[resume] completed training accepted; skipping filter_negatives and training",
+                file=sys.stderr,
+                flush=True,
+            )
     if (
         holdout_manifest is not None
         and holdout_set_status(holdout_manifest, "test_translated_msmarco_pl") == "materialized"
