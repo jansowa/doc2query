@@ -1,6 +1,6 @@
 # P-05/P-04 frozen-dev guardrail progress — 2026-07-23
 
-Status: `INCOMPLETE_SENTENCE_GUARDRAIL`; no arm is authorized for
+Status: `COMPLETE_NO_PROMOTION`; no arm is authorized for
 `dev_confirm` and no final test was opened.
 
 The measurement uses the same 6,598-query `dev_intrinsic_rank10` cohort,
@@ -29,25 +29,25 @@ The shared natural dev queries have `format_valid_rate = 1.000000` (6,598 /
 - synthetic round-trip: `20f5ec09…b1c2`;
 - format: `78e1a592…c3097b`.
 
-## Remaining measurement and fail-closed state
+## Completed sentence measurement and fail-closed decision
 
 The canonical `sentence_level_source_hit` compares the best sentence score
 from the known source passage(s) with the hardest inherited-negative score
 under pinned `sdadas/polish-reranker-roberta-v3`. Whole-passage scores cannot
-be substituted. The required sentence scores are not present in earlier
-artifacts, and CUDA is unavailable in the current process, so this measurement
-remains unexecuted.
+be substituted. The completed pinned-primary measurement gives
+`sentence_level_source_hit=0.894665` on the 6,598 shared frozen natural dev
+queries. Its raw artifact SHA-256 is `1996a995…c40ab`.
 
-The fail-closed P-04 engine was run against the still-incomplete audit and
-returned `status=incomplete`, without a selection claim. Independently, both
-variant lower CI bounds for the primary `corpus_ndcg_at_10` effect remain below
-the preregistered `+0.01` threshold. Therefore neither variant can become
-`eligible` at `dev_screen`: after the sentence measurement each can only be
-`non_inferior_only` or `rejected`. No arm may proceed to `dev_confirm`.
+The completed fail-closed P-04 engine returns `non_inferior_only` for mixed and
+synthetic-only, with `errors=[]`. All guardrails pass, but both variant lower
+CI bounds for the primary `corpus_ndcg_at_10` effect remain below the
+preregistered `+0.01` threshold. Therefore no arm may proceed to
+`dev_confirm`. The final decision and exact CIs are recorded in
+[`p04_gate_decision_2026-07-23.md`](p04_gate_decision_2026-07-23.md).
 
-The resumable runner scores only the missing sentence guardrail, reuses the
-completed round-trip files, merges the per-query artifacts, builds paired-query
-10,000-sample bootstrap reports and invokes the decision engine:
+The resumable runner that produced the result scores the sentence guardrail,
+reuses completed round-trip files, merges the per-query artifacts, builds
+paired-query 10,000-sample bootstrap reports and invokes the decision engine:
 
 ```bash
 DOC2QUERY_PYTHON="$PWD/.venv-gpu/bin/python" scripts/run_p05_guardrails.sh

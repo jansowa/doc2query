@@ -9,7 +9,6 @@ from pathlib import Path
 from statistics import fmean
 from typing import Any
 
-from doc2query.evaluation.bootstrap import paired_bootstrap
 from doc2query.evaluation.p04_decision import REQUIRED_METRICS
 from doc2query.evaluation.statistical_contract import StatisticalContract
 from doc2query.utils.records import read_records
@@ -56,6 +55,36 @@ def _summary(values: Sequence[float]) -> dict[str, float]:
     }
 
 
+def _paired_bootstrap_pcg64(
+    control: Mapping[str, float],
+    arm: Mapping[str, float],
+    *,
+    samples: int,
+    seed: int,
+) -> dict[str, float | int]:
+    """Reproduce the preregistered P-05 NumPy PCG64 query bootstrap."""
+    import numpy as np
+
+    ids = sorted(control.keys() & arm.keys())
+    if not ids or set(control) != set(arm):
+        raise ValueError("paired bootstrap requires the same non-empty query IDs")
+    differences = np.asarray([arm[key] - control[key] for key in ids], dtype=np.float64)
+    rng = np.random.Generator(np.random.PCG64(seed))
+    estimates = np.empty(samples, dtype=np.float64)
+    for index in range(samples):
+        estimates[index] = float(np.mean(differences[rng.integers(0, len(ids), len(ids))]))
+    low, high = np.quantile(estimates, [0.025, 0.975])
+    return {
+        "query_count": len(ids),
+        "bootstrap_samples": samples,
+        "seed": seed,
+        "difference": float(np.mean(differences)),
+        "ci95_low": float(low),
+        "ci95_high": float(high),
+        "variant_win_fraction": float(np.mean(estimates > 0)),
+    }
+
+
 def build_dev_screen_report(
     *,
     arm_id: str,
@@ -95,7 +124,7 @@ def build_dev_screen_report(
 
     means = {metric: fmean(values.values()) for metric, values in arm_values.items()}
     bootstraps = {
-        metric: paired_bootstrap(
+        metric: _paired_bootstrap_pcg64(
             control_values[metric],
             arm_values[metric],
             samples=10_000,
@@ -124,6 +153,7 @@ def build_dev_screen_report(
             "includes_training_seed_variance": False,
             "samples": 10_000,
             "seed": 20_260_721,
+            "rng": "numpy.random.PCG64",
             "metrics": {
                 metric: {
                     "difference": result["difference"],

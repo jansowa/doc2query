@@ -51,6 +51,7 @@ def test_build_report_is_paired_and_consumable_by_p04(tmp_path: Path) -> None:
     decision = evaluate_p04_comparison(report, control_manifest=manifest, contract=contract)
     assert decision["status"] == "eligible"
     assert report["paired_query_bootstrap"]["query_count"] == 3
+    assert report["paired_query_bootstrap"]["rng"] == "numpy.random.PCG64"
 
 
 def test_build_report_rejects_unpaired_guardrails(tmp_path: Path) -> None:

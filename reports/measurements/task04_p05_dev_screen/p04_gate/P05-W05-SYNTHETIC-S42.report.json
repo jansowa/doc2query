@@ -1,0 +1,111 @@
+{
+  "actual_frozen_subset": "dev_intrinsic_rank10",
+  "arm_id": "P05-W05-SYNTHETIC-S42",
+  "comparison_budget": {
+    "definition_version": "probe-budget-v1",
+    "pair_count": 2486,
+    "queries_per_passage": 1,
+    "token_count": 1152000,
+    "unique_passage_count": 2486
+  },
+  "control_id": "P05-GOLD-NATURAL-S42",
+  "data_sources": [
+    "dev_intrinsic"
+  ],
+  "evaluation_sets": [
+    "dev_intrinsic"
+  ],
+  "final_tests_used": [],
+  "guardrail_semantics": {
+    "corpus_round_trip_at_20": "known-positive hit@20 of the arm's probe on the shared frozen natural dev query",
+    "format_valid_rate": "single-query format validity of the shared frozen natural dev query; identical across probe-training arms",
+    "sentence_level_source_hit": "frozen-primary best source sentence beats the hardest inherited negative; shared natural dev query, hence identical across probe-training arms"
+  },
+  "paired_query_bootstrap": {
+    "includes_training_seed_variance": false,
+    "metrics": {
+      "corpus_ndcg_at_10": {
+        "ci_high": -0.0003609309654892418,
+        "ci_low": -0.007937212918602693,
+        "difference": -0.004143461282246863,
+        "variant_win_fraction": 0.0184
+      },
+      "corpus_round_trip_at_20": {
+        "ci_high": 0.002121855107608366,
+        "ci_low": -0.011215519854501364,
+        "difference": -0.004546832373446499,
+        "variant_win_fraction": 0.0885
+      },
+      "format_valid_rate": {
+        "ci_high": 0.0,
+        "ci_low": 0.0,
+        "difference": 0.0,
+        "variant_win_fraction": 0.0
+      },
+      "sentence_level_source_hit": {
+        "ci_high": 0.0,
+        "ci_low": 0.0,
+        "difference": 0.0,
+        "variant_win_fraction": 0.0
+      }
+    },
+    "paired": true,
+    "query_count": 6598,
+    "query_id_fingerprint": "33ee2411d2ccd3704dec019c8c618572ac9295551f43c4b678b29a2ababc7189",
+    "rng": "numpy.random.PCG64",
+    "samples": 10000,
+    "seed": 20260721,
+    "unit": "query"
+  },
+  "per_seed": [
+    {
+      "metrics": {
+        "corpus_ndcg_at_10": 0.04861844419332954,
+        "corpus_round_trip_at_20": 0.11230675962412852,
+        "format_valid_rate": 1.0,
+        "sentence_level_source_hit": 0.8946650500151561
+      },
+      "seed": 42
+    }
+  ],
+  "schema_version": 1,
+  "stage": "dev_screen",
+  "statistical_contract": {
+    "adr_fingerprint": "2f978f482e304c17ee72d5604a278ab0db1e0090d006902de5069c94d303d968",
+    "adr_id": "ADR-task04-P04-statistical-budget",
+    "adr_path": "reports/decisions/task04_p04_statistical_budget_contract.md",
+    "adr_version": "1.0.0",
+    "contract_fingerprint": "e2afd9b03a0e6e55b896dff76e1c0df00f0b7fc1d7eddbcb014e85470c273c19",
+    "contract_version": "task04-p04-v1"
+  },
+  "training_seed_summary": {
+    "corpus_ndcg_at_10": {
+      "max": 0.04861844419332954,
+      "mean": 0.04861844419332954,
+      "min": 0.04861844419332954,
+      "range": 0.0,
+      "sample_sd": 0.0
+    },
+    "corpus_round_trip_at_20": {
+      "max": 0.11230675962412852,
+      "mean": 0.11230675962412852,
+      "min": 0.11230675962412852,
+      "range": 0.0,
+      "sample_sd": 0.0
+    },
+    "format_valid_rate": {
+      "max": 1.0,
+      "mean": 1.0,
+      "min": 1.0,
+      "range": 0.0,
+      "sample_sd": 0.0
+    },
+    "sentence_level_source_hit": {
+      "max": 0.8946650500151561,
+      "mean": 0.8946650500151561,
+      "min": 0.8946650500151561,
+      "range": 0.0,
+      "sample_sd": 0.0
+    }
+  }
+}

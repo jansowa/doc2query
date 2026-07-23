@@ -1,0 +1,33 @@
+{
+  "criteria": {
+    "corpus_ndcg_at_10": {
+      "ci_low": -0.007937212918602693,
+      "kind": "minimum_practical_effect",
+      "passed": false,
+      "required_minimum": 0.01
+    },
+    "corpus_round_trip_at_20": {
+      "ci_low": -0.011215519854501364,
+      "kind": "non_inferiority",
+      "passed": true,
+      "required_minimum": -0.02
+    },
+    "format_valid_rate": {
+      "ci_low": 0.0,
+      "kind": "non_inferiority",
+      "passed": true,
+      "required_minimum": -0.005
+    },
+    "sentence_level_source_hit": {
+      "ci_low": 0.0,
+      "kind": "non_inferiority",
+      "passed": true,
+      "required_minimum": -0.02
+    }
+  },
+  "errors": [],
+  "schema_version": 1,
+  "selection_claim": null,
+  "stage": "dev_screen",
+  "status": "non_inferior_only"
+}

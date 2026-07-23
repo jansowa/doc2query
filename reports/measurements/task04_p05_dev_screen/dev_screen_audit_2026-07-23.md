@@ -41,7 +41,8 @@ Later on 23 July, exact `corpus_round_trip_at_20` was backfilled from the
 completed probe artifacts and frozen embedding caches: gold `0.116854`, mixed
 `0.130797`, synthetic-only `0.112307`. The shared frozen natural dev queries
 have `format_valid_rate=1.0`. The canonical sentence-level primary-judge
-measurement remains unexecuted because CUDA is unavailable in the current
-process. The gate therefore remains fail-closed and no arm is authorized for
+measurement was subsequently completed at `0.894665`. The final engine returns
+`non_inferior_only` for both variants: all guardrails pass, but neither primary
+CI reaches the `+0.01` practical-effect threshold. No arm is authorized for
 `dev_confirm`. See
-[`guardrail_progress_2026-07-23.md`](guardrail_progress_2026-07-23.md).
+[`p04_gate_decision_2026-07-23.md`](p04_gate_decision_2026-07-23.md).

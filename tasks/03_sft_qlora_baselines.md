@@ -15,10 +15,12 @@ Wśród runów 10k najniższy eval loss uzyskał LR `2e-4` (1.2505); run 50k z L
 [`docs/experiments/task03_8gb_weekend_2026-07-17.md`](../docs/experiments/task03_8gb_weekend_2026-07-17.md).
 
 Zadanie pozostaje `IMPLEMENTED`, ponieważ loss i panel nie otwierają bramki
-jakościowej. Pierwszy zredukowany probe P-05 jest zmierzony, lecz jego bramka
-pozostaje niekompletna bez intrinsic guardraili P-04. Pozostały również S00,
+jakościowej. Pierwszy zredukowany probe P-05 oraz pełna bramka P-04
+`dev_screen` są zmierzone, ale oba warianty mają tylko
+`non_inferior_only`; `dev_confirm_authorized_arms=[]`. Pozostały również S00,
 S07, pełniejsze probe, 4.5B base vs instruct oraz ordinary/balanced/weighted.
-Do czasu tych pomiarów nie ma podstaw do przejścia do DPO.
+Do czasu prospektywnej decyzji o dalszej ścieżce nie ma podstaw do przejścia
+do DPO.
 
 18 lipca uruchomiono nocną kolejkę W06 dla Bielika 4.5B Instruct na 8 GB.
 Po wstępnym potwierdzeniu, że BS1/L512 wykonuje backward bez OOM, kolejkę
@@ -121,12 +123,12 @@ Audyt: [`dev_screen_audit_2026-07-23.md`](../reports/measurements/task04_p05_dev
 
 Follow-up zmierzył na tym samym frozen dev exact `corpus_round_trip_at_20`
 gold/mixed/synthetic `0.116854/0.130797/0.112307` oraz wspólny
-`format_valid_rate=1.0`. Kanoniczny `sentence_level_source_hit` nadal wymaga
-krótkiego wznawialnego runu primary judge na GPU. Ponieważ dolny CI primary
-effect żadnego wariantu nie osiąga `+0.01`, żadne ramię nie może uzyskać
-statusu `eligible` do `dev_confirm`; engine pozostaje `incomplete` do domknięcia
-ostatniego guardraila. Raport postępu:
-[`guardrail_progress_2026-07-23.md`](../reports/measurements/task04_p05_dev_screen/guardrail_progress_2026-07-23.md).
+`format_valid_rate=1.0` oraz `sentence_level_source_hit=0.894665`. Pełny engine
+z 10 000 paired-query bootstrapów zwraca `non_inferior_only` dla mixed i
+synthetic-only: wszystkie guardraile przechodzą, lecz dolny CI primary effect
+żadnego wariantu nie osiąga `+0.01`. `dev_confirm_authorized_arms=[]`; nie
+wybrano finalisty i nie otwarto testów. Raport decyzji:
+[`p04_gate_decision_2026-07-23.md`](../reports/measurements/task04_p05_dev_screen/p04_gate_decision_2026-07-23.md).
 
 Do preflightu dodano deterministyczny materializator wspólnej kohorty P-05.
 Weryfikuje jawne fingerprinty naturalnych par i generacji W05, odrzuca finalne
