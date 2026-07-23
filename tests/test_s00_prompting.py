@@ -1,25 +1,53 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 from typing import Any
 
 import pytest
+import torch
 import yaml
 
 from doc2query.evaluation import s00_prompting
-from doc2query.evaluation.s00_prompting import encode_prompt, generate_s00, load_contract
+from doc2query.evaluation.s00_prompting import (
+    LEGACY_RESUME_IDENTITIES,
+    _generate_model_batch,
+    _left_pad_batch,
+    _open_journal,
+    encode_prompt,
+    generate_s00,
+    load_contract,
+)
 from doc2query.utils.records import JsonlWriter
 
 
 class ToyTokenizer:
+    pad_token_id = 0
+    eos_token_id = 9
+
     def encode(self, text: str, add_special_tokens: bool = False) -> list[int]:
         del add_special_tokens
         return [ord(char) for char in text]
 
     def decode(self, values: list[int], skip_special_tokens: bool = False) -> str:
         del skip_special_tokens
-        return "".join(chr(value) for value in values)
+        return "".join(chr(int(value)) for value in values)
+
+
+class ToyModel(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.anchor = torch.nn.Parameter(torch.zeros(1))
+        self.last_attention: torch.Tensor | None = None
+
+    def generate(self, **kwargs: Any) -> torch.Tensor:
+        inputs = kwargs["input_ids"]
+        self.last_attention = kwargs["attention_mask"]
+        count = int(kwargs["num_return_sequences"])
+        expanded = inputs.repeat_interleave(count, dim=0)
+        suffix = torch.arange(65, 65 + expanded.shape[0], dtype=torch.long).unsqueeze(1)
+        return torch.cat((expanded, suffix), dim=1)
 
 
 def _record(identifier: str, query: str, *, split: str = "dev") -> dict[str, Any]:
@@ -110,6 +138,46 @@ def test_few_shot_encoding_preserves_target_budget() -> None:
     assert prompt.endswith("Zapytanie:\n")
 
 
+def test_left_padding_preserves_causal_prompt_suffix() -> None:
+    input_ids, attention = _left_pad_batch(
+        [[1, 2, 3], [4]], pad_token_id=0, device=torch.device("cpu")
+    )
+    assert input_ids.tolist() == [[1, 2, 3], [0, 0, 4]]
+    assert attention.tolist() == [[1, 1, 1], [0, 0, 1]]
+
+
+def test_model_batch_expands_sampling_candidates_in_prompt_order() -> None:
+    model = ToyModel()
+    generated = _generate_model_batch(
+        model,
+        ToyTokenizer(),
+        [[1, 2, 3], [4]],
+        mode={
+            "do_sample": True,
+            "num_return_sequences": 2,
+            "temperature": 0.8,
+            "top_p": 0.95,
+        },
+        max_new_tokens=4,
+    )
+    assert generated == ["A", "B", "C", "D"]
+    assert model.last_attention is not None
+    assert model.last_attention.tolist() == [[1, 1, 1], [0, 0, 1]]
+
+
+def test_legacy_journal_identity_is_accepted(tmp_path: Path) -> None:
+    legacy = next(iter(LEGACY_RESUME_IDENTITIES))
+    path = tmp_path / "generation.sqlite"
+    connection = _open_journal(path, legacy)
+    connection.close()
+    connection = _open_journal(
+        path,
+        "new-trajectory-identity",
+        compatible_identities=LEGACY_RESUME_IDENTITIES,
+    )
+    connection.close()
+
+
 def test_mock_generation_resumes_exactly(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     contract = _fixture(tmp_path, monkeypatch)
     with pytest.raises(InterruptedError):
@@ -127,3 +195,30 @@ def test_mock_generation_resumes_exactly(monkeypatch: pytest.MonkeyPatch, tmp_pa
         ]
         assert len(rows) == 20
         assert len({row["evaluation_id"] for row in rows}) == 20
+
+
+def test_mock_generation_halves_batch_after_oom(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    contract = _fixture(tmp_path, monkeypatch)
+    result = generate_s00(
+        contract,
+        batch_size=4,
+        min_batch_size=1,
+        mock=True,
+        mock_oom_above=2,
+    )
+    assert result["oom_retries"] == 4
+    assert set(result["effective_prompt_batch_sizes"].values()) == {2}
+    journal = tmp_path / "out" / "generation.sqlite"
+    connection = sqlite3.connect(journal)
+    try:
+        batch_sizes = {
+            int(row[0])
+            for row in connection.execute(
+                "SELECT value FROM metadata WHERE key LIKE 'prompt_batch_size:%'"
+            )
+        }
+    finally:
+        connection.close()
+    assert batch_sizes == {2}

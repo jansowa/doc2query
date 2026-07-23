@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import hashlib
 import json
 import os
@@ -26,6 +27,14 @@ from doc2query.utils.tracking import collect_code_provenance
 
 CONTRACT_VERSION = "task03-s00-prompting-v1"
 PROMPT_STRATEGIES = ("zero_shot", "few_shot")
+GENERATION_TRAJECTORY_VERSION = "s00-batched-generation-v2"
+# Journal created by e6ecfb3 before batching was introduced. Its completed
+# rows use the same frozen cohort, prompts and decoding contract and are safe
+# to retain. New journals use the trajectory version above instead of a git
+# commit so execution-only optimizations do not invalidate resume state.
+LEGACY_RESUME_IDENTITIES = frozenset(
+    {"feefd6d189cddb0ec9f059579eaf280fc8ce83246940024fc98fe150ba1d2280"}
+)
 
 
 def canonical_fingerprint(value: Any) -> str:
@@ -287,7 +296,12 @@ def encode_prompt(
     return ids, tokenizer.decode(ids, skip_special_tokens=False)
 
 
-def _open_journal(path: Path, identity: str) -> sqlite3.Connection:
+def _open_journal(
+    path: Path,
+    identity: str,
+    *,
+    compatible_identities: frozenset[str] = frozenset(),
+) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(path)
     connection.execute("PRAGMA journal_mode=WAL")
@@ -304,10 +318,106 @@ def _open_journal(path: Path, identity: str) -> sqlite3.Connection:
     if row is None:
         connection.execute("INSERT INTO metadata(key, value) VALUES('identity', ?)", (identity,))
         connection.commit()
-    elif row[0] != identity:
+    elif row[0] != identity and row[0] not in compatible_identities:
         connection.close()
         raise ValueError("S00 generation resume identity mismatch")
     return connection
+
+
+def _batch_metadata_key(strategy: str, mode: str) -> str:
+    return f"prompt_batch_size:{strategy}:{mode}"
+
+
+def _effective_batch_size(
+    connection: sqlite3.Connection,
+    *,
+    strategy: str,
+    mode: str,
+    requested: int,
+    minimum: int,
+) -> int:
+    key = _batch_metadata_key(strategy, mode)
+    row = connection.execute("SELECT value FROM metadata WHERE key=?", (key,)).fetchone()
+    effective = min(requested, int(row[0])) if row is not None else requested
+    if effective < minimum:
+        raise ValueError("saved S00 batch size is below the configured minimum")
+    return effective
+
+
+def _save_batch_size(
+    connection: sqlite3.Connection, *, strategy: str, mode: str, value: int
+) -> None:
+    connection.execute(
+        "INSERT OR REPLACE INTO metadata(key, value) VALUES(?, ?)",
+        (_batch_metadata_key(strategy, mode), str(value)),
+    )
+    connection.commit()
+
+
+def _left_pad_batch(
+    sequences: Sequence[Sequence[int]], *, pad_token_id: int, device: torch.device
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if not sequences:
+        raise ValueError("cannot pad an empty S00 generation batch")
+    width = max(len(sequence) for sequence in sequences)
+    input_ids = torch.full((len(sequences), width), pad_token_id, dtype=torch.long, device=device)
+    attention_mask = torch.zeros_like(input_ids)
+    for row, sequence in enumerate(sequences):
+        length = len(sequence)
+        input_ids[row, width - length :] = torch.tensor(sequence, dtype=torch.long, device=device)
+        attention_mask[row, width - length :] = 1
+    return input_ids, attention_mask
+
+
+def _is_cuda_oom(error: BaseException) -> bool:
+    return isinstance(error, torch.cuda.OutOfMemoryError) or (
+        "out of memory" in str(error).casefold() and "cuda" in str(error).casefold()
+    )
+
+
+def _generate_model_batch(
+    model: Any,
+    tokenizer: Any,
+    prompt_ids: Sequence[Sequence[int]],
+    *,
+    mode: Mapping[str, Any],
+    max_new_tokens: int,
+) -> list[str]:
+    """Keep CUDA batch tensors in a short-lived frame so OOM retry can release them."""
+    device = next(model.parameters()).device
+    tensor, attention_mask = _left_pad_batch(
+        prompt_ids,
+        pad_token_id=int(tokenizer.pad_token_id),
+        device=device,
+    )
+    kwargs: dict[str, Any] = {
+        "input_ids": tensor,
+        "attention_mask": attention_mask,
+        "max_new_tokens": max_new_tokens,
+        "do_sample": bool(mode["do_sample"]),
+        "num_return_sequences": int(mode["num_return_sequences"]),
+        "pad_token_id": tokenizer.pad_token_id,
+        "eos_token_id": tokenizer.eos_token_id,
+    }
+    if mode["do_sample"]:
+        kwargs.update(
+            temperature=float(mode["temperature"]),
+            top_p=float(mode["top_p"]),
+        )
+    with torch.inference_mode():
+        sequences = model.generate(**kwargs)
+    return [
+        tokenizer.decode(sequence[tensor.shape[1] :], skip_special_tokens=True).strip()
+        for sequence in sequences
+    ]
+
+
+def _batch_seed(target_seed: int, strategy: str, mode: str, example_ids: Sequence[str]) -> int:
+    joined = ",".join(example_ids)
+    return int(
+        hashlib.sha256(f"{target_seed}:{strategy}:{mode}:{joined}".encode()).hexdigest()[:8],
+        16,
+    )
 
 
 def _duration(seconds: float) -> str:
@@ -361,10 +471,15 @@ def generate_s00(
     contract_path: Path,
     *,
     output_dir: Path | None = None,
+    batch_size: int = 8,
+    min_batch_size: int = 1,
     mock: bool = False,
     interrupt_after: int | None = None,
+    mock_oom_above: int | None = None,
 ) -> dict[str, Any]:
     """Generate zero/few-shot greedy and sampled queries with exact SQLite resume."""
+    if batch_size < 1 or min_batch_size < 1 or min_batch_size > batch_size:
+        raise ValueError("S00 requires 1 <= min_batch_size <= batch_size")
     contract = load_contract(contract_path)
     destination = output_dir or Path(str(contract["output_dir"]))
     preparation = prepare_s00(contract_path, output_dir=destination)
@@ -379,17 +494,25 @@ def generate_s00(
         "contract": contract,
         "target_records_sha256": preparation["target_records_sha256"],
         "exemplars_sha256": _sha256_file(exemplar_path),
-        "code": collect_code_provenance(),
+        "generation_trajectory_version": GENERATION_TRAJECTORY_VERSION,
     }
     identity = canonical_fingerprint(identity_payload)
     journal_path = destination / "generation.sqlite"
-    connection = _open_journal(journal_path, identity)
+    connection = _open_journal(
+        journal_path, identity, compatible_identities=LEGACY_RESUME_IDENTITIES
+    )
     completed = {
         (str(row[0]), str(row[1]), str(row[2]), int(row[3]))
         for row in connection.execute(
             "SELECT strategy, mode, example_id, candidate_index FROM generations"
         )
     }
+    legacy_completed = int(
+        connection.execute(
+            "SELECT COUNT(*) FROM generations "
+            "WHERE instr(payload, '\"generation_trajectory_version\"') = 0"
+        ).fetchone()[0]
+    )
     modes = list(contract["generation"]["modes"])
     expected_per_strategy = len(target) * sum(int(mode["num_return_sequences"]) for mode in modes)
     total = len(PROMPT_STRATEGIES) * expected_per_strategy
@@ -406,117 +529,177 @@ def generate_s00(
         model.eval()
     started = time.perf_counter()
     generated_now = 0
+    oom_retries = 0
+    effective_batch_sizes: dict[str, int] = {}
     _progress(len(completed), total, 0.0)
     try:
         for strategy in PROMPT_STRATEGIES:
-            for ordinal, record in enumerate(target):
-                positive = sorted(record["positives"], key=lambda row: str(row["doc_id"]))[0]
-                example_id = str(record["example_id"])
-                for mode in modes:
-                    name = str(mode["name"])
-                    candidate_count = int(mode["num_return_sequences"])
+            for mode in modes:
+                name = str(mode["name"])
+                candidate_count = int(mode["num_return_sequences"])
+                pending: list[tuple[int, dict[str, Any]]] = []
+                for ordinal, record in enumerate(target):
+                    example_id = str(record["example_id"])
                     keys = [(strategy, name, example_id, index) for index in range(candidate_count)]
                     if all(key in completed for key in keys):
                         continue
                     if any(key in completed for key in keys):
                         raise ValueError("partial multi-candidate S00 generation group in journal")
-                    seed = int(
-                        hashlib.sha256(
-                            f"{contract['target_seed']}:{strategy}:{name}:{example_id}".encode()
-                        ).hexdigest()[:8],
-                        16,
-                    )
-                    if mock:
-                        generated = [
-                            f"mock {strategy} {name} {example_id} {i}"
-                            for i in range(candidate_count)
-                        ]
-                        prompt = f"mock prompt {strategy} {example_id}"
-                    else:
-                        assert tokenizer is not None and model is not None
-                        set_seed(seed)
-                        input_ids, prompt = encode_prompt(
-                            tokenizer,
-                            str(positive["text"]),
-                            strategy=strategy,
-                            exemplars=exemplars,
-                            max_prompt_tokens=int(contract["generation"]["max_prompt_tokens"]),
-                            min_target_passage_tokens=int(
-                                contract["prompt"]["min_target_passage_tokens"]
-                            ),
-                            max_exemplar_characters=int(
-                                contract["exemplars"]["max_passage_characters"]
-                            ),
-                        )
-                        tensor = torch.tensor(
-                            [input_ids], dtype=torch.long, device=next(model.parameters()).device
-                        )
-                        kwargs: dict[str, Any] = {
-                            "input_ids": tensor,
-                            "attention_mask": torch.ones_like(tensor),
-                            "max_new_tokens": int(contract["generation"]["max_new_tokens"]),
-                            "do_sample": bool(mode["do_sample"]),
-                            "num_return_sequences": candidate_count,
-                            "pad_token_id": tokenizer.pad_token_id,
-                            "eos_token_id": tokenizer.eos_token_id,
-                        }
-                        if mode["do_sample"]:
-                            kwargs.update(
-                                temperature=float(mode["temperature"]), top_p=float(mode["top_p"])
+                    pending.append((ordinal, record))
+                effective_batch = _effective_batch_size(
+                    connection,
+                    strategy=strategy,
+                    mode=name,
+                    requested=batch_size,
+                    minimum=min_batch_size,
+                )
+                position = 0
+                while position < len(pending):
+                    chunk = pending[position : position + effective_batch]
+                    example_ids = [str(record["example_id"]) for _ordinal, record in chunk]
+                    seed = _batch_seed(int(contract["target_seed"]), strategy, name, example_ids)
+                    prompts: list[str] = []
+                    prompt_ids: list[list[int]] = []
+                    try:
+                        if mock and mock_oom_above is not None and len(chunk) > mock_oom_above:
+                            raise torch.cuda.OutOfMemoryError("mock CUDA out of memory")
+                        if mock:
+                            generated = [
+                                f"mock {strategy} {name} {example_id} {candidate_index}"
+                                for example_id in example_ids
+                                for candidate_index in range(candidate_count)
+                            ]
+                            prompts = [
+                                f"mock prompt {strategy} {example_id}" for example_id in example_ids
+                            ]
+                        else:
+                            assert tokenizer is not None and model is not None
+                            for _ordinal, record in chunk:
+                                positive = sorted(
+                                    record["positives"], key=lambda row: str(row["doc_id"])
+                                )[0]
+                                encoded, prompt = encode_prompt(
+                                    tokenizer,
+                                    str(positive["text"]),
+                                    strategy=strategy,
+                                    exemplars=exemplars,
+                                    max_prompt_tokens=int(
+                                        contract["generation"]["max_prompt_tokens"]
+                                    ),
+                                    min_target_passage_tokens=int(
+                                        contract["prompt"]["min_target_passage_tokens"]
+                                    ),
+                                    max_exemplar_characters=int(
+                                        contract["exemplars"]["max_passage_characters"]
+                                    ),
+                                )
+                                prompt_ids.append(encoded)
+                                prompts.append(prompt)
+                            set_seed(seed)
+                            generated = _generate_model_batch(
+                                model,
+                                tokenizer,
+                                prompt_ids,
+                                mode=mode,
+                                max_new_tokens=int(contract["generation"]["max_new_tokens"]),
                             )
-                        with torch.inference_mode():
-                            sequences = model.generate(**kwargs)
-                        generated = [
-                            tokenizer.decode(
-                                sequence[tensor.shape[1] :], skip_special_tokens=True
-                            ).strip()
-                            for sequence in sequences
-                        ]
-                    for candidate_index, text in enumerate(generated):
-                        payload = {
-                            "example_id": example_id,
-                            "positive": positive,
-                            "hard_negatives": record["hard_negatives"],
-                            "positive_count": len(record["positives"]),
-                            "reference": str(record["query"]),
-                            "metadata": record.get("metadata", {}),
-                            "experiment_id": f"S00-{strategy}",
-                            "generation_run_id": f"S00-{strategy}-{name}",
-                            "evaluation_id": f"{example_id}::{name}::{candidate_index}",
-                            "mode": name,
-                            "candidate_index": candidate_index,
-                            "generation_config": mode,
-                            "prompt_version": str(contract["prompt"]["version"]),
-                            "prompt_strategy": strategy,
-                            "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
-                            "seed": seed,
-                            "generated": text,
-                        }
-                        connection.execute(
-                            "INSERT INTO generations("
-                            "strategy, mode, example_id, candidate_index, ordinal, payload) "
-                            "VALUES(?, ?, ?, ?, ?, ?)",
-                            (
-                                strategy,
-                                name,
-                                example_id,
-                                candidate_index,
-                                ordinal,
-                                json.dumps(payload, ensure_ascii=False, sort_keys=True),
-                            ),
+                        expected = len(chunk) * candidate_count
+                        if len(generated) != expected:
+                            raise RuntimeError(
+                                f"S00 generation returned {len(generated)}/{expected} sequences"
+                            )
+                    except BaseException as error:
+                        if not _is_cuda_oom(error):
+                            raise
+                        connection.rollback()
+                        oom_retries += 1
+                        if effective_batch <= min_batch_size:
+                            raise RuntimeError(
+                                "S00 CUDA OOM at minimum prompt batch size "
+                                f"{min_batch_size}; lower S00_MIN_BATCH_SIZE or prompt length"
+                            ) from error
+                        previous_batch = effective_batch
+                        effective_batch = max(min_batch_size, effective_batch // 2)
+                        _save_batch_size(
+                            connection,
+                            strategy=strategy,
+                            mode=name,
+                            value=effective_batch,
                         )
+                        error.__traceback__ = None
+                        gc.collect()
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                        print(
+                            f"[S00 OOM] {strategy}/{name}: prompt batch "
+                            f"{previous_batch} -> {effective_batch}; retrying",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                        continue
+                    _save_batch_size(
+                        connection,
+                        strategy=strategy,
+                        mode=name,
+                        value=effective_batch,
+                    )
+                    for chunk_index, (ordinal, record) in enumerate(chunk):
+                        example_id = str(record["example_id"])
+                        positive = sorted(record["positives"], key=lambda row: str(row["doc_id"]))[
+                            0
+                        ]
+                        for candidate_index in range(candidate_count):
+                            text_index = chunk_index * candidate_count + candidate_index
+                            payload = {
+                                "example_id": example_id,
+                                "positive": positive,
+                                "hard_negatives": record["hard_negatives"],
+                                "positive_count": len(record["positives"]),
+                                "reference": str(record["query"]),
+                                "metadata": record.get("metadata", {}),
+                                "experiment_id": f"S00-{strategy}",
+                                "generation_run_id": f"S00-{strategy}-{name}",
+                                "evaluation_id": (f"{example_id}::{name}::{candidate_index}"),
+                                "mode": name,
+                                "candidate_index": candidate_index,
+                                "generation_config": mode,
+                                "prompt_version": str(contract["prompt"]["version"]),
+                                "prompt_strategy": strategy,
+                                "prompt_sha256": hashlib.sha256(
+                                    prompts[chunk_index].encode()
+                                ).hexdigest(),
+                                "seed": seed,
+                                "prompt_batch_size": len(chunk),
+                                "generation_trajectory_version": (GENERATION_TRAJECTORY_VERSION),
+                                "generated": generated[text_index],
+                            }
+                            connection.execute(
+                                "INSERT INTO generations("
+                                "strategy, mode, example_id, candidate_index, "
+                                "ordinal, payload) VALUES(?, ?, ?, ?, ?, ?)",
+                                (
+                                    strategy,
+                                    name,
+                                    example_id,
+                                    candidate_index,
+                                    ordinal,
+                                    json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                                ),
+                            )
                     connection.commit()
-                    generated_now += candidate_count
+                    position += len(chunk)
+                    generated_now += len(chunk) * candidate_count
                     done = len(completed) + generated_now
                     interval = int(contract["generation"]["progress_every"])
                     if (
-                        generated_now == candidate_count
-                        or done % interval < candidate_count
+                        generated_now == len(chunk) * candidate_count
+                        or done % interval < len(chunk) * candidate_count
                         or done == total
                     ):
                         _progress(done, total, time.perf_counter() - started)
                     if interrupt_after is not None and generated_now >= interrupt_after:
                         raise InterruptedError("deliberate S00 generation interruption")
+                effective_batch_sizes[f"{strategy}/{name}"] = effective_batch
         artifacts = {}
         for strategy in PROMPT_STRATEGIES:
             path = destination / f"{strategy}.generations.jsonl"
@@ -534,7 +717,11 @@ def generate_s00(
         "target_count": len(target),
         "expected_generation_count": total,
         "resumed_generation_count": len(completed),
+        "legacy_resumed_generation_count": legacy_completed,
         "generated_now": generated_now,
+        "requested_prompt_batch_size": batch_size,
+        "effective_prompt_batch_sizes": effective_batch_sizes,
+        "oom_retries": oom_retries,
         "elapsed_seconds_this_invocation": elapsed,
         "final_tests_used": [],
         "artifacts": artifacts,

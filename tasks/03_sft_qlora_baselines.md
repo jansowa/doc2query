@@ -155,11 +155,20 @@ fingerprint kohorty `93313d5a…db284`, brak przecięcia demonstracji i
 pierwszym etapem właściwego runnera. Raport:
 [`task03_s00_preflight_2026-07-23.md`](../reports/measurements/task03_s00_preflight_2026-07-23.md).
 
-Właściwy S00 (50 000 completionów oraz primary/shadow/corpus scoring) wymaga
-kosztownego GPU i nie został uruchomiony w tej sesji. Nie ma wyników
-zero-shot/few-shot ani decyzji jakościowej. S00 i S07 pozostają
+Właściwy S00 (50 000 completionów oraz primary/shadow/corpus scoring) został
+rozpoczęty, ale journal zawiera na razie tylko częściową generację zero-shot;
+scoring nie ruszył. Nie ma kompletnych wyników zero-shot/few-shot ani decyzji
+jakościowej. S00 i S07 pozostają
 `required_unexecuted`, P-06 niewykonane, a status Task 03 pozostaje
 `IMPLEMENTED`.
+
+Pierwszy start S00 ujawnił ETA około 20 godzin przy batch 1 promptu. Runner
+zoptymalizowano do domyślnego batcha 8 promptów z lewym paddingiem oraz
+automatycznym fallbackiem CUDA OOM `8 → 4 → 2 → 1`. Skuteczny batch jest
+zapisywany per strategia/tryb w SQLite; `S00_BATCH_SIZE` może go ograniczyć
+przy kolejnym wznowieniu. Legacy journal z commita `e6ecfb3` jest zgodny, więc
+ukończone wyniki nie są kasowane. Przyspieszenie, peak VRAM i pełny wynik S00
+pozostają niezmierzone.
 
 ## Cel
 

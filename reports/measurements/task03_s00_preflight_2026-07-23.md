@@ -49,11 +49,31 @@ tokenów, par, unikalnych pasaży oraz K query/passage.
 ## Tooling i testy
 
 Dodano kontrakt S00, fail-closed materializator kohorty, wersjonowany prompt,
-stratyfikowane demonstracje, deterministyczne seedy per rekord/ramię,
+stratyfikowane demonstracje, deterministyczne seedy generacji,
 wznawialny SQLite journal, atomowe JSONL, postęp z ETA i runner etapowy.
 
-Krótkie testy CPU: 20 testów przeszło (`test_s00_prompting.py`,
+Krótkie testy CPU w pierwotnym preflight: 20 testów przeszło (`test_s00_prompting.py`,
 `test_config.py`, `test_statistical_contract.py`). Sprawdzają między innymi
 blokadę finalnego markera, budżet promptu i wznowienie po kontrolowanym
-przerwaniu. Właściwe 50 tys. completionów i scoring nie zostały uruchomione;
-nie ma wyniku S00.
+przerwaniu. W momencie pierwotnego preflight właściwe 50 tys. completionów i
+scoring nie były uruchomione; późniejszy częściowy start opisuje follow-up
+poniżej i nadal nie stanowi wyniku S00.
+
+## Follow-up: optymalizacja runtime
+
+Pierwszy rzeczywisty start pokazał ETA około 20 godzin i około 2 GB zajętego
+VRAM. Audyt kodu potwierdził 20 000 osobnych wywołań `model.generate`: batch 1
+dla greedy oraz jeden prompt rozszerzony do czterech sekwencji dla sampling.
+Nie był to hang ani OOM, lecz niedostateczne wypełnienie GPU.
+
+Runner zmieniono na batchowanie promptów z domyślnym rozmiarem 8. Sampling
+rozszerza taki batch do 32 sekwencji. CUDA OOM jest przechwytywany przed
+commitem wyników; runner czyści cache, dzieli batch przez dwa i ponawia tę
+samą grupę aż do minimum 1. Skuteczny batch jest zapisywany w SQLite osobno
+dla `zero_shot/few_shot × greedy/sampling`. `S00_BATCH_SIZE` pozwala zacząć
+od mniejszej wartości bez utraty ukończonych grup.
+
+W chwili audytu journal zawierał 244 rekordy greedy i 972 sampling dla
+zero-shot. Zgodność z legacy identity `e6ecfb3` została przypięta, więc nie
+trzeba ich usuwać. Zysk throughputu i nowe peak VRAM pozostają niezmierzone do
+wznowienia właściwego GPU runu; nie dopisano wyniku jakościowego.
