@@ -15,9 +15,10 @@ Wśród runów 10k najniższy eval loss uzyskał LR `2e-4` (1.2505); run 50k z L
 [`docs/experiments/task03_8gb_weekend_2026-07-17.md`](../docs/experiments/task03_8gb_weekend_2026-07-17.md).
 
 Zadanie pozostaje `IMPLEMENTED`, ponieważ loss i panel nie otwierają bramki
-jakościowej. Pozostały: S00, memory probe 768/1024, intrinsic i probe embedder
-z Task 04, 4.5B base vs instruct oraz ordinary/balanced/weighted. Do czasu tych
-pomiarów nie ma podstaw do przejścia do DPO.
+jakościowej. Pierwszy zredukowany probe P-05 jest zmierzony, lecz jego bramka
+pozostaje niekompletna bez intrinsic guardraili P-04. Pozostały również S00,
+S07, pełniejsze probe, 4.5B base vs instruct oraz ordinary/balanced/weighted.
+Do czasu tych pomiarów nie ma podstaw do przejścia do DPO.
 
 18 lipca uruchomiono nocną kolejkę W06 dla Bielika 4.5B Instruct na 8 GB.
 Po wstępnym potwierdzeniu, że BS1/L512 wykonuje backward bez OOM, kolejkę
@@ -109,6 +110,14 @@ Pełne zestawienie:
 [`task03_i03_result_2026-07-21.md`](../docs/experiments/task03_i03_result_2026-07-21.md).
 I02/I04/I05 pozostają `DEFERRED`, S00/S07 `required_unexecuted`, a testy
 finalne są nieotwarte.
+
+23 lipca zakończyły się trzy zredukowane probe P-05 seed 42 na wspólnym
+budżecie i zamrożonym `dev_intrinsic_rank10`. Mixed 50/50 uzyskał nDCG@10
+`0.057568` wobec `0.052762` gold i `0.048618` synthetic-only. Paired bootstrap
+mixed-minus-gold dał `+0.004806`, 95% CI `[+0.000876, +0.008692]`, więc nie
+spełnia progu praktycznego `+0.01`. Brak trzech guardraili P-04 blokuje
+promocję do `dev_confirm`; nie wybrano finalisty i nie otwarto testów.
+Audyt: [`dev_screen_audit_2026-07-23.md`](../reports/measurements/task04_p05_dev_screen/dev_screen_audit_2026-07-23.md).
 
 Do preflightu dodano deterministyczny materializator wspólnej kohorty P-05.
 Weryfikuje jawne fingerprinty naturalnych par i generacji W05, odrzuca finalne

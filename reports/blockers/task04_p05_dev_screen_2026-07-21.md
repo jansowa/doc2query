@@ -2,7 +2,9 @@
 
 Date: 2026-07-21
 
-Status: `READY_FOR_USER_GPU_RUN`; no probe or final test executed.
+Status (updated 2026-07-23): `RUN_COMPLETE_GATE_INCOMPLETE`; three dev-only
+probe runs completed, intrinsic guardrails are missing, and no final test was
+executed.
 
 The CPU-only campaign audit passed with nine required arms complete and I02,
 I04 and I05 deferred under the pinned early-stop ADR. P-04/P-05 planning was
@@ -68,3 +70,12 @@ The older tentative 9,968-pair budget and the intermediate 9,960-pair
 eligibility budget are not comparison-authoritative. Only
 `reports/measurements/task04_p05_dev_screen/budget.k1.json` may be used by the
 runner and planner.
+
+All three runs subsequently completed. The authoritative 2026-07-23 audit is
+`reports/measurements/task04_p05_dev_screen/dev_screen_audit_2026-07-23.md`.
+It verifies the common budget, corpus and 6,598 development query IDs. Mixed
+50/50 improved nDCG@10 over gold by `0.004806` with 95% CI
+`[0.000876, 0.008692]`; synthetic-only was worse by `-0.004143` with 95% CI
+`[-0.007937, -0.000361]`. Neither passes the preregistered `+0.01` practical
+effect rule. The P-04 gate remains incomplete because the three intrinsic
+guardrails were not measured, so `dev_confirm` was not opened.

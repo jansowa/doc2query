@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "status": "incomplete_guardrails",
+  "stage": "dev_screen",
+  "selection_claim": null,
+  "data_access": {
+    "actual_set": "dev_intrinsic_rank10",
+    "parent_set": "dev_intrinsic",
+    "records_sha256": "235d9b81e04ddc5e74bd2bbe884055dd74f03b6706e6030e88a4f918ac2ffab6",
+    "query_id_fingerprint": "33ee2411d2ccd3704dec019c8c618572ac9295551f43c4b678b29a2ababc7189",
+    "query_count": 6598,
+    "final_tests_used": []
+  },
+  "integrity": {
+    "same_query_ids": true,
+    "same_corpus_sha256": "78f9f2be82ba6e42b80e80b4f77c4ff050c3ec783f1fc422f5b21313381deca7",
+    "same_comparison_budget": {
+      "definition_version": "probe-budget-v1",
+      "pair_count": 2486,
+      "queries_per_passage": 1,
+      "token_count": 1152000,
+      "unique_passage_count": 2486
+    },
+    "same_recipe_fingerprint": "5407021311adb1202c8248d5ed12fa0ede1d2b9ac63cee9d7f6cebe75e19dc68",
+    "metadata_defect": "Results were labeled test_translated_msmarco_pl even though the verified fingerprint is dev_intrinsic_rank10; no final test was accessed."
+  },
+  "arms": {
+    "P05-GOLD-NATURAL-S42": {
+      "result_sha256": "bca24e56b613b5c80b7f85f78ad5358360af34fa81d3c427bc2a182834674e4d",
+      "per_query_sha256": "5e90b12e560c94c57aaa54e152b1c1aaa7eabc7dffd8fcace69cae22054920cb",
+      "metrics": {
+        "corpus_map": 0.04576128052501216,
+        "corpus_mrr_at_10": 0.04847133811592738,
+        "corpus_ndcg_at_10": 0.0527619054755764,
+        "corpus_recall_at_1": 0.025628978478326764,
+        "corpus_recall_at_5": 0.061351924825704764,
+        "corpus_recall_at_10": 0.08092856421137719,
+        "corpus_recall_at_100": 0.18038041830857837
+      }
+    },
+    "P05-MIXED50-S42": {
+      "result_sha256": "ac59d979f49b31622b69d1be96fc4971e3af55f7d206cb4082af562a9857b488",
+      "per_query_sha256": "1638665dedec7b72d5869d005c5ec84aebee898d1d337ccf92a090b1397f7a21",
+      "metrics": {
+        "corpus_map": 0.049374874847770193,
+        "corpus_mrr_at_10": 0.052691351876711076,
+        "corpus_ndcg_at_10": 0.05756789135841576,
+        "corpus_recall_at_1": 0.026015459230069718,
+        "corpus_recall_at_5": 0.06537839749419017,
+        "corpus_recall_at_10": 0.08954228554107305,
+        "corpus_recall_at_100": 0.19577144589269477
+      }
+    },
+    "P05-W05-SYNTHETIC-S42": {
+      "result_sha256": "31766cffa5b8127e9b7ccf3be7f2912a35f33cd36389f61e0ed003c2c2754694",
+      "per_query_sha256": "99236fa4ade9f6f3c9fadd3c241b0e41293c46bb547aa3a0b371ca006aa2456c",
+      "metrics": {
+        "corpus_map": 0.04236215283641991,
+        "corpus_mrr_at_10": 0.045031563196158524,
+        "corpus_ndcg_at_10": 0.04861844419332954,
+        "corpus_recall_at_1": 0.023539961604526625,
+        "corpus_recall_at_5": 0.05677730625442053,
+        "corpus_recall_at_10": 0.07434576134182076,
+        "corpus_recall_at_100": 0.1672350207133475
+      }
+    }
+  },
+  "paired_query_bootstrap": {
+    "metric": "corpus_ndcg_at_10",
+    "difference": "variant_minus_gold",
+    "unit": "query",
+    "paired": true,
+    "samples": 10000,
+    "seed": 20260721,
+    "rng": "numpy.random.PCG64",
+    "includes_training_seed_variance": false,
+    "comparisons": {
+      "P05-MIXED50-S42": {
+        "difference": 0.004805985882839361,
+        "ci_low": 0.000875961643672034,
+        "ci_high": 0.00869244719223684,
+        "variant_win_fraction": 0.9924,
+        "practical_effect_lower_bound_required": 0.01,
+        "practical_effect_passed": false
+      },
+      "P05-W05-SYNTHETIC-S42": {
+        "difference": -0.004143461282246863,
+        "ci_low": -0.007937212918602693,
+        "ci_high": -0.0003609309654892418,
+        "variant_win_fraction": 0.0184,
+        "practical_effect_lower_bound_required": 0.01,
+        "practical_effect_passed": false
+      }
+    }
+  },
+  "p04_gate": {
+    "primary_metric_complete": true,
+    "primary_practical_effect_passed_by_any_variant": false,
+    "missing_guardrails": [
+      "corpus_round_trip_at_20",
+      "sentence_level_source_hit",
+      "format_valid_rate"
+    ],
+    "dev_confirm_authorized": false,
+    "reason": "P-04 fails closed when any guardrail is missing; point-estimate ranking is not a promotion decision."
+  }
+}

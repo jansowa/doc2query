@@ -38,9 +38,16 @@ ramiona po 9944 unikalne pary/dokumenty, fingerprint
 4972+4972 w pełnym prefiksie. Planner przechodzi bez blockerów i wskazuje
 wyłącznie zamrożony `dev_intrinsic_rank10`; `final_tests_used=[]`.
 
-Nie ma ukończonego probe ani pomiaru `dev_screen`: restart systemu przerwał
-pierwsze podejście bez artefaktów, a drugie zatrzymano po ostrzeżeniu o braku
-deterministycznego workspace cuBLAS. Gotowy runner przypina
+Trzy probe `dev_screen` seed 42 zakończyły się na identycznym budżecie i 6598
+query `dev_intrinsic_rank10`. Mixed 50/50 ma nDCG@10 `0.057568`, gold
+`0.052762`, a synthetic-only `0.048618`. Bootstrap mixed-minus-gold wynosi
+`+0.004806`, 95% CI `[+0.000876, +0.008692]`; synthetic-minus-gold
+`-0.004143`, 95% CI `[-0.007937, -0.000361]`. Żaden wariant nie spełnia
+progu praktycznego P-04 `+0.01`, a brak intrinsic guardraili blokuje
+`dev_confirm`. Nie ma decyzji finalisty ani otwarcia testów. Audyt:
+[`dev_screen_audit_2026-07-23.md`](../reports/measurements/task04_p05_dev_screen/dev_screen_audit_2026-07-23.md).
+
+Runner przypina
 `CUBLAS_WORKSPACE_CONFIG=:4096:8`, pokazuje postęp i uruchamia tylko trzy
 25-procentowe runy seed 42. Jest wznawialny: waliduje i pomija ukończone
 ramiona, a po zapisaniu modelu i `train_summary.json` pomija również scoring

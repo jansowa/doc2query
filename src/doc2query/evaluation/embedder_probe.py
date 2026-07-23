@@ -1068,7 +1068,9 @@ def run_probe_experiment(
         recipe=recipe,
         output_dir=translated_output,
         test_fingerprint=translated_fingerprint,
-        dataset_name="test_translated_msmarco_pl",
+        dataset_name=(
+            "test_translated_msmarco_pl" if holdout_manifest is not None else test_subset
+        ),
         profile=translated_profile,
         negative_contract=negative_contract,
         statistical_contract=train_summary["statistical_contract"],
@@ -1134,19 +1136,32 @@ def run_probe_experiment(
                 statistical_contract=train_summary["statistical_contract"],
                 comparison_budget=train_summary["comparison_budget"],
             )
-    report_status = "complete" if native.get("status") == "measured" else "incomplete"
-    comparison_eligible = (
-        report_status == "complete" and holdout_profile == "full" and translated_profile == "full"
-    )
+    if holdout_manifest is None:
+        report_status = "development_complete"
+        comparison_eligible = False
+        incomplete_reasons: list[str] = []
+        evaluation_sets = {test_subset: retrieval}
+    else:
+        report_status = "complete" if native.get("status") == "measured" else "incomplete"
+        comparison_eligible = (
+            report_status == "complete"
+            and holdout_profile == "full"
+            and translated_profile == "full"
+        )
+        incomplete_reasons = (
+            []
+            if report_status == "complete"
+            else [str(native.get("reason", "native not measured"))]
+        )
+        evaluation_sets = {
+            "test_native_pl": native,
+            "test_translated_msmarco_pl": retrieval,
+        }
     result = {
         "schema_version": 2,
         "report_status": report_status,
         "comparison_eligible": comparison_eligible,
-        "incomplete_reasons": (
-            []
-            if report_status == "complete"
-            else [str(native.get("reason", "native not measured"))]
-        ),
+        "incomplete_reasons": incomplete_reasons,
         "training": train_summary,
         "recipe_version": recipe.recipe_version,
         "recipe_fingerprint": recipe.fingerprint,
@@ -1154,12 +1169,9 @@ def run_probe_experiment(
         "statistical_contract": train_summary["statistical_contract"],
         "comparison_budget": train_summary["comparison_budget"],
         "possible_false_negative_report": false_negative_report,
-        "evaluation_sets": {
-            "test_native_pl": native,
-            "test_translated_msmarco_pl": retrieval,
-        },
-        # Compatibility alias for pre-P-02 consumers.  It is explicitly the
-        # translated result and must not be used as the native primary metric.
+        "evaluation_sets": evaluation_sets,
+        # Compatibility alias for pre-P-02 consumers. The named evaluation_sets
+        # entry above remains authoritative for whether this is dev or translated.
         "corpus_retrieval": retrieval,
     }
     write_json(output_dir / "result.json", result)
