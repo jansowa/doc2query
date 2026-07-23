@@ -328,6 +328,10 @@ def _batch_metadata_key(strategy: str, mode: str) -> str:
     return f"prompt_batch_size:{strategy}:{mode}"
 
 
+def _oom_ceiling_metadata_key(strategy: str, mode: str) -> str:
+    return f"oom_batch_ceiling:{strategy}:{mode}"
+
+
 def _effective_batch_size(
     connection: sqlite3.Connection,
     *,
@@ -336,7 +340,7 @@ def _effective_batch_size(
     requested: int,
     minimum: int,
 ) -> int:
-    key = _batch_metadata_key(strategy, mode)
+    key = _oom_ceiling_metadata_key(strategy, mode)
     row = connection.execute("SELECT value FROM metadata WHERE key=?", (key,)).fetchone()
     effective = min(requested, int(row[0])) if row is not None else requested
     if effective < minimum:
@@ -344,12 +348,22 @@ def _effective_batch_size(
     return effective
 
 
-def _save_batch_size(
+def _save_successful_batch_size(
     connection: sqlite3.Connection, *, strategy: str, mode: str, value: int
 ) -> None:
     connection.execute(
         "INSERT OR REPLACE INTO metadata(key, value) VALUES(?, ?)",
         (_batch_metadata_key(strategy, mode), str(value)),
+    )
+    connection.commit()
+
+
+def _save_oom_batch_ceiling(
+    connection: sqlite3.Connection, *, strategy: str, mode: str, value: int
+) -> None:
+    connection.execute(
+        "INSERT OR REPLACE INTO metadata(key, value) VALUES(?, ?)",
+        (_oom_ceiling_metadata_key(strategy, mode), str(value)),
     )
     connection.commit()
 
@@ -472,14 +486,20 @@ def generate_s00(
     *,
     output_dir: Path | None = None,
     batch_size: int = 8,
+    greedy_batch_size: int | None = None,
+    sampling_batch_size: int | None = None,
     min_batch_size: int = 1,
     mock: bool = False,
     interrupt_after: int | None = None,
     mock_oom_above: int | None = None,
 ) -> dict[str, Any]:
     """Generate zero/few-shot greedy and sampled queries with exact SQLite resume."""
-    if batch_size < 1 or min_batch_size < 1 or min_batch_size > batch_size:
-        raise ValueError("S00 requires 1 <= min_batch_size <= batch_size")
+    requested_by_mode = {
+        "greedy": greedy_batch_size if greedy_batch_size is not None else batch_size,
+        "sampling": sampling_batch_size if sampling_batch_size is not None else batch_size,
+    }
+    if min_batch_size < 1 or any(value < min_batch_size for value in requested_by_mode.values()):
+        raise ValueError("S00 requires each mode batch size >= min_batch_size >= 1")
     contract = load_contract(contract_path)
     destination = output_dir or Path(str(contract["output_dir"]))
     preparation = prepare_s00(contract_path, output_dir=destination)
@@ -550,7 +570,7 @@ def generate_s00(
                     connection,
                     strategy=strategy,
                     mode=name,
-                    requested=batch_size,
+                    requested=requested_by_mode[name],
                     minimum=min_batch_size,
                 )
                 position = 0
@@ -620,7 +640,7 @@ def generate_s00(
                             ) from error
                         previous_batch = effective_batch
                         effective_batch = max(min_batch_size, effective_batch // 2)
-                        _save_batch_size(
+                        _save_oom_batch_ceiling(
                             connection,
                             strategy=strategy,
                             mode=name,
@@ -637,7 +657,7 @@ def generate_s00(
                             flush=True,
                         )
                         continue
-                    _save_batch_size(
+                    _save_successful_batch_size(
                         connection,
                         strategy=strategy,
                         mode=name,
@@ -719,7 +739,7 @@ def generate_s00(
         "resumed_generation_count": len(completed),
         "legacy_resumed_generation_count": legacy_completed,
         "generated_now": generated_now,
-        "requested_prompt_batch_size": batch_size,
+        "requested_prompt_batch_sizes": requested_by_mode,
         "effective_prompt_batch_sizes": effective_batch_sizes,
         "oom_retries": oom_retries,
         "elapsed_seconds_this_invocation": elapsed,

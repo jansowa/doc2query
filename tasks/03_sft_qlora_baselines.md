@@ -163,12 +163,13 @@ jakościowej. S00 i S07 pozostają
 `IMPLEMENTED`.
 
 Pierwszy start S00 ujawnił ETA około 20 godzin przy batch 1 promptu. Runner
-zoptymalizowano do domyślnego batcha 8 promptów z lewym paddingiem oraz
-automatycznym fallbackiem CUDA OOM `8 → 4 → 2 → 1`. Skuteczny batch jest
-zapisywany per strategia/tryb w SQLite; `S00_BATCH_SIZE` może go ograniczyć
-przy kolejnym wznowieniu. Legacy journal z commita `e6ecfb3` jest zgodny, więc
-ukończone wyniki nie są kasowane. Przyspieszenie, peak VRAM i pełny wynik S00
-pozostają niezmierzone.
+zoptymalizowano do batcha 32 promptów dla greedy i 8 dla sampling (efektywnie
+32 sekwencje), z lewym paddingiem oraz niezależnym automatycznym fallbackiem
+CUDA OOM przez dzielenie do 1. Skuteczny batch i sufit OOM są zapisywane per
+strategia/tryb w SQLite; `S00_GREEDY_BATCH_SIZE` i
+`S00_SAMPLING_BATCH_SIZE` mogą je ograniczyć. Legacy journal z commita
+`e6ecfb3` jest zgodny, więc ukończone wyniki nie są kasowane. Przyspieszenie,
+peak VRAM i pełny wynik S00 pozostają niezmierzone.
 
 ## Cel
 

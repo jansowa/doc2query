@@ -12,6 +12,7 @@ import yaml
 from doc2query.evaluation import s00_prompting
 from doc2query.evaluation.s00_prompting import (
     LEGACY_RESUME_IDENTITIES,
+    _effective_batch_size,
     _generate_model_batch,
     _left_pad_batch,
     _open_journal,
@@ -178,6 +179,44 @@ def test_legacy_journal_identity_is_accepted(tmp_path: Path) -> None:
     connection.close()
 
 
+def test_successful_batch_does_not_block_later_growth(tmp_path: Path) -> None:
+    path = tmp_path / "generation.sqlite"
+    connection = _open_journal(path, "identity")
+    try:
+        connection.execute(
+            "INSERT INTO metadata(key, value) VALUES(?, ?)",
+            ("prompt_batch_size:zero_shot:greedy", "8"),
+        )
+        connection.commit()
+        assert (
+            _effective_batch_size(
+                connection,
+                strategy="zero_shot",
+                mode="greedy",
+                requested=32,
+                minimum=1,
+            )
+            == 32
+        )
+        connection.execute(
+            "INSERT INTO metadata(key, value) VALUES(?, ?)",
+            ("oom_batch_ceiling:zero_shot:greedy", "16"),
+        )
+        connection.commit()
+        assert (
+            _effective_batch_size(
+                connection,
+                strategy="zero_shot",
+                mode="greedy",
+                requested=32,
+                minimum=1,
+            )
+            == 16
+        )
+    finally:
+        connection.close()
+
+
 def test_mock_generation_resumes_exactly(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     contract = _fixture(tmp_path, monkeypatch)
     with pytest.raises(InterruptedError):
@@ -222,3 +261,22 @@ def test_mock_generation_halves_batch_after_oom(
     finally:
         connection.close()
     assert batch_sizes == {2}
+
+
+def test_greedy_and_sampling_use_independent_prompt_batches(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    contract = _fixture(tmp_path, monkeypatch)
+    result = generate_s00(
+        contract,
+        greedy_batch_size=4,
+        sampling_batch_size=2,
+        mock=True,
+    )
+    assert result["requested_prompt_batch_sizes"] == {"greedy": 4, "sampling": 2}
+    assert result["effective_prompt_batch_sizes"] == {
+        "zero_shot/greedy": 4,
+        "zero_shot/sampling": 2,
+        "few_shot/greedy": 4,
+        "few_shot/sampling": 2,
+    }

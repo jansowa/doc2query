@@ -66,12 +66,14 @@ VRAM. Audyt kodu potwierdził 20 000 osobnych wywołań `model.generate`: batch 
 dla greedy oraz jeden prompt rozszerzony do czterech sekwencji dla sampling.
 Nie był to hang ani OOM, lecz niedostateczne wypełnienie GPU.
 
-Runner zmieniono na batchowanie promptów z domyślnym rozmiarem 8. Sampling
-rozszerza taki batch do 32 sekwencji. CUDA OOM jest przechwytywany przed
-commitem wyników; runner czyści cache, dzieli batch przez dwa i ponawia tę
-samą grupę aż do minimum 1. Skuteczny batch jest zapisywany w SQLite osobno
-dla `zero_shot/few_shot × greedy/sampling`. `S00_BATCH_SIZE` pozwala zacząć
-od mniejszej wartości bez utraty ukończonych grup.
+Runner używa niezależnych ustawień: domyślnie 32 prompty dla greedy oraz 8 dla
+sampling, który rozszerza je do 32 sekwencji. CUDA OOM jest przechwytywany
+przed commitem wyników; runner czyści cache, dzieli właściwy batch przez dwa
+i ponawia tę samą grupę aż do minimum 1. Skuteczny batch i sufit po OOM są
+zapisywane w SQLite osobno dla `zero_shot/few_shot × greedy/sampling`.
+`S00_GREEDY_BATCH_SIZE` i `S00_SAMPLING_BATCH_SIZE` mogą niezależnie ograniczyć
+wartości bez utraty ukończonych grup. Zapis wcześniejszego udanego batcha 8 nie
+blokuje już późniejszego zwiększenia greedy.
 
 W chwili audytu journal zawierał 244 rekordy greedy i 972 sampling dla
 zero-shot. Zgodność z legacy identity `e6ecfb3` została przypięta, więc nie

@@ -23,7 +23,17 @@ def main() -> None:
         "--batch-size",
         type=int,
         default=8,
-        help="Prompt batch size; sampling expands it by num_return_sequences.",
+        help="Backward-compatible default for modes without an explicit batch size.",
+    )
+    parser.add_argument(
+        "--greedy-batch-size",
+        type=int,
+        help="Prompt batch for greedy generation (recommended: 32 on 8 GB).",
+    )
+    parser.add_argument(
+        "--sampling-batch-size",
+        type=int,
+        help="Prompt batch; expanded by num_return_sequences (recommended: 8 on 8 GB).",
     )
     parser.add_argument(
         "--min-batch-size",
@@ -42,6 +52,8 @@ def main() -> None:
             args.contract,
             output_dir=args.output_dir,
             batch_size=args.batch_size,
+            greedy_batch_size=args.greedy_batch_size,
+            sampling_batch_size=args.sampling_batch_size,
             min_batch_size=args.min_batch_size,
             mock=args.mock,
             interrupt_after=args.interrupt_after,

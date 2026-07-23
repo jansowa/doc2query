@@ -9,7 +9,8 @@ CONTRACT="configs/evaluation/s00_prompting_v1.yaml"
 OUTPUT_DIR="runs/S00-prompting-v1"
 DERIVED_MANIFEST="$OUTPUT_DIR/cohort/manifest.json"
 SUBSET="dev_s00_5000"
-PROMPT_BATCH_SIZE="${S00_BATCH_SIZE:-8}"
+GREEDY_BATCH_SIZE="${S00_GREEDY_BATCH_SIZE:-32}"
+SAMPLING_BATCH_SIZE="${S00_SAMPLING_BATCH_SIZE:-8}"
 MIN_PROMPT_BATCH_SIZE="${S00_MIN_BATCH_SIZE:-1}"
 
 if [[ ! -x "$PYTHON_BIN" ]]; then
@@ -28,7 +29,7 @@ export HF_HOME="${HF_HOME:-$ROOT_DIR/.cache/huggingface}"
 export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-$HF_HOME/transformers}"
 export TOKENIZERS_PARALLELISM=false
 
-echo "[S00 runtime] prompt_batch_size=$PROMPT_BATCH_SIZE min_batch_size=$MIN_PROMPT_BATCH_SIZE" >&2
+echo "[S00 runtime] greedy_batch_size=$GREEDY_BATCH_SIZE sampling_batch_size=$SAMPLING_BATCH_SIZE min_batch_size=$MIN_PROMPT_BATCH_SIZE" >&2
 
 "$PYTHON_BIN" scripts/run_s00_prompting.py \
   --contract "$CONTRACT" \
@@ -48,7 +49,8 @@ fi
 "$PYTHON_BIN" scripts/run_s00_prompting.py \
   --contract "$CONTRACT" \
   --output-dir "$OUTPUT_DIR" \
-  --batch-size "$PROMPT_BATCH_SIZE" \
+  --greedy-batch-size "$GREEDY_BATCH_SIZE" \
+  --sampling-batch-size "$SAMPLING_BATCH_SIZE" \
   --min-batch-size "$MIN_PROMPT_BATCH_SIZE"
 
 for STRATEGY in zero_shot few_shot; do
