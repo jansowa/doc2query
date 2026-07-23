@@ -119,6 +119,15 @@ spełnia progu praktycznego `+0.01`. Brak trzech guardraili P-04 blokuje
 promocję do `dev_confirm`; nie wybrano finalisty i nie otwarto testów.
 Audyt: [`dev_screen_audit_2026-07-23.md`](../reports/measurements/task04_p05_dev_screen/dev_screen_audit_2026-07-23.md).
 
+Follow-up zmierzył na tym samym frozen dev exact `corpus_round_trip_at_20`
+gold/mixed/synthetic `0.116854/0.130797/0.112307` oraz wspólny
+`format_valid_rate=1.0`. Kanoniczny `sentence_level_source_hit` nadal wymaga
+krótkiego wznawialnego runu primary judge na GPU. Ponieważ dolny CI primary
+effect żadnego wariantu nie osiąga `+0.01`, żadne ramię nie może uzyskać
+statusu `eligible` do `dev_confirm`; engine pozostaje `incomplete` do domknięcia
+ostatniego guardraila. Raport postępu:
+[`guardrail_progress_2026-07-23.md`](../reports/measurements/task04_p05_dev_screen/guardrail_progress_2026-07-23.md).
+
 Do preflightu dodano deterministyczny materializator wspólnej kohorty P-05.
 Weryfikuje jawne fingerprinty naturalnych par i generacji W05, odrzuca finalne
 testy, buduje jeden seedowany porządek `doc_id/pair_id` i zapisuje osobne

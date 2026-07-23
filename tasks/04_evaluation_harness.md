@@ -47,6 +47,17 @@ progu praktycznego P-04 `+0.01`, a brak intrinsic guardraili blokuje
 `dev_confirm`. Nie ma decyzji finalisty ani otwarcia testów. Audyt:
 [`dev_screen_audit_2026-07-23.md`](../reports/measurements/task04_p05_dev_screen/dev_screen_audit_2026-07-23.md).
 
+Follow-up CPU domierzył exact `corpus_round_trip_at_20` dla wszystkich ramion:
+gold `0.116854`, mixed `0.130797`, synthetic-only `0.112307`; wspólny frozen
+dev ma `format_valid_rate=1.0`. Pozostał `sentence_level_source_hit`, którego
+kanoniczna definicja wymaga przypiętego primary judge. CUDA jest niedostępna w
+bieżącym procesie, więc przygotowano wznawialny runner z progressem oraz
+assembler pełnego raportu z 10 000 paired-query bootstrapów. Fail-closed engine
+uruchomiony na niepełnym pakiecie zwraca `incomplete`. Ponieważ primary CI obu
+wariantów nie osiąga progu `+0.01`, żaden nie może zostać `eligible`; testy
+finalne i `dev_confirm` pozostają zamknięte. Szczegóły:
+[`guardrail_progress_2026-07-23.md`](../reports/measurements/task04_p05_dev_screen/guardrail_progress_2026-07-23.md).
+
 Runner przypina
 `CUBLAS_WORKSPACE_CONFIG=:4096:8`, pokazuje postęp i uruchamia tylko trzy
 25-procentowe runy seed 42. Jest wznawialny: waliduje i pomija ukończone

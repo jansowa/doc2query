@@ -34,3 +34,14 @@ missing guardrail fails closed, `dev_confirm` is not authorized. The next
 in-scope step is to measure and assemble these three guardrails on frozen dev,
 then run the P-04 decision engine. Starting an independent Task 05/06
 experiment before that would leave the current gate unresolved.
+
+## Guardrail follow-up
+
+Later on 23 July, exact `corpus_round_trip_at_20` was backfilled from the
+completed probe artifacts and frozen embedding caches: gold `0.116854`, mixed
+`0.130797`, synthetic-only `0.112307`. The shared frozen natural dev queries
+have `format_valid_rate=1.0`. The canonical sentence-level primary-judge
+measurement remains unexecuted because CUDA is unavailable in the current
+process. The gate therefore remains fail-closed and no arm is authorized for
+`dev_confirm`. See
+[`guardrail_progress_2026-07-23.md`](guardrail_progress_2026-07-23.md).
