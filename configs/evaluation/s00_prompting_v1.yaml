@@ -1,0 +1,58 @@
+schema_version: 1
+contract_version: task03-s00-prompting-v1
+status: prospective
+
+model_config: configs/experiments/s00_prompting.yaml
+model_name_or_path: speakleash/Bielik-1.5B-v3
+model_revision: 4b25049621bf3952a1fc9314c89773102eda0333
+
+frozen_manifest: data/processed/v1/evaluation/task04-v1/manifest.json
+source_subset: dev_intrinsic_rank10
+source_subset_fingerprint: 235d9b81e04ddc5e74bd2bbe884055dd74f03b6706e6030e88a4f918ac2ffab6
+target_subset: dev_s00_5000
+target_size: 5000
+target_seed: 20260723
+
+exemplars:
+  source_subset: dev_intrinsic
+  count: 6
+  seed: 20260724
+  max_passage_characters: 480
+  form_counts:
+    full_question: 3
+    keyword_query: 3
+  require_disjoint_example_ids: true
+  require_disjoint_positive_doc_ids: true
+
+prompt:
+  version: s00-prompt-pl-v1
+  min_target_passage_tokens: 128
+
+generation:
+  max_prompt_tokens: 1024
+  max_new_tokens: 64
+  progress_every: 25
+  modes:
+    - name: greedy
+      do_sample: false
+      num_return_sequences: 1
+    - name: sampling
+      do_sample: true
+      num_return_sequences: 4
+      temperature: 0.8
+      top_p: 0.95
+
+harness:
+  version: "1.1"
+  corpus_index: data/processed/v1/evaluation/corpus-bm25-v1
+  primary_judge: configs/reranker/primary_polish_roberta_v3_p03_gpu.yaml
+  shadow_judge: configs/reranker/shadow_bge_v2_m3.yaml
+  comparison_contract: configs/evaluation/comparison_contract_v1.yaml
+  comparison_contract_version: task04-p04-v1
+
+data_access:
+  development_only: true
+  final_tests_used: []
+  forbidden_markers: [test_native, test_translated, test_embedder, final_test]
+
+output_dir: runs/S00-prompting-v1

@@ -1,0 +1,129 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+import pytest
+import yaml
+
+from doc2query.evaluation import s00_prompting
+from doc2query.evaluation.s00_prompting import encode_prompt, generate_s00, load_contract
+from doc2query.utils.records import JsonlWriter
+
+
+class ToyTokenizer:
+    def encode(self, text: str, add_special_tokens: bool = False) -> list[int]:
+        del add_special_tokens
+        return [ord(char) for char in text]
+
+    def decode(self, values: list[int], skip_special_tokens: bool = False) -> str:
+        del skip_special_tokens
+        return "".join(chr(value) for value in values)
+
+
+def _record(identifier: str, query: str, *, split: str = "dev") -> dict[str, Any]:
+    return {
+        "example_id": identifier,
+        "query": query,
+        "positives": [{"doc_id": f"p-{identifier}", "text": f"Pasaż {identifier}."}],
+        "hard_negatives": [
+            {"doc_id": f"n-{identifier}-{index}", "text": f"Negatyw {index}."}
+            for index in range(10)
+        ],
+        "metadata": {"split": split},
+    }
+
+
+def _fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    rows = [_record(str(index), f"Jak działa rzecz {index}?") for index in range(8)]
+    rows += [_record(f"k{index}", f"rzecz numer {index}") for index in range(8)]
+    source = tmp_path / "dev.jsonl"
+    with JsonlWriter(source) as writer:
+        for row in rows:
+            writer.write(row)
+    parent = tmp_path / "parent.json"
+    parent.write_text("{}\n", encoding="utf-8")
+
+    def fake_load(_manifest: Path, subset: str) -> list[dict[str, Any]]:
+        if subset in {"dev_intrinsic_rank10", "dev_intrinsic"}:
+            return rows
+        ids_path = tmp_path / "out" / "cohort" / f"{subset}.ids.jsonl"
+        ids = {json.loads(line)["id"] for line in ids_path.read_text().splitlines()}
+        return [row for row in rows if row["example_id"] in ids]
+
+    monkeypatch.setattr(s00_prompting, "load_frozen_records", fake_load)
+    monkeypatch.setattr(s00_prompting, "_sha256_file", lambda _path: "f" * 64)
+    manifest = {
+        "sets": {
+            "dev_intrinsic_rank10": {
+                "records_sha256": "a" * 64,
+                "source_path": str(source),
+                "source_sha256": "b" * 64,
+            }
+        }
+    }
+    parent.write_text(json.dumps(manifest), encoding="utf-8")
+    contract = yaml.safe_load(Path("configs/evaluation/s00_prompting_v1.yaml").read_text())
+    contract.update(
+        frozen_manifest=str(parent),
+        source_subset_fingerprint="a" * 64,
+        target_size=4,
+        target_subset="dev_s00_5000",
+        output_dir=str(tmp_path / "out"),
+    )
+    contract["exemplars"]["count"] = 2
+    contract["exemplars"]["form_counts"] = {"full_question": 1, "keyword_query": 1}
+    path = tmp_path / "contract.yaml"
+    path.write_text(yaml.safe_dump(contract), encoding="utf-8")
+    monkeypatch.setattr(s00_prompting, "load_contract", lambda _path: contract)
+    return path
+
+
+def test_contract_rejects_final_test_reference(tmp_path: Path) -> None:
+    contract = yaml.safe_load(Path("configs/evaluation/s00_prompting_v1.yaml").read_text())
+    contract["output_dir"] = "runs/final_test"
+    path = tmp_path / "bad.yaml"
+    path.write_text(yaml.safe_dump(contract), encoding="utf-8")
+    with pytest.raises(ValueError, match="forbidden final-test"):
+        load_contract(path)
+
+
+def test_few_shot_encoding_preserves_target_budget() -> None:
+    tokenizer = ToyTokenizer()
+    exemplars = [
+        {"passage": "A" * 20, "query": "Jak A?", "form": "full_question"},
+        {"passage": "B" * 20, "query": "hasło B", "form": "keyword_query"},
+    ]
+    ids, prompt = encode_prompt(
+        tokenizer,
+        "C" * 1000,
+        strategy="few_shot",
+        exemplars=exemplars,
+        max_prompt_tokens=700,
+        min_target_passage_tokens=128,
+        max_exemplar_characters=20,
+    )
+    assert len(ids) == 700
+    assert "Przykład 1" in prompt
+    assert "Jak A?" in prompt
+    assert prompt.endswith("Zapytanie:\n")
+
+
+def test_mock_generation_resumes_exactly(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    contract = _fixture(tmp_path, monkeypatch)
+    with pytest.raises(InterruptedError):
+        generate_s00(contract, mock=True, interrupt_after=1)
+    result = generate_s00(contract, mock=True)
+    assert result["status"] == "complete"
+    assert result["resumed_generation_count"] > 0
+    assert result["final_tests_used"] == []
+    for strategy in ("zero_shot", "few_shot"):
+        rows = [
+            json.loads(line)
+            for line in (tmp_path / "out" / f"{strategy}.generations.jsonl")
+            .read_text()
+            .splitlines()
+        ]
+        assert len(rows) == 20
+        assert len({row["evaluation_id"] for row in rows}) == 20

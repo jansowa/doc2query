@@ -10,11 +10,13 @@ run:
   seed: 42
   output_dir: runs/S00
 data:
-  input_path: data/processed/v1/doc2query_dev.parquet
+  # Model loading only. The S00 runner ignores this selector and fail-closes on
+  # the derived 5k cohort from the frozen Task 04 development manifest.
+  input_path: data/processed/v1/dev.parquet
   input_format: parquet
   train_split: train
   eval_split: dev
   max_eval_examples: 5000
 training:
-  baseline: b0
+  baseline: b1
 tracking: {backend: offline, online: false}

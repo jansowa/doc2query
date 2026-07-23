@@ -138,6 +138,29 @@ zachowują dokładne proporcje bez duplikowania rekordów. Planner ufa wyłączn
 manifestowi z pasującymi SHA-256. Jest to nadal wyłącznie tooling/preflight:
 nie wykonano rzeczywistej materializacji, P-05/P-06, S00/S07 ani probe.
 
+Po zamknięciu P-05 zapisano prospektywny ADR dalszej kolejności:
+[`task03_s00_after_p05_2026-07-23.md`](../reports/decisions/task03_s00_after_p05_2026-07-23.md).
+Najpierw należy domknąć S00, a dopiero potem podjąć decyzję o S07/P-06. Nie
+autoryzuje to Task 05/06, DPO, nowej kampanii 4.5B, `dev_confirm` ani testów
+finalnych.
+
+Audyt wykazał, że dotychczasowy config i panel 100 rekordów nie realizowały
+S00. Dodano kontrakt `task03-s00-prompting-v1` oraz runner
+`scripts/run_s00_prompting.sh`: prospektywnie wybiera 5 000 rekordów z
+zamrożonego `dev_intrinsic_rank10`, przygotowuje 6 rozłącznych demonstracji
+per forma, uruchamia zero/few-shot w greedy i sampling, zapisuje postęp w
+SQLite i ocenia oba ramiona Harnessem v1.1. CPU preflight potwierdził
+fingerprint kohorty `93313d5a…db284`, brak przecięcia demonstracji i
+`final_tests_used=[]`. Pełny indeks corpus BM25 nie był obecny i jest
+pierwszym etapem właściwego runnera. Raport:
+[`task03_s00_preflight_2026-07-23.md`](../reports/measurements/task03_s00_preflight_2026-07-23.md).
+
+Właściwy S00 (50 000 completionów oraz primary/shadow/corpus scoring) wymaga
+kosztownego GPU i nie został uruchomiony w tej sesji. Nie ma wyników
+zero-shot/few-shot ani decyzji jakościowej. S00 i S07 pozostają
+`required_unexecuted`, P-06 niewykonane, a status Task 03 pozostaje
+`IMPLEMENTED`.
+
 ## Cel
 
 Zaimplementować stabilny trening passage→query i uruchomić serię tanich baseline’ów, zanim projekt przejdzie do DPO lub RL.

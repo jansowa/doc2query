@@ -36,7 +36,7 @@ uruchomiono.
 | [00](00_repository_bootstrap.md) | Bootstrap repozytorium i odtwarzalność | `DONE` | Szkielet projektu, środowisko, CLI, testy i rejestrowanie są gotowe. |
 | [01](01_data_contract_audit_and_splits.md) | Kontrakt danych, audyt, deduplikacja i splity | `IMPLEMENTED` | Pełny `msmarco_pl` przetworzono do zamrożonych splitów v1 i par doc2query bez leakage pozytywów. Dla rekordów z <10 negatywami przyjęto corpus retrieval oraz oznaczone, deterministyczne backfillowanie tylko w diagnostycznej puli. Pozostał raport tokenowych percentyli/HTML. |
 | [02](02_reranker_and_reward_proxies.md) | Zamrożone rerankery i proxy nagrody | `IMPLEMENTED` | Integracja, reward proxies i testy są gotowe; primary zmierzył pełny frozen dev, a query-macro próg Youdena `possible_false_negative` jest przypięty bez użycia testu. Pozostał pełny benchmark primary/shadow na dev/test z hard negative'ami. |
-| [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | Ukończono siedem ramion base oraz I01/I03 Instruct/10k. Pełna bramka P-05 `dev_screen` jest rozstrzygnięta: mixed i synthetic-only mają status `non_inferior_only`; wszystkie guardraile przechodzą, ale dolne CI nDCG@10 nie osiągają `+0.01`. `dev_confirm_authorized_arms=[]`. I02/I04/I05 są `DEFERRED`, S00/S07 `required_unexecuted`; testy finalne są nieotwarte. |
+| [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | Po braku promocji P-05 zamrożono prospektywną kolejność `S00 → decyzja S07/P-06`. Audyt S00 i preflight frozen-dev są ukończone; gotowy jest deterministyczny, wznawialny runner 5k zero/few-shot z Harness v1.1. Właściwy run GPU i scoring S00 pozostają niewykonane, podobnie S07/P-06; `dev_confirm` i testy finalne są zamknięte. |
 | [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IMPLEMENTED` | P-01–P-04 są gotowe. Trzy probe P-05 `dev_screen` i guardraile na 6598 frozen-dev query ukończono; sentence hit `0.894665`, format `1.0`, round-trip@20 gold/mixed/synthetic `0.116854/0.130797/0.112307`. Fail-closed engine bez błędów zwraca `non_inferior_only` dla obu wariantów i nie autoryzuje `dev_confirm`. Testów finalnych nie otwarto; nadal brak pełnych baseline'ów i pozostałych kryteriów Task 04. |
 | [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `IMPLEMENTED` | Gotowe są kontrakty i kod CPU: `form`/`intent`, evidence i F0–F3, controlled SFT/inference, retry/deduplikacja, multi-query JSON, concept coverage oraz top-N/MMR/coverage-aware. D00–D12, audyty 500/200, kalibracja per domena, human check i probe z CI pozostają niewykonane; mogą ruszyć dopiero po bieżącej kolejce i pierwszych probe zgodnych z P-04. |
 | [06](06_candidate_scoring_and_preference_data.md) | Scoring kandydatów i dane preferencyjne | `TODO` | Wymaga stabilnego checkpointu SFT, ukończonego Harness v1.1 oraz Task 02 i 05. |
@@ -57,11 +57,13 @@ backlogiem. Zakres P-xx został przeniesiony do wskazanych plików zadań.
    `non_inferior_only`; `dev_confirm_authorized_arms=[]`. Nie uruchamiać
    `dev_confirm` dla gold/mixed/W05 synthetic z tej macierzy. Pełna bramka HN
    przed Task 09 nadal pozostaje niewykonana.
-2. **Następna decyzja baseline:** przed nową kampanią zapisać prospektywny ADR,
-   czy domknąć wymagane S00/S07/P-06, czy zakończyć tę gałąź. Nie zmieniać
-   progu P-04 po obejrzeniu wyników. Testy finalne wolno otworzyć raz dopiero
-   po zamrożeniu rzeczywistych finalistów. W06 pozostaje eksploracyjnym dowodem
-   wykonalności 4.5B/8 GB, a nie zgodą na dalszą kampanię skali.
+2. **Następna kolejka baseline:** prospektywny ADR przyjął
+   `S00 → decyzja S07/P-06`. Tooling i dev-only preflight S00 są gotowe;
+   właściwa generacja/scoring GPU pozostają niewykonane. Po kompletnym S00
+   trzeba zapisać osobną decyzję S07/P-06. Nie zmieniać progu P-04 po
+   obejrzeniu wyników. Testy finalne wolno otworzyć raz dopiero po zamrożeniu
+   rzeczywistych finalistów. W06 pozostaje eksploracyjnym dowodem wykonalności
+   4.5B/8 GB, a nie zgodą na dalszą kampanię skali.
 3. **Task 05:** implementacja CPU jest gotowa; D00–D12 pozostają niewykonane
    do zakończenia kolejki baseline'ów i pierwszych probe zgodnych z P-04.
 4. **Po bramce:** eksperymenty Task 05, potem P-08 w Task 06 i Task 07.
@@ -69,8 +71,8 @@ backlogiem. Zakres P-xx został przeniesiony do wskazanych plików zadań.
    i pełnej bramce HN; Task 10 dopiero po finalnym ADR.
 6. **Opcjonalne:** Task 08, P-09 i Task 11 wyłącznie po własnych bramkach.
 
-Najbliższy punkt wejścia wymaga prospektywnej decyzji o dalszej ścieżce
-baseline po nieudanej promocji. Nie należy ponownie uruchamiać
+Najbliższy punkt wejścia to właściwy dev-only run S00 według zamrożonego ADR.
+Nie należy ponownie uruchamiać
 `scripts/run_p05_dev_screen.sh` ani `scripts/run_p05_guardrails.sh`: wyniki i
 decyzje są kompletne. I02/I04/I05 pozostają odroczone, S00/S07 wymagane i
 niewykonane, a `dev_confirm`, D00–D12, Task 06 i wszystkie testy finalne

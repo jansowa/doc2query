@@ -282,12 +282,19 @@ def run_checkpoint_evaluation(
             corpus_fingerprint=str(corpus_manifest["document_fingerprint"]),
         )
     local_generations = generations_path or output_dir / "generations.jsonl"
+    effective_adapter = (
+        adapter_path
+        if adapter_path is not None
+        else None
+        if generations_path is not None
+        else config.run.output_dir / "adapter"
+    )
     generation_report_path = output_dir / "generation_report.json"
     if generations_path is None and not local_generations.exists():
         generation_report = generate_evaluation_queries(
             config,
             selected,
-            adapter_path=adapter_path or config.run.output_dir / "adapter",
+            adapter_path=effective_adapter,
             output_path=local_generations,
         )
         write_json(generation_report_path, generation_report)
@@ -309,7 +316,7 @@ def run_checkpoint_evaluation(
         "selected_examples": len(selected),
         "config_path": str(config_path),
         "config": config.model_dump(mode="json"),
-        "adapter_path": str(adapter_path or config.run.output_dir / "adapter"),
+        "adapter_path": str(effective_adapter) if effective_adapter is not None else None,
         "generations_path": str(local_generations),
         "generation": generation_report,
         "primary_judge_config": str(primary_config) if primary_config else None,
