@@ -12,6 +12,9 @@ SUBSET="dev_s00_5000"
 GREEDY_BATCH_SIZE="${S00_GREEDY_BATCH_SIZE:-32}"
 SAMPLING_BATCH_SIZE="${S00_SAMPLING_BATCH_SIZE:-8}"
 MIN_PROMPT_BATCH_SIZE="${S00_MIN_BATCH_SIZE:-1}"
+SCORING_BATCH_SIZE="${S00_SCORING_BATCH_SIZE:-64}"
+BM25_WORKERS="${S00_BM25_WORKERS:-8}"
+SCORING_PROGRESS_EVERY="${S00_SCORING_PROGRESS_EVERY:-100}"
 
 if [[ ! -x "$PYTHON_BIN" ]]; then
   echo "S00 requires the GPU environment; set DOC2QUERY_PYTHON or create .venv-gpu." >&2
@@ -30,6 +33,7 @@ export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-$HF_HOME/transformers}"
 export TOKENIZERS_PARALLELISM=false
 
 echo "[S00 runtime] greedy_batch_size=$GREEDY_BATCH_SIZE sampling_batch_size=$SAMPLING_BATCH_SIZE min_batch_size=$MIN_PROMPT_BATCH_SIZE" >&2
+echo "[S00 scoring] batch_size=$SCORING_BATCH_SIZE bm25_workers=$BM25_WORKERS progress_every=$SCORING_PROGRESS_EVERY" >&2
 
 "$PYTHON_BIN" scripts/run_s00_prompting.py \
   --contract "$CONTRACT" \
@@ -68,5 +72,8 @@ for STRATEGY in zero_shot few_shot; do
     --shadow-judge configs/reranker/shadow_bge_v2_m3.yaml \
     --corpus-index data/processed/v1/evaluation/corpus-bm25-v1 \
     --judge-device cuda \
+    --scoring-batch-size "$SCORING_BATCH_SIZE" \
+    --bm25-workers "$BM25_WORKERS" \
+    --progress-every "$SCORING_PROGRESS_EVERY" \
     --output-dir "$REPORT_DIR"
 done

@@ -19,6 +19,7 @@ from doc2query.evaluation.corpus import (
     backfill_candidate_pools,
     build_biencoder_index,
     build_bm25_index,
+    evaluate_round_trip_queries,
     evaluate_round_trip_query,
 )
 from doc2query.evaluation.datasets import (
@@ -42,7 +43,7 @@ from doc2query.evaluation.retrieval import (
 )
 from doc2query.evaluation.slices import aggregate_slices
 from doc2query.evaluation.statistical_contract import StatisticalContract
-from doc2query.utils.records import JsonlWriter
+from doc2query.utils.records import JsonlWriter, read_records
 
 
 def _canonical(identifier: str, negative_count: int = 10) -> dict[str, Any]:
@@ -411,6 +412,18 @@ class _OverlapScorer:
         return result
 
 
+class _InterruptingOverlapScorer(_OverlapScorer):
+    def __init__(self, fail_on_call: int) -> None:
+        self.calls = 0
+        self.fail_on_call = fail_on_call
+
+    def score_pairs(self, pairs: Any) -> list[float]:
+        self.calls += 1
+        if self.calls == self.fail_on_call:
+            raise RuntimeError("fixture interruption")
+        return super().score_pairs(pairs)
+
+
 def test_intrinsic_smoke_writes_null_for_unmeasured(tmp_path: Path) -> None:
     source = _canonical("1")
     generation = {
@@ -441,6 +454,64 @@ def test_intrinsic_smoke_writes_null_for_unmeasured(tmp_path: Path) -> None:
     assert summary["protocols"]["candidate_pool_ranking"]["metric_prefix"] == "pool_"
     assert summary["protocols"]["corpus_retrieval"]["status"] == "not_measured"
     assert json.loads((tmp_path / "summary.json").read_text())["test_fingerprint"] == "f" * 64
+
+
+def test_intrinsic_scoring_resumes_only_durable_batches(tmp_path: Path) -> None:
+    records = []
+    for index in range(3):
+        source = _canonical(str(index))
+        records.append(
+            {
+                "evaluation_id": f"evaluation-{index}",
+                "experiment_id": "fixture",
+                "example_id": str(index),
+                "mode": "deterministic",
+                "candidate_index": 0,
+                "generated": "Gdzie leży Warszawa?",
+                "reference": source["query"],
+                "positive": source["positives"][0],
+                "hard_negatives": source["hard_negatives"],
+                "positive_count": 1,
+                "metadata": source["metadata"],
+            }
+        )
+    with pytest.raises(RuntimeError, match="fixture interruption"):
+        evaluate_intrinsic_records(
+            records,
+            primary=_InterruptingOverlapScorer(fail_on_call=5),
+            shadow=None,
+            output_dir=tmp_path,
+            test_fingerprint="f" * 64,
+            experiment_id="fixture",
+            scoring_batch_size=1,
+        )
+    assert len(list(read_records(tmp_path / "scoring.journal.jsonl"))) == 1
+    with (tmp_path / "scoring.journal.jsonl").open("ab") as handle:
+        handle.write(b'{"crash_truncated":')
+    summary = evaluate_intrinsic_records(
+        records,
+        primary=_OverlapScorer(),
+        shadow=None,
+        output_dir=tmp_path,
+        test_fingerprint="f" * 64,
+        experiment_id="fixture",
+        scoring_batch_size=1,
+    )
+    assert summary["resume"]["resumed_generation_count"] == 1
+    assert summary["resume"]["durable_generation_count"] == 3
+    assert len(list(read_records(tmp_path / "per_generation.jsonl"))) == 3
+    changed = [{**record} for record in records]
+    changed[0]["generated"] = "zmieniony output"
+    with pytest.raises(ValueError, match="resume identity mismatch"):
+        evaluate_intrinsic_records(
+            changed,
+            primary=_OverlapScorer(),
+            shadow=None,
+            output_dir=tmp_path,
+            test_fingerprint="f" * 64,
+            experiment_id="fixture",
+            scoring_batch_size=1,
+        )
 
 
 def _corpus_documents(count: int = 100) -> list[dict[str, Any]]:
@@ -484,6 +555,13 @@ def test_bm25_corpus_round_trip_records_full_pool_and_fingerprint(tmp_path: Path
     assert result["corpus_round_trip_at_100"] == 1.0
     assert result["corpus_margin_to_best_nonpositive"] > 0
     assert isinstance(result["corpus_effective_candidate_count"], int)
+    with BM25CorpusIndex(index_dir) as index:
+        batched = evaluate_round_trip_queries(
+            index,
+            [("Gdzie leży Warszawa?", ("d-000",))],
+            workers=2,
+        )
+    assert batched == [result]
 
 
 def test_candidate_pool_backfill_is_deterministic_and_marks_provenance(tmp_path: Path) -> None:

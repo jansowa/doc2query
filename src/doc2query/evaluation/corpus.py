@@ -7,6 +7,7 @@ import json
 import sqlite3
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -320,11 +321,15 @@ class BM25CorpusIndex:
         self._normalizer = normalizer or _load_manifest_normalizer(raw_normalizer)
         if self._normalizer.cache_namespace != manifest["normalizer_namespace"]:
             raise ValueError("BM25 query normalizer does not match the frozen index")
-        self._connection = sqlite3.connect(f"file:{database_path}?mode=ro", uri=True)
+        self._database_path = database_path
+        self._connection = self._open_connection()
         raw_config = manifest.get("config", {})
         if not isinstance(raw_config, dict):
             raise ValueError("invalid BM25 config in corpus manifest")
         self._config = BM25IndexConfig(**raw_config)
+
+    def _open_connection(self) -> sqlite3.Connection:
+        return sqlite3.connect(f"file:{self._database_path}?mode=ro", uri=True)
 
     @property
     def metadata(self) -> Mapping[str, Any]:
@@ -358,23 +363,31 @@ class BM25CorpusIndex:
             "GROUP BY p.doc_ordinal"
         )
 
-    def _top_matches(self, terms: Sequence[str], limit: int) -> list[tuple[str, float]]:
+    def _top_matches(
+        self,
+        terms: Sequence[str],
+        limit: int,
+        *,
+        connection: sqlite3.Connection | None = None,
+    ) -> list[tuple[str, float]]:
         if not terms:
             return []
         sql = self._scored_sql(terms) + " ORDER BY score DESC, d.doc_id ASC LIMIT ?"
         return [
             (str(doc_id), float(score))
-            for doc_id, score in self._connection.execute(sql, (*terms, limit))
+            for doc_id, score in (connection or self._connection).execute(sql, (*terms, limit))
         ]
 
-    def _effective_count(self, terms: Sequence[str]) -> int:
+    def _effective_count(
+        self, terms: Sequence[str], *, connection: sqlite3.Connection | None = None
+    ) -> int:
         threshold = self._config.relevance_score_threshold
         if threshold <= 0:
             return self.candidate_count
         if not terms:
             return 0
         sql = "SELECT COUNT(*) FROM (" + self._scored_sql(terms) + ") WHERE score >= ?"
-        row = self._connection.execute(sql, (*terms, threshold)).fetchone()
+        row = (connection or self._connection).execute(sql, (*terms, threshold)).fetchone()
         return int(row[0]) if row else 0
 
     def search(self, query: str, *, limit: int) -> CorpusSearchResult:
@@ -400,6 +413,126 @@ class BM25CorpusIndex:
                 effective == 0 or effective >= self._config.ambiguity_candidate_threshold
             ),
         )
+
+    def _search_and_score_documents(
+        self,
+        connection: sqlite3.Connection,
+        terms: Sequence[str],
+        *,
+        limit: int,
+        doc_ids: Sequence[str],
+    ) -> tuple[CorpusSearchResult, dict[str, float]]:
+        """Score the corpus once and return both top hits and requested document scores."""
+        wanted = tuple(dict.fromkeys(str(doc_id) for doc_id in doc_ids))
+        threshold = self._config.relevance_score_threshold
+        if not terms:
+            matches: list[tuple[str, float]] = []
+            effective = self.candidate_count if threshold <= 0 else 0
+            wanted_scores = dict.fromkeys(wanted, 0.0)
+        else:
+            wanted_placeholders = ", ".join("?" for _ in wanted)
+            wanted_clause = (
+                f" WHERE doc_id IN ({wanted_placeholders})" if wanted_placeholders else " WHERE 0"
+            )
+            sql = (
+                "WITH scored AS MATERIALIZED (" + self._scored_sql(terms) + "), top_matches AS ("
+                "SELECT doc_id, score FROM scored ORDER BY score DESC, doc_id ASC LIMIT ?"
+                "), stats AS ("
+                "SELECT COUNT(*) AS effective_count FROM scored WHERE score >= ?"
+                ") "
+                "SELECT doc_id, score, effective_count FROM top_matches CROSS JOIN stats "
+                "UNION ALL "
+                f"SELECT doc_id, score, effective_count FROM scored CROSS JOIN stats{wanted_clause}"
+            )
+            rows = list(connection.execute(sql, (*terms, limit, threshold, *wanted)))
+            matches = sorted(
+                {(str(doc_id), float(score)) for doc_id, score, _effective in rows},
+                key=lambda item: (-item[1], item[0]),
+            )[:limit]
+            effective = self.candidate_count if threshold <= 0 else int(rows[0][2]) if rows else 0
+            wanted_scores = dict.fromkeys(wanted, 0.0)
+            for doc_id, score, _effective in rows:
+                if str(doc_id) in wanted_scores:
+                    wanted_scores[str(doc_id)] = float(score)
+        if len(matches) < limit:
+            seen = {doc_id for doc_id, _score in matches}
+            placeholders = ", ".join("?" for _ in seen)
+            exclusion = f" WHERE doc_id NOT IN ({placeholders})" if seen else ""
+            sql = f"SELECT doc_id FROM documents{exclusion} ORDER BY doc_id LIMIT ?"
+            parameters: tuple[Any, ...] = (*sorted(seen), limit - len(matches))
+            matches.extend((str(row[0]), 0.0) for row in connection.execute(sql, parameters))
+        return (
+            CorpusSearchResult(
+                documents=tuple(
+                    RankedDocument(doc_id=doc_id, score=score, rank=rank)
+                    for rank, (doc_id, score) in enumerate(matches, 1)
+                ),
+                candidate_count=self.candidate_count,
+                effective_candidate_count=effective,
+                possibly_ambiguous_query=(
+                    effective == 0 or effective >= self._config.ambiguity_candidate_threshold
+                ),
+            ),
+            wanted_scores,
+        )
+
+    def search_and_score_many(
+        self,
+        requests: Sequence[tuple[str, Sequence[str]]],
+        *,
+        limit: int,
+        workers: int,
+    ) -> list[tuple[CorpusSearchResult, dict[str, float]]]:
+        """Run independent read-only BM25 queries on bounded per-worker connections."""
+        validate_recall_cutoffs(self.candidate_count, (limit,))
+        if workers < 1:
+            raise ValueError("BM25 workers must be positive")
+        prepared = [(self._query_terms(query), tuple(doc_ids)) for query, doc_ids in requests]
+        wanted_ids = tuple(
+            dict.fromkeys(doc_id for _terms, doc_ids in prepared for doc_id in doc_ids)
+        )
+        if wanted_ids:
+            placeholders = ", ".join("?" for _ in wanted_ids)
+            validation_connection = self._open_connection()
+            try:
+                present = {
+                    str(row[0])
+                    for row in validation_connection.execute(
+                        f"SELECT doc_id FROM documents WHERE doc_id IN ({placeholders})",
+                        wanted_ids,
+                    )
+                }
+            finally:
+                validation_connection.close()
+            missing = sorted(set(wanted_ids) - present)
+            if missing:
+                raise KeyError(f"documents are absent from frozen corpus: {missing[:3]}")
+
+        def process_shard(
+            shard: Sequence[tuple[int, tuple[str, ...], tuple[str, ...]]],
+        ) -> list[tuple[int, tuple[CorpusSearchResult, dict[str, float]]]]:
+            connection = self._open_connection()
+            try:
+                return [
+                    (
+                        index,
+                        self._search_and_score_documents(
+                            connection, terms, limit=limit, doc_ids=doc_ids
+                        ),
+                    )
+                    for index, terms, doc_ids in shard
+                ]
+            finally:
+                connection.close()
+
+        indexed = [(index, terms, doc_ids) for index, (terms, doc_ids) in enumerate(prepared)]
+        worker_count = min(workers, len(indexed)) if indexed else 1
+        shards = [indexed[offset::worker_count] for offset in range(worker_count)]
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            nested = list(executor.map(process_shard, shards))
+        ordered = [item for shard in nested for item in shard]
+        ordered.sort(key=lambda item: item[0])
+        return [value for _index, value in ordered]
 
     def score_documents(self, query: str, doc_ids: Sequence[str]) -> dict[str, float]:
         wanted = tuple(dict.fromkeys(str(doc_id) for doc_id in doc_ids))
@@ -677,3 +810,58 @@ def evaluate_round_trip_query(
         "corpus_best_positive_score": best_positive,
         "corpus_best_nonpositive_score": best_nonpositive,
     }
+
+
+def evaluate_round_trip_queries(
+    index: CorpusIndex,
+    requests: Sequence[tuple[str, Sequence[str]]],
+    *,
+    workers: int = 1,
+    cutoffs: Sequence[int] = CORPUS_ROUND_TRIP_CUTOFFS,
+) -> list[dict[str, Any]]:
+    """Evaluate a batch, using one-pass parallel BM25 when the backend supports it."""
+    normalized_cutoffs = validate_recall_cutoffs(index.candidate_count, cutoffs)
+    if not isinstance(index, BM25CorpusIndex):
+        return [
+            evaluate_round_trip_query(
+                index, query=query, positive_doc_ids=positive_doc_ids, cutoffs=cutoffs
+            )
+            for query, positive_doc_ids in requests
+        ]
+    prepared = [
+        (query, tuple(dict.fromkeys(str(value) for value in positive_doc_ids)))
+        for query, positive_doc_ids in requests
+    ]
+    if any(not positive_doc_ids for _query, positive_doc_ids in prepared):
+        raise ValueError("corpus round-trip requires at least one positive document ID")
+    searched = index.search_and_score_many(prepared, limit=max(normalized_cutoffs), workers=workers)
+    rows: list[dict[str, Any]] = []
+    for (_query, positive_doc_ids), (result, positive_scores) in zip(
+        prepared, searched, strict=True
+    ):
+        positives = frozenset(positive_doc_ids)
+        positive_ranks = [
+            document.rank for document in result.documents if document.doc_id in positives
+        ]
+        best_positive = max(positive_scores.values())
+        best_nonpositive = next(
+            (document.score for document in result.documents if document.doc_id not in positives),
+            None,
+        )
+        rows.append(
+            {
+                **corpus_round_trip_metrics(
+                    positive_ranks,
+                    candidate_count=result.candidate_count,
+                    cutoffs=normalized_cutoffs,
+                ),
+                "corpus_effective_candidate_count": result.effective_candidate_count,
+                "corpus_margin_to_best_nonpositive": (
+                    best_positive - best_nonpositive if best_nonpositive is not None else None
+                ),
+                "corpus_possibly_ambiguous_query": result.possibly_ambiguous_query,
+                "corpus_best_positive_score": best_positive,
+                "corpus_best_nonpositive_score": best_nonpositive,
+            }
+        )
+    return rows

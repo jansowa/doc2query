@@ -215,6 +215,9 @@ def score_generation_artifact(
     test_fingerprint: str,
     experiment_id: str,
     corpus_index_path: Path | None = None,
+    scoring_batch_size: int = 64,
+    bm25_workers: int = 8,
+    progress_every: int = 100,
 ) -> dict[str, Any]:
     generation_records = list(read_records(generations_path))
     dedup_map = Path("data/processed/v1/dedup_map.parquet")
@@ -240,6 +243,9 @@ def score_generation_artifact(
             test_fingerprint=test_fingerprint,
             experiment_id=experiment_id,
             corpus_index=corpus_index,
+            scoring_batch_size=scoring_batch_size,
+            bm25_workers=bm25_workers,
+            progress_every=progress_every,
         )
     finally:
         if corpus_index is not None:
@@ -260,6 +266,9 @@ def run_checkpoint_evaluation(
     generations_path: Path | None = None,
     generation_only: bool = False,
     corpus_index_path: Path | None = None,
+    scoring_batch_size: int = 64,
+    bm25_workers: int = 8,
+    progress_every: int = 100,
 ) -> dict[str, Any]:
     """Generate two decoding modes, score them, and build all cheap report artifacts."""
     config = load_config(config_path)
@@ -338,6 +347,9 @@ def run_checkpoint_evaluation(
         test_fingerprint=test_fingerprint,
         experiment_id=config.run.experiment_id,
         corpus_index_path=corpus_index_path,
+        scoring_batch_size=scoring_batch_size,
+        bm25_workers=bm25_workers,
+        progress_every=progress_every,
     )
     report = build_generator_report(
         output_dir / "summary.json",

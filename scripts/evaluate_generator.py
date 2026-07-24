@@ -28,6 +28,9 @@ def main() -> None:
         help="Frozen BM25 or auxiliary bi-encoder index directory for corpus round-trip.",
     )
     parser.add_argument("--generation-only", action="store_true")
+    parser.add_argument("--scoring-batch-size", type=int, default=64)
+    parser.add_argument("--bm25-workers", type=int, default=8)
+    parser.add_argument("--progress-every", type=int, default=100)
     args = parser.parse_args()
     result = run_checkpoint_evaluation(
         args.config,
@@ -42,6 +45,9 @@ def main() -> None:
         generations_path=args.generations,
         generation_only=args.generation_only,
         corpus_index_path=args.corpus_index,
+        scoring_batch_size=args.scoring_batch_size,
+        bm25_workers=args.bm25_workers,
+        progress_every=args.progress_every,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
 

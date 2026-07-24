@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
+import os
+import sys
 import time
 from collections import Counter, defaultdict
+from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
+from itertools import pairwise
 from pathlib import Path
 from statistics import fmean
 from typing import Any
 
 from doc2query.data.invert import query_style
-from doc2query.evaluation.corpus import CorpusIndex, evaluate_round_trip_query
+from doc2query.evaluation.corpus import CorpusIndex, evaluate_round_trip_queries
 from doc2query.evaluation.diversity import diversity_metrics
 from doc2query.evaluation.format import format_metrics
 from doc2query.evaluation.retrieval import (
@@ -258,6 +265,98 @@ def mode_summaries(
     }
 
 
+class _FixedPairScorer:
+    def __init__(self, name: str, scores: Sequence[float]) -> None:
+        self.name = name
+        self._scores = list(scores)
+
+    def score_pairs(self, pairs: Sequence[tuple[str, str]]) -> list[float]:
+        if len(pairs) != len(self._scores):
+            raise RuntimeError("batched scorer replay shape mismatch")
+        return self._scores
+
+
+def _score_pair_groups(
+    scorer: PairScorer, groups: Sequence[Sequence[tuple[str, str]]]
+) -> list[list[float]]:
+    offsets = [0]
+    flattened: list[tuple[str, str]] = []
+    for group in groups:
+        flattened.extend(group)
+        offsets.append(len(flattened))
+    scores = scorer.score_pairs(flattened) if flattened else []
+    if len(scores) != len(flattened):
+        raise ValueError("scorer returned an invalid batched score count")
+    return [scores[left:right] for left, right in pairwise(offsets)]
+
+
+def _resume_identity(
+    records: Sequence[dict[str, Any]],
+    *,
+    primary: PairScorer,
+    shadow: PairScorer | None,
+    test_fingerprint: str,
+    experiment_id: str,
+    corpus_index: CorpusIndex | None,
+) -> dict[str, Any]:
+    record_digest = hashlib.sha256()
+    for record in records:
+        record_digest.update(
+            json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+        )
+        record_digest.update(b"\n")
+    return {
+        "schema_version": 1,
+        "scoring_contract": "intrinsic-batched-resume-v1",
+        "experiment_id": experiment_id,
+        "test_fingerprint": test_fingerprint,
+        "record_count": len(records),
+        "records_sha256": record_digest.hexdigest(),
+        "primary_judge": primary.name,
+        "primary_config": repr(getattr(primary, "config", None)),
+        "shadow_judge": shadow.name if shadow else None,
+        "shadow_config": repr(getattr(shadow, "config", None)) if shadow else None,
+        "corpus_index_fingerprint": (
+            str(corpus_index.metadata.get("index_fingerprint")) if corpus_index else None
+        ),
+    }
+
+
+def _append_checkpoint_rows(path: Path, rows: Sequence[dict[str, Any]]) -> None:
+    with path.open("a", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _read_checkpoint_rows(path: Path) -> list[dict[str, Any]]:
+    """Read a durable prefix and discard only a crash-truncated final line."""
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    valid_bytes = 0
+    with path.open("rb") as handle:
+        while line := handle.readline():
+            complete = line.endswith(b"\n")
+            if not complete:
+                break
+            try:
+                value = json.loads(line)
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise ValueError("intrinsic scoring journal contains a malformed row") from exc
+            if not isinstance(value, dict):
+                raise ValueError("intrinsic scoring journal row must be an object")
+            rows.append(value)
+            valid_bytes = handle.tell()
+    if path.stat().st_size != valid_bytes:
+        with path.open("r+b") as handle:
+            handle.truncate(valid_bytes)
+            handle.flush()
+            os.fsync(handle.fileno())
+    return rows
+
+
 def evaluate_intrinsic_records(
     records: list[dict[str, Any]],
     *,
@@ -267,117 +366,254 @@ def evaluate_intrinsic_records(
     test_fingerprint: str,
     experiment_id: str,
     corpus_index: CorpusIndex | None = None,
+    scoring_batch_size: int = 64,
+    bm25_workers: int = 8,
+    progress_every: int = 100,
 ) -> dict[str, Any]:
     if not records:
         raise ValueError("intrinsic evaluation requires generations")
+    if scoring_batch_size < 1 or bm25_workers < 1 or progress_every < 1:
+        raise ValueError("scoring batch size, BM25 workers and progress interval must be positive")
     normalizer = SimplePolishNormalizer()
     output_dir.mkdir(parents=True, exist_ok=True)
-    measured: list[dict[str, Any]] = []
+    journal_path = output_dir / "scoring.journal.jsonl"
+    identity_path = output_dir / "scoring.resume.json"
+    identity = _resume_identity(
+        records,
+        primary=primary,
+        shadow=shadow,
+        test_fingerprint=test_fingerprint,
+        experiment_id=experiment_id,
+        corpus_index=corpus_index,
+    )
+    if identity_path.exists():
+        existing_identity = json.loads(identity_path.read_text(encoding="utf-8"))
+        if existing_identity != identity:
+            raise ValueError("intrinsic scoring resume identity mismatch")
+    elif journal_path.exists() and journal_path.stat().st_size:
+        raise ValueError("intrinsic scoring journal exists without resume identity")
+    else:
+        temporary_identity = identity_path.with_suffix(".json.tmp")
+        write_json(temporary_identity, identity)
+        os.replace(temporary_identity, identity_path)
+    measured = _read_checkpoint_rows(journal_path)
+    if len(measured) > len(records):
+        raise ValueError("intrinsic scoring journal contains too many rows")
+    for index, checkpoint_row in enumerate(measured):
+        expected_id = str(records[index].get("evaluation_id", index))
+        if str(checkpoint_row.get("evaluation_id", index)) != expected_id:
+            raise ValueError("intrinsic scoring journal is not the expected generation prefix")
     reference_cache: dict[str, tuple[int, int]] = {}
     started = time.perf_counter()
-    with JsonlWriter(output_dir / "per_generation.jsonl") as writer:
-        for index, record in enumerate(records):
-            passage, positive_doc_id, negatives, negative_ids = _document_texts(record)
-            generated = str(record.get("generated", ""))
-            identifier = str(record.get("evaluation_id", index))
-            example_id = str(record["example_id"])
-            primary_score = score_group(
-                primary,
-                example_id=identifier,
-                query=generated,
-                positive=passage,
-                negatives=negatives,
-                query_id=example_id,
-                positive_doc_id=positive_doc_id,
-                negative_doc_ids=tuple(negative_ids),
+    resumed_count = len(measured)
+    print(
+        f"[intrinsic resume] {resumed_count:,}/{len(records):,} rows durable; "
+        f"batch={scoring_batch_size} bm25_workers={bm25_workers}",
+        file=sys.stderr,
+        flush=True,
+    )
+    with ThreadPoolExecutor(max_workers=1) as corpus_executor:
+        for batch_start in range(resumed_count, len(records), scoring_batch_size):
+            batch = records[batch_start : batch_start + scoring_batch_size]
+            documents = [_document_texts(record) for record in batch]
+            corpus_future = (
+                corpus_executor.submit(
+                    evaluate_round_trip_queries,
+                    corpus_index,
+                    [
+                        (str(record.get("generated", "")), (document[1],))
+                        for record, document in zip(batch, documents, strict=True)
+                    ],
+                    workers=bm25_workers,
+                )
+                if corpus_index is not None
+                else None
             )
-            if example_id not in reference_cache:
+
+            generated_groups = [
+                [(str(record.get("generated", "")), passage)]
+                + [(str(record.get("generated", "")), negative) for negative in negatives]
+                for record, (passage, _positive_id, negatives, _negative_ids) in zip(
+                    batch, documents, strict=True
+                )
+            ]
+            generated_focus_groups = [
+                [
+                    (str(record.get("generated", "")), sentence)
+                    for sentence in split_sentences(passage)
+                ]
+                for record, (passage, _positive_id, _negatives, _negative_ids) in zip(
+                    batch, documents, strict=True
+                )
+            ]
+            primary_group_scores = _score_pair_groups(primary, generated_groups)
+            primary_focus_scores = _score_pair_groups(primary, generated_focus_groups)
+            shadow_group_scores = (
+                _score_pair_groups(shadow, generated_groups) if shadow is not None else None
+            )
+
+            new_references: dict[
+                str, tuple[dict[str, Any], tuple[str, str, list[str], list[str]]]
+            ] = {}
+            for record, document in zip(batch, documents, strict=True):
+                example_id = str(record["example_id"])
+                if example_id not in reference_cache and example_id not in new_references:
+                    new_references[example_id] = (record, document)
+            reference_items = list(new_references.items())
+            reference_group_pairs = [
+                [(str(record.get("reference", "")), passage)]
+                + [(str(record.get("reference", "")), negative) for negative in negatives]
+                for _example_id, (
+                    record,
+                    (passage, _positive_id, negatives, _negative_ids),
+                ) in reference_items
+            ]
+            reference_focus_pairs = [
+                [
+                    (str(record.get("reference", "")), sentence)
+                    for sentence in split_sentences(passage)
+                ]
+                for _example_id, (
+                    record,
+                    (passage, _positive_id, _negatives, _negative_ids),
+                ) in reference_items
+            ]
+            reference_group_scores = _score_pair_groups(primary, reference_group_pairs)
+            reference_focus_scores = _score_pair_groups(primary, reference_focus_pairs)
+            for position, (example_id, (record, document)) in enumerate(reference_items):
+                passage, _positive_id, negatives, _negative_ids = document
                 reference = score_group(
-                    primary,
+                    _FixedPairScorer(primary.name, reference_group_scores[position]),
                     example_id=f"reference::{example_id}",
                     query=str(record.get("reference", "")),
                     positive=passage,
                     negatives=negatives,
                 )
                 reference_focus = assign_focus(
-                    primary, str(record.get("reference", "")), passage
+                    _FixedPairScorer(primary.name, reference_focus_scores[position]),
+                    str(record.get("reference", "")),
+                    passage,
                 ).focus_sentence_id
                 reference_cache[example_id] = (reference.pool_rank, reference_focus)
-            reference_rank, reference_focus = reference_cache[example_id]
-            focus = assign_focus(primary, generated, passage)
-            source_sentences = split_sentences(passage)
-            sentence_source_hit = float(focus.focus_score > primary_score.hardest_negative_score)
-            lexical = lexical_metrics(normalizer.analyze(generated), normalizer.analyze(passage))
-            natural_lexical = lexical_metrics(
-                normalizer.analyze(str(record.get("reference", ""))),
-                normalizer.analyze(passage),
+
+            corpus_rows = (
+                corpus_future.result() if corpus_future is not None else [{} for _ in batch]
             )
-            format_result = format_metrics(
-                generated, multi_query_json=bool(record.get("multi_query_json", False))
-            )
-            pool_metrics = candidate_pool_metrics_from_rank(
-                primary_score.pool_rank,
-                candidate_count=len(primary_score.document_scores),
-            )
-            corpus_metrics = (
-                evaluate_round_trip_query(
-                    corpus_index,
-                    query=generated,
-                    positive_doc_ids=(positive_doc_id,),
-                )
-                if corpus_index is not None
-                else {}
-            )
-            shadow_result = None
-            if shadow is not None:
-                shadow_result = score_group(
-                    shadow,
+            batch_rows: list[dict[str, Any]] = []
+            for offset, (record, document) in enumerate(zip(batch, documents, strict=True)):
+                index = batch_start + offset
+                passage, positive_doc_id, negatives, negative_ids = document
+                generated = str(record.get("generated", ""))
+                identifier = str(record.get("evaluation_id", index))
+                example_id = str(record["example_id"])
+                primary_score = score_group(
+                    _FixedPairScorer(primary.name, primary_group_scores[offset]),
                     example_id=identifier,
                     query=generated,
                     positive=passage,
                     negatives=negatives,
+                    query_id=example_id,
+                    positive_doc_id=positive_doc_id,
+                    negative_doc_ids=tuple(negative_ids),
                 )
-            row: dict[str, Any] = {
-                **record,
-                **pool_metrics,
-                **corpus_metrics,
-                **lexical.to_dict(),
-                **format_result,
-                "primary_judge": primary.name,
-                "pool_positive_score": primary_score.positive_score,
-                "pool_margin": primary_score.pool_margin,
-                "shadow_judge": shadow.name if shadow else None,
-                "shadow_score": shadow_result.positive_score if shadow_result else None,
-                "shadow_pool_margin": shadow_result.pool_margin if shadow_result else None,
-                "judge_rank_disagreement": (
-                    primary_score.pool_rank != shadow_result.pool_rank if shadow_result else None
-                ),
-                "predicted_sentence_index": focus.focus_sentence_id,
-                "predicted_focus_bucket": focus.focus_bucket,
-                "focus_accuracy": (
-                    float(focus.focus_bucket == str(record["requested_focus_bucket"]))
-                    if record.get("requested_focus_bucket") is not None
-                    else None
-                ),
-                "reference_focus_agreement": float(focus.focus_sentence_id == reference_focus),
-                "natural_content_jaccard": natural_lexical.content_jaccard,
-                "sentence_level_source_hit": sentence_source_hit,
-                "sentence_count": len(source_sentences),
-                "predicted_style": query_style(generated),
-            }
-            row["slices"] = _slice_base(
-                record,
-                style=str(row["predicted_style"]),
-                target_focus=reference_focus,
-                sentence_count=len(source_sentences),
-                reference_rank=reference_rank,
-            )
-            measured.append(row)
+                reference_rank, reference_focus = reference_cache[example_id]
+                focus = assign_focus(
+                    _FixedPairScorer(primary.name, primary_focus_scores[offset]),
+                    generated,
+                    passage,
+                )
+                source_sentences = split_sentences(passage)
+                sentence_source_hit = float(
+                    focus.focus_score > primary_score.hardest_negative_score
+                )
+                lexical = lexical_metrics(
+                    normalizer.analyze(generated), normalizer.analyze(passage)
+                )
+                natural_lexical = lexical_metrics(
+                    normalizer.analyze(str(record.get("reference", ""))),
+                    normalizer.analyze(passage),
+                )
+                format_result = format_metrics(
+                    generated, multi_query_json=bool(record.get("multi_query_json", False))
+                )
+                pool_metrics = candidate_pool_metrics_from_rank(
+                    primary_score.pool_rank,
+                    candidate_count=len(primary_score.document_scores),
+                )
+                corpus_metrics = corpus_rows[offset]
+                shadow_result = None
+                if shadow is not None:
+                    if shadow_group_scores is None:
+                        raise RuntimeError("missing batched shadow scores")
+                    shadow_result = score_group(
+                        _FixedPairScorer(shadow.name, shadow_group_scores[offset]),
+                        example_id=identifier,
+                        query=generated,
+                        positive=passage,
+                        negatives=negatives,
+                    )
+                row: dict[str, Any] = {
+                    **record,
+                    **pool_metrics,
+                    **corpus_metrics,
+                    **lexical.to_dict(),
+                    **format_result,
+                    "primary_judge": primary.name,
+                    "pool_positive_score": primary_score.positive_score,
+                    "pool_margin": primary_score.pool_margin,
+                    "shadow_judge": shadow.name if shadow else None,
+                    "shadow_score": shadow_result.positive_score if shadow_result else None,
+                    "shadow_pool_margin": shadow_result.pool_margin if shadow_result else None,
+                    "judge_rank_disagreement": (
+                        primary_score.pool_rank != shadow_result.pool_rank
+                        if shadow_result
+                        else None
+                    ),
+                    "predicted_sentence_index": focus.focus_sentence_id,
+                    "predicted_focus_bucket": focus.focus_bucket,
+                    "focus_accuracy": (
+                        float(focus.focus_bucket == str(record["requested_focus_bucket"]))
+                        if record.get("requested_focus_bucket") is not None
+                        else None
+                    ),
+                    "reference_focus_agreement": float(focus.focus_sentence_id == reference_focus),
+                    "natural_content_jaccard": natural_lexical.content_jaccard,
+                    "sentence_level_source_hit": sentence_source_hit,
+                    "sentence_count": len(source_sentences),
+                    "predicted_style": query_style(generated),
+                }
+                row["slices"] = _slice_base(
+                    record,
+                    style=str(row["predicted_style"]),
+                    target_focus=reference_focus,
+                    sentence_count=len(source_sentences),
+                    reference_rank=reference_rank,
+                )
+                batch_rows.append(row)
+            _append_checkpoint_rows(journal_path, batch_rows)
+            measured.extend(batch_rows)
+            completed = len(measured)
+            crossed_progress_boundary = completed // progress_every != batch_start // progress_every
+            if completed == len(records) or crossed_progress_boundary:
+                elapsed = time.perf_counter() - started
+                rate = (completed - resumed_count) / elapsed if elapsed > 0 else 0.0
+                remaining = (len(records) - completed) / rate if rate > 0 else float("inf")
+                print(
+                    f"[intrinsic progress] {completed:,}/{len(records):,} "
+                    f"({completed / len(records):.1%}) rate={rate:.2f}/s "
+                    f"eta={remaining / 60:.1f} min",
+                    file=sys.stderr,
+                    flush=True,
+                )
+
+    temporary_rows = output_dir / "per_generation.jsonl.tmp"
+    with JsonlWriter(temporary_rows) as writer:
         overlaps = [float(row["natural_content_jaccard"]) for row in measured]
         overlap_buckets = rank_buckets(overlaps, ("low", "medium", "high"))
         for row, bucket in zip(measured, overlap_buckets, strict=True):
             row["slices"]["natural_overlap_quantile"] = bucket
             writer.write(row)
+    os.replace(temporary_rows, output_dir / "per_generation.jsonl")
 
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for row in measured:
@@ -414,6 +650,17 @@ def evaluate_intrinsic_records(
         "generation_count": len(measured),
         "example_count": len({str(row["example_id"]) for row in measured}),
         "elapsed_seconds": time.perf_counter() - started,
+        "resume": {
+            "journal": str(journal_path),
+            "resumed_generation_count": resumed_count,
+            "durable_generation_count": len(measured),
+        },
+        "execution": {
+            "scoring_batch_size": scoring_batch_size,
+            "bm25_workers": bm25_workers,
+            "progress_every": progress_every,
+            "gpu_and_corpus_overlapped": corpus_index is not None,
+        },
         "judges": {
             "primary": primary.name,
             "shadow": shadow.name if shadow else None,

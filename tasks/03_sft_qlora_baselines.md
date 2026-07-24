@@ -155,10 +155,11 @@ fingerprint kohorty `93313d5a…db284`, brak przecięcia demonstracji i
 pierwszym etapem właściwego runnera. Raport:
 [`task03_s00_preflight_2026-07-23.md`](../reports/measurements/task03_s00_preflight_2026-07-23.md).
 
-Właściwy S00 (50 000 completionów oraz primary/shadow/corpus scoring) został
-rozpoczęty, ale journal zawiera na razie tylko częściową generację zero-shot;
-scoring nie ruszył. Nie ma kompletnych wyników zero-shot/few-shot ani decyzji
-jakościowej. S00 i S07 pozostają
+Właściwa generacja S00 zakończyła się kompletem 50 000/50 000 completionów:
+po 25 000 zero-shot i few-shot. Pierwszy scoring zero-shot został przerwany po
+około dziesięciu godzinach, zanim stary evaluator zapisał jakikolwiek trwały
+wiersz. Nie ma kompletnych wyników zero-shot/few-shot ani decyzji jakościowej.
+S00 i S07 pozostają
 `required_unexecuted`, P-06 niewykonane, a status Task 03 pozostaje
 `IMPLEMENTED`.
 
@@ -168,8 +169,20 @@ zoptymalizowano do batcha 32 promptów dla greedy i 8 dla sampling (efektywnie
 CUDA OOM przez dzielenie do 1. Skuteczny batch i sufit OOM są zapisywane per
 strategia/tryb w SQLite; `S00_GREEDY_BATCH_SIZE` i
 `S00_SAMPLING_BATCH_SIZE` mogą je ograniczyć. Legacy journal z commita
-`e6ecfb3` jest zgodny, więc ukończone wyniki nie są kasowane. Przyspieszenie,
-peak VRAM i pełny wynik S00 pozostają niezmierzone.
+`e6ecfb3` jest zgodny, więc ukończone wyniki nie są kasowane.
+
+Scoring S00 zoptymalizowano po przerwanym przebiegu. Primary, focus,
+referencje i shadow są teraz batchowane, a ośmiu read-only workerów BM25
+pracuje równolegle z GPU. Jedno zapytanie SQL materializuje score BM25 raz i
+wyprowadza z niego top-100, licznik progu oraz score pozytywu. Po każdym batchu
+64 rekordów evaluator zapisuje i `fsync`uje journal, pokazuje throughput/ETA,
+odrzuca zmianę pełnej tożsamości wejścia/sędziów/indeksu i odzyskuje się po
+uciętym ostatnim wierszu. Benchmark 64 prawdziwych outputów dev dał 25,57 s
+(`2,50/s`), czyli liniową projekcję 2,77 h na ramię 25 tys.; nie jest to wynik
+pełnego runu. `ruff`, `mypy` i 181 testów przechodzą. Raport:
+[`task03_s00_scoring_optimization_2026-07-24.md`](../reports/measurements/task03_s00_scoring_optimization_2026-07-24.md).
+Pełny scoring obu ramion nadal pozostaje niewykonany, podobnie decyzja
+S07/P-06; finalne testy są nieotwarte.
 
 ## Cel
 
