@@ -184,6 +184,21 @@ pełnego runu. `ruff`, `mypy` i 181 testów przechodzą. Raport:
 Pełny scoring obu ramion nadal pozostaje niewykonany, podobnie decyzja
 S07/P-06; finalne testy są nieotwarte.
 
+25 lipca wznowiony runner domknął S00. Oba ramiona mają po 25 000 ocenionych
+completionów, wspólny fingerprint frozen dev i pełny corpus retrieval.
+Zero-shot uzyskał corpus round-trip@20 `0,6492` i format-valid `0,1507`, a
+few-shot odpowiednio `0,3824` i `0,0376`; candidate-pool nDCG@10 wyniósł
+`0,9131/0,9165`. Wynik jest intrinsic baseline'em i nie zawiera probe ani
+oceny człowieka. Raport:
+[`task03_s00_result_2026-07-25.md`](../reports/measurements/task03_s00_result_2026-07-25.md).
+
+Osobny ADR daje `GO` dla przygotowania prospektywnego kontraktu S07 i `HOLD`
+dla P-06 do zamrożenia planu S07 oraz potwierdzenia offline marginów train.
+Nie autoryzuje `dev_confirm`, finalnych testów ani dalszej kampanii 4.5B:
+[`task03_s07_p06_after_s00_2026-07-25.md`](../reports/decisions/task03_s07_p06_after_s00_2026-07-25.md).
+S00 ma teraz stan `measured`; S07 i P-06 pozostają niewykonane, dlatego status
+Task 03 pozostaje `IMPLEMENTED`.
+
 ## Cel
 
 Zaimplementować stabilny trening passage→query i uruchomić serię tanich baseline’ów, zanim projekt przejdzie do DPO lub RL.
