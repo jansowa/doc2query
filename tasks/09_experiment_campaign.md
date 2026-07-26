@@ -8,8 +8,9 @@
 
 Zadanie oczekuje na implementację wcześniejszych etapów w zakresie
 dopuszczonym przez bramki. W szczególności blokują je Harness v1.1 P-01…P-04,
-rozstrzygnięcie P-05, mały audyt integralności tłumaczeń P06-T oraz pełna
-ablacja polityki hard negative'ów z Task 04. P-06 mass rescoring i warianty
+rozstrzygnięcie P-05 oraz pełna ablacja polityki hard negative'ów z Task 04.
+P06-T zostało świadomie anulowane decyzją właściciela i nie jest już bramką.
+P-06 mass rescoring i warianty
 drop/weighted według lokalnego marginu są `SUPERSEDED`, nie są zależnością.
 
 ## Cel

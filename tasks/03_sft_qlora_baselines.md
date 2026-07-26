@@ -20,7 +20,7 @@ jakościowej. Pierwszy zredukowany probe P-05 oraz pełna bramka P-04
 `non_inferior_only`; `dev_confirm_authorized_arms=[]`. S07 jest kompletnym
 wynikiem diagnostycznym, ale nieporównywalny budżet probe uniemożliwia wybór
 architektury i nie będzie wykonywany matched-budget rerun. Pozostały również
-manualne kodowanie zamrożonego P06-T, pełniejsze porównywalne probe, 4.5B base vs instruct oraz
+pełniejsze porównywalne probe, 4.5B base vs instruct oraz
 ordinary/balanced/weighted.
 Do czasu prospektywnej decyzji o dalszej ścieżce nie ma podstaw do przejścia
 do DPO.
@@ -59,6 +59,13 @@ diagnostyki triage; primary/shadow pozostają jawnie niepoliczone. Nie wykonano
 jeszcze ręcznej oceny i nie wyprowadzono klasy błędu, filtra, progu ani wag.
 Raport:
 [`task03_p06_t_freeze_2026-07-26.md`](../docs/experiments/task03_p06_t_freeze_2026-07-26.md).
+
+Właściciel projektu później świadomie anulował ręczną ocenę P06-T, wskazując
+wcześniejszy udany trening embeddera retrievalowego na tym zbiorze jako
+praktyczną przesłankę jakości. Jest to zaakceptowane ryzyko, nie nowy pomiar w
+repozytorium. Frozen train i próg `source_en_score >=23.50` pozostają bez
+zmian; P06-T nie blokuje dalszej kolejki. ADR:
+[`task03_p06_t_waiver_2026-07-26.md`](../docs/decisions/task03_p06_t_waiver_2026-07-26.md).
 
 18 lipca uruchomiono nocną kolejkę W06 dla Bielika 4.5B Instruct na 8 GB.
 Po wstępnym potwierdzeniu, że BS1/L512 wykonuje backward bez OOM, kolejkę
@@ -428,11 +435,10 @@ jest `SUPERSEDED`. Adapter już egzekwuje `source_en_score >= 23.50`, a
 źródłowe etykiety i margin pochodzą z silniejszego rerankera użytego przed
 kopaniem negatywów. Nie nadpisuj ich słabszym lokalnym sędzią.
 
-Próbka i ślepy formularz P06-T są zamrożone zgodnie z ADR. Następnym krokiem
-jest ręczne kodowanie answerability i integralności tłumaczenia. Lokalne
-primary/shadow pozostają opcjonalną diagnostyką disagreement/triage. Bez
-powtarzalnej ręcznie potwierdzonej klasy błędu nie zmieniaj danych, nie trenuj
-wariantów drop/weighted i nie ustalaj progów.
+Próbka i ślepy formularz P06-T pozostają zamrożonymi artefaktami, ale ręczne
+kodowanie zostało świadomie anulowane. Ryzyko tłumaczeń jest zaakceptowane;
+nie zmieniaj danych, nie trenuj wariantów drop/weighted i nie ustalaj progów
+bez nowego prospektywnego ADR.
 
 ### S07 — polski baseline seq2seq
 

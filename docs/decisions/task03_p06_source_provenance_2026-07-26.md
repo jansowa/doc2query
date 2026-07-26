@@ -2,10 +2,14 @@
 
 Data: 2026-07-26
 
-Status: `ACCEPTED — SUPERSEDES P-06 MASS RESCORING`
+Status: `ACCEPTED — SUPERSEDES P-06 MASS RESCORING; P06-T LATER WAIVED`
 
 Zakres: frozen train v1 i przyszły audyt wyłącznie train/dev;
 `final_tests_used=[]`
+
+Aktualizacja: ręczna część P06-T została później świadomie anulowana decyzją
+właściciela projektu. Obowiązuje ADR
+[`task03_p06_t_waiver_2026-07-26.md`](task03_p06_t_waiver_2026-07-26.md).
 
 ## Ustalenia provenance
 

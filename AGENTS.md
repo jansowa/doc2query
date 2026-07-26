@@ -291,6 +291,14 @@ stanowią samodzielnej podstawy zmiany etykiety. Automatyczny filtr tłumaczeń
 może powstać dopiero po wykazaniu ręcznie potwierdzonej, powtarzalnej klasy
 błędu oraz zapisaniu osobnego prospektywnego ADR.
 
+Ręczny audyt P06-T został następnie świadomie anulowany przez właściciela
+projektu w `docs/decisions/task03_p06_t_waiver_2026-07-26.md`. Frozen train
+pozostaje bez zmian, a resztkowe ryzyko tłumaczeń jest zaakceptowane. Nadal
+obowiązuje próg `source_en_score >= 23.50`; nie wolno na podstawie tej decyzji
+wznawiać mass rescoringu, tworzyć lokalnego progu ani trenować wariantów
+drop/weighted. Powrót do automatycznej filtracji wymaga nowego prospektywnego
+ADR.
+
 ---
 
 ## 6. Szablon SFT
