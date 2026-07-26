@@ -6,6 +6,8 @@ cd "$ROOT"
 
 PYTHON=${DOC2QUERY_PYTHON:-$ROOT/.venv-gpu/bin/python}
 GATE_SUMMARY="$ROOT/artifacts/task04/hn_full_gate_v1/summary.json"
+FROZEN_MANIFEST="$ROOT/data/processed/v1/evaluation/task04-v1/manifest.json"
+FROZEN_SUBSET=dev_intrinsic_rank10
 SMOKE_CONFIG="$ROOT/configs/experiments/d01_1_5b_style_smoke_s42.yaml"
 TRAIN_CONFIG="$ROOT/configs/experiments/d01_1_5b_style_50k_s42.yaml"
 GENERATION_CONFIG="$ROOT/configs/experiments/d01_1_5b_style_dev_generation_s42.yaml"
@@ -175,47 +177,37 @@ run_step train-50k-4.5b \
   --config "$TRAIN_4_5B_CONFIG" \
   --resume-if-available
 
-GENERATION_SUMMARY=${GENERATION_OUTPUT%.jsonl}.summary.json
+GENERATION_SUMMARY="$GENERATION_OUTPUT.summary.json"
 if [[ -f $GENERATION_OUTPUT && -f $GENERATION_SUMMARY ]]; then
   printf '[%s] Diagnostic controlled generation is already complete; skipping.\n' \
     "$(date --iso-8601=seconds)" | tee -a "$LOG"
 else
-  if [[ -f $GENERATION_OUTPUT || -f $GENERATION_SUMMARY ]]; then
-    archive_suffix=$(date +%Y%m%dT%H%M%S)
-    [[ ! -f $GENERATION_OUTPUT ]] || \
-      mv "$GENERATION_OUTPUT" "$GENERATION_OUTPUT.incomplete-$archive_suffix"
-    [[ ! -f $GENERATION_SUMMARY ]] || \
-      mv "$GENERATION_SUMMARY" "$GENERATION_SUMMARY.incomplete-$archive_suffix"
-  fi
   mkdir -p "$GENERATION_DIR"
   run_step generate-dev-diagnostic \
-    "$PYTHON" -m doc2query.cli generate \
+    "$PYTHON" scripts/run_d01_postprocess.py generation-only \
     --config "$GENERATION_CONFIG" \
+    --frozen-manifest "$FROZEN_MANIFEST" \
+    --subset "$FROZEN_SUBSET" \
     --adapter "$TRAIN_DIR/adapter" \
-    --output "$GENERATION_OUTPUT"
+    --output "$GENERATION_OUTPUT" \
+    --archive-incompatible
 fi
 
-GENERATION_4_5B_SUMMARY=${GENERATION_4_5B_OUTPUT%.jsonl}.summary.json
+GENERATION_4_5B_SUMMARY="$GENERATION_4_5B_OUTPUT.summary.json"
 if [[ -f $GENERATION_4_5B_OUTPUT && -f $GENERATION_4_5B_SUMMARY ]]; then
   printf '[%s] 4.5B diagnostic controlled generation is already complete; skipping.\n' \
     "$(date --iso-8601=seconds)" | tee -a "$LOG"
 else
-  if [[ -f $GENERATION_4_5B_OUTPUT || -f $GENERATION_4_5B_SUMMARY ]]; then
-    archive_suffix=$(date +%Y%m%dT%H%M%S)
-    [[ ! -f $GENERATION_4_5B_OUTPUT ]] || \
-      mv "$GENERATION_4_5B_OUTPUT" \
-        "$GENERATION_4_5B_OUTPUT.incomplete-$archive_suffix"
-    [[ ! -f $GENERATION_4_5B_SUMMARY ]] || \
-      mv "$GENERATION_4_5B_SUMMARY" \
-        "$GENERATION_4_5B_SUMMARY.incomplete-$archive_suffix"
-  fi
   mkdir -p "$GENERATION_4_5B_DIR"
   run_step generate-dev-diagnostic-4.5b \
-    "$PYTHON" -m doc2query.cli generate \
+    "$PYTHON" scripts/run_d01_postprocess.py generation-only \
     --config "$GENERATION_4_5B_CONFIG" \
+    --frozen-manifest "$FROZEN_MANIFEST" \
+    --subset "$FROZEN_SUBSET" \
     --adapter "$TRAIN_4_5B_DIR/adapter" \
-    --output "$GENERATION_4_5B_OUTPUT"
+    --output "$GENERATION_4_5B_OUTPUT" \
+    --archive-incompatible
 fi
 
-printf '[%s] D01 overnight queue complete. This is a dev diagnostic, not a final-test result.\n' \
+printf '[%s] D01 overnight queue complete. Scoring/probe are separate opt-in postprocess steps; no final test was opened.\n' \
   "$(date --iso-8601=seconds)" | tee -a "$LOG"

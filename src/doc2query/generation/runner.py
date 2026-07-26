@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-from itertools import cycle
 from pathlib import Path
 from typing import Any
 
@@ -20,15 +19,24 @@ from doc2query.utils.tracking import collect_code_provenance
 
 def _control_matrix(config: AppConfig, passage: str) -> list[QueryControl]:
     sentence_count = len(split_sentences(passage))
-    axes = cycle(
-        (form, intent, mode)
-        for form in config.generation.forms
-        for intent in config.generation.intents
-        for mode in config.generation.focus_modes
-    )
     controls: list[QueryControl] = []
-    for index in range(config.generation.target_query_count):
-        form, intent, mode = next(axes)
+    candidate_index = 0
+    maximum_candidates = config.generation.target_query_count * max(
+        1,
+        len(config.generation.forms)
+        * len(config.generation.intents)
+        * len(config.generation.focus_modes),
+    )
+    while (
+        len(controls) < config.generation.target_query_count
+        and candidate_index < maximum_candidates
+    ):
+        # Interleave axes so a small K does not consume only the first form.
+        form = config.generation.forms[candidate_index % len(config.generation.forms)]
+        intent = config.generation.intents[candidate_index % len(config.generation.intents)]
+        mode = config.generation.focus_modes[candidate_index % len(config.generation.focus_modes)]
+        index = len(controls)
+        candidate_index += 1
         kwargs: dict[str, Any] = {}
         if mode == FocusMode.BUCKET:
             kwargs["focus_bucket"] = ("beginning", "middle", "end")[index % 3]
@@ -78,6 +86,7 @@ def run_controlled_generation(
         model = adapter_loader(model, adapter_path)
     model.eval()
     set_seed(config.run.seed)
+
     def backend(prompt: str, seed: int) -> str:
         set_seed(seed)
         prompt_ids = list(tokenizer.encode(prompt, add_special_tokens=False))

@@ -17,6 +17,7 @@ from statistics import fmean
 from typing import Any
 
 from doc2query.data.invert import query_style
+from doc2query.data.style_labels import label_query
 from doc2query.evaluation.corpus import CorpusIndex, evaluate_round_trip_queries
 from doc2query.evaluation.diversity import diversity_metrics
 from doc2query.evaluation.format import format_metrics
@@ -38,6 +39,9 @@ from doc2query.text.normalization import SimplePolishNormalizer
 from doc2query.utils.records import JsonlWriter, write_json
 
 SLICE_FIELDS = [
+    "generator_model",
+    "requested_form",
+    "requested_intent",
     "natural_overlap_quantile",
     "passage_length",
     "sentence_count",
@@ -60,6 +64,9 @@ KEY_METRICS = [
     "normalized_lcs",
     "copy_density",
     "format_valid",
+    "form_accuracy",
+    "intent_accuracy",
+    "judge_rank_disagreement",
     "sentence_level_source_hit",
     "reference_focus_agreement",
 ]
@@ -337,14 +344,14 @@ def _archive_incompatible_scoring_state(
     next_identity: dict[str, Any],
 ) -> Path:
     """Move an incompatible scoring run aside without deleting its artifacts."""
+
     def fingerprint(value: dict[str, Any]) -> str:
         return hashlib.sha256(
             json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()[:12]
+
     root = output_dir / "interrupted-scoring"
-    destination = root / (
-        f"{fingerprint(previous_identity)}-to-{fingerprint(next_identity)}"
-    )
+    destination = root / (f"{fingerprint(previous_identity)}-to-{fingerprint(next_identity)}")
     suffix = 1
     while destination.exists():
         destination = root / (
@@ -609,6 +616,17 @@ def evaluate_intrinsic_records(
                         positive=passage,
                         negatives=negatives,
                     )
+                predicted_labels = label_query(generated)
+                requested_form = record.get("requested_form")
+                requested_intent = record.get("requested_intent")
+                shadow_pool_metrics = (
+                    candidate_pool_metrics_from_rank(
+                        shadow_result.pool_rank,
+                        candidate_count=len(shadow_result.document_scores),
+                    )
+                    if shadow_result is not None
+                    else {}
+                )
                 row: dict[str, Any] = {
                     **record,
                     **pool_metrics,
@@ -617,10 +635,14 @@ def evaluate_intrinsic_records(
                     **format_result,
                     "primary_judge": primary.name,
                     "pool_positive_score": primary_score.positive_score,
+                    "primary_negative_scores": list(primary_score.document_scores[1:]),
+                    "pool_rank": primary_score.pool_rank,
                     "pool_margin": primary_score.pool_margin,
                     "shadow_judge": shadow.name if shadow else None,
                     "shadow_score": shadow_result.positive_score if shadow_result else None,
+                    "shadow_pool_rank": shadow_result.pool_rank if shadow_result else None,
                     "shadow_pool_margin": shadow_result.pool_margin if shadow_result else None,
+                    **{f"shadow_{key}": value for key, value in shadow_pool_metrics.items()},
                     "judge_rank_disagreement": (
                         primary_score.pool_rank != shadow_result.pool_rank
                         if shadow_result
@@ -638,6 +660,24 @@ def evaluate_intrinsic_records(
                     "sentence_level_source_hit": sentence_source_hit,
                     "sentence_count": len(source_sentences),
                     "predicted_style": query_style(generated),
+                    "predicted_form": predicted_labels.form.value,
+                    "predicted_intent": predicted_labels.intent.value,
+                    "form_confidence": predicted_labels.form_confidence,
+                    "intent_confidence": predicted_labels.intent_confidence,
+                    "form_abstained": predicted_labels.form.value == "unknown",
+                    "intent_abstained": predicted_labels.intent.value == "unknown",
+                    "form_accuracy": (
+                        float(predicted_labels.form.value == str(requested_form))
+                        if requested_form is not None
+                        else None
+                    ),
+                    "intent_accuracy": (
+                        float(predicted_labels.intent.value == str(requested_intent))
+                        if requested_intent is not None
+                        and record.get("intent_applicable") is not False
+                        and predicted_labels.intent.value != "unknown"
+                        else None
+                    ),
                 }
                 row["slices"] = _slice_base(
                     record,
@@ -645,6 +685,13 @@ def evaluate_intrinsic_records(
                     target_focus=reference_focus,
                     sentence_count=len(source_sentences),
                     reference_rank=reference_rank,
+                )
+                row["slices"].update(
+                    {
+                        "generator_model": str(record.get("experiment_id", experiment_id)),
+                        "requested_form": str(requested_form or "uncontrolled"),
+                        "requested_intent": str(requested_intent or "uncontrolled"),
+                    }
                 )
                 batch_rows.append(row)
             _append_checkpoint_rows(journal_path, batch_rows)
@@ -727,6 +774,53 @@ def evaluate_intrinsic_records(
             "primary": primary.name,
             "shadow": shadow.name if shadow else None,
             "shadow_status": "measured" if shadow else "not_measured",
+            "primary_source_score": distribution(
+                [float(row["pool_positive_score"]) for row in measured]
+            ),
+            "primary_margin": distribution([float(row["pool_margin"]) for row in measured]),
+            "shadow_source_score": distribution(
+                [
+                    float(row["shadow_score"])
+                    for row in measured
+                    if isinstance(row.get("shadow_score"), (int, float))
+                ]
+            ),
+            "shadow_margin": distribution(
+                [
+                    float(row["shadow_pool_margin"])
+                    for row in measured
+                    if isinstance(row.get("shadow_pool_margin"), (int, float))
+                ]
+            ),
+            "shadow_candidate_pool_metrics": {
+                f"shadow_{field}": _mean_rate(measured, f"shadow_{field}") for field in POOL_METRICS
+            },
+            "raw_logit_comparison_prohibited": True,
+        },
+        "controls": {
+            "form_accuracy": _mean_rate(measured, "form_accuracy"),
+            "form_abstention_rate": _mean_rate(measured, "form_abstained"),
+            "intent_accuracy_excluding_unknown": _mean_rate(measured, "intent_accuracy"),
+            "intent_abstention_rate": _mean_rate(measured, "intent_abstained"),
+            "intent_unknown_count": sum(bool(row["intent_abstained"]) for row in measured),
+            "requested_form_distribution": dict(
+                Counter(str(row.get("requested_form", "uncontrolled")) for row in measured)
+            ),
+            "requested_intent_distribution": dict(
+                Counter(str(row.get("requested_intent", "uncontrolled")) for row in measured)
+            ),
+        },
+        "judge_disagreement": {
+            "rank_disagreement_rate": _mean_rate(measured, "judge_rank_disagreement"),
+            "primary_rank": distribution([float(row["pool_rank"]) for row in measured]),
+            "shadow_rank": distribution(
+                [
+                    float(row["shadow_pool_rank"])
+                    for row in measured
+                    if isinstance(row.get("shadow_pool_rank"), (int, float))
+                ]
+            ),
+            "note": "primary and shadow raw logits are reported separately and never pooled",
         },
         "protocols": {
             CANDIDATE_POOL_RANKING: {

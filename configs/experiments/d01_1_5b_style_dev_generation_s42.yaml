@@ -1,6 +1,6 @@
 # @package _global_
-# Diagnostic generation uses frozen development pairs only.  It is not a
-# Task 04 comparison and must not be interpreted as an intrinsic gate result.
+# Post-training generation is loaded directly from the frozen Task 04 manifest
+# by scripts/run_d01_postprocess.py. data.input_path is intentionally unused.
 defaults:
   - d01_1_5b_style_50k_s42
   - _self_
@@ -10,11 +10,12 @@ run:
   output_dir: runs/D01-1.5B-STYLE-DEV-GENERATION-S42
 
 data:
-  input_path: data/processed/v1/doc2query_dev.parquet
-  input_format: parquet
+  # Required by AppConfig; the frozen-dev runner never reads this placeholder.
+  input_path: data/input.jsonl
+  input_format: jsonl
   eval_path: null
   max_train_examples: null
-  max_eval_examples: 500
+  max_eval_examples: null
 
 generation:
   do_sample: true

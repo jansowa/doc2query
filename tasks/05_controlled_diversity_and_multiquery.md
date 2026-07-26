@@ -22,6 +22,17 @@ porównania kwalifikującego modele bez guardraili i probe.
 Plan i empiryczny budżet kolejki:
 [`task05_d01_overnight_2026-07-26.md`](../reports/plans/task05_d01_overnight_2026-07-26.md).
 
+Zaimplementowano również kompletny post-D01 pipeline dla dopasowanych runów
+1.5B/W05 i 4.5B/W06: frozen-dev generation-only z passage-level journalem i
+pełną identity, atomowy artefakt, progress/ETA/VRAM, wznawialny primary/shadow
+scoring, kontrolne metryki formy/intencji z abstention, lexical/copy/retrieval,
+disagreement i slice'y, matched-budget bootstrap report oraz fail-closed
+materializację późniejszych probe inputs z przypiętym HN0+filter/drop. Nocny
+runner nie czyta już spłaszczonego `doc2query_dev.parquet` w etapie generacji i
+nie uruchamia scoringu automatycznie. Testy CPU/mocks są gotowe; nie wykonano
+żadnego treningu, generacji modelowej, scoringu ani probe. Plan i komendy:
+[`task05_d01_post_evaluation_2026-07-26.md`](../reports/plans/task05_d01_post_evaluation_2026-07-26.md).
+
 Do statusu `DONE` pozostają: ukończenie Harness v1.1/P-04, eksperymenty
 D00–D12 na wspólnych kandydatach i budżetach, kalibracja rozkładów naturalnych
 query per domena, ręczny audyt co najmniej 500 etykiet i około 200 ekstrakcji

@@ -1,0 +1,31 @@
+schema_version: 1
+contract: task05-d01-postprocess-v1
+frozen_manifest: data/processed/v1/evaluation/task04-v1/manifest.json
+frozen_subset: dev_intrinsic_rank10
+final_tests_used: []
+negative_recipe:
+  strategy: HN0+filter
+  possible_false_negative_policy: drop
+comparison:
+  statistical_contract: configs/evaluation/comparison_contract_v1.yaml
+  pairs:
+    - variant: D01-1.5B-STYLE-50K-S42
+      baseline: W05-1.5B-50K-8GB
+    - variant: D01-4.5B-STYLE-50K-S42
+      baseline: W06-4.5B-INSTRUCT-50K-8GB-BS1-L512
+  required_equal_fields:
+    - frozen_cohort_fingerprint
+    - source_passage_count
+    - target_queries_per_passage
+    - max_new_tokens
+    - seed_contract
+  style_accuracy:
+    status: provisional_not_gating
+    threshold: null
+    rationale: no calibrated P-04 style-accuracy threshold exists
+probe_inputs:
+  queries_per_passage: 4
+  negative_recipe: HN0+filter
+  possible_false_negative_policy: drop
+  require_intrinsic_comparison_status: intrinsic_complete
+  final_tests_used: []
