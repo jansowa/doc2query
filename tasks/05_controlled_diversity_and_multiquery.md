@@ -33,10 +33,25 @@ nie uruchamia scoringu automatycznie. Testy CPU/mocks są gotowe; nie wykonano
 żadnego treningu, generacji modelowej, scoringu ani probe. Plan i komendy:
 [`task05_d01_post_evaluation_2026-07-26.md`](../reports/plans/task05_d01_post_evaluation_2026-07-26.md).
 
-Do statusu `DONE` pozostają: ukończenie Harness v1.1/P-04, eksperymenty
-D00–D12 na wspólnych kandydatach i budżetach, kalibracja rozkładów naturalnych
-query per domena, ręczny audyt co najmniej 500 etykiet i około 200 ekstrakcji
-koncepcji, human check oraz porównawcze probe embeddera z CI.
+Niezależnie od D01 zaimplementowano i uruchomiono CPU-only pakiet kalibracji
+naturalnych query na pełnym zamrożonym `dev_intrinsic_rank10` (6598 rekordów).
+Prospektywny kontrakt przypina kohortę, seed, reguły `form`/`intent`, jawne
+`unknown`/abstention, `intent_applicable`, stratyfikację i
+`final_tests_used=[]`; wyniki D01 i finalne testy są zakazane. Zmaterializowano
+ślepy formularz 500 etykiet, osobny machine key, formularz adjudykacji oraz
+analogiczny pakiet dla 200 unikalnych pasaży i ekstrakcji koncepcji. Journale
+są crash-safe i identity-bound, a agregatory liczą confusion/PRF, coverage,
+accuracy po abstention, slice'y domenowe, reliability bins i Cohen/Fleiss
+kappa oraz odmawiają statusu `complete` przy brakach lub nierozstrzygniętej
+adjudykacji. Oba formularze nadal są puste: audyty 500/200 pozostają
+`NOT MEASURED`, nie wyznaczono progu style accuracy. Plan, hashe i komendy:
+[`task05_natural_audits_2026-07-26.md`](../reports/plans/task05_natural_audits_2026-07-26.md).
+
+Do statusu `DONE` pozostają: eksperymenty D00–D12 na wspólnych kandydatach i
+budżetach, rzeczywiste ręczne oceny i adjudykacja zmaterializowanych audytów
+500 etykiet i 200 ekstrakcji koncepcji, human check oraz porównawcze probe
+embeddera z CI. Opisowa kalibracja naturalnych query jest zmaterializowana,
+ale nie zastępuje ręcznego pomiaru accuracy.
 
 ## Cel
 

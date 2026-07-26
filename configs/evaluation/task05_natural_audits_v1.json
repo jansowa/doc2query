@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "contract": "task05-natural-calibration-audits-v1",
+  "frozen_manifest": "data/processed/v1/evaluation/task04-v1/manifest.json",
+  "frozen_subset": "dev_intrinsic_rank10",
+  "seed": 20260726,
+  "label_audit_size": 500,
+  "concept_audit_size": 200,
+  "required_reviewers": 2,
+  "stratification": {
+    "label_audit": [
+      "domain",
+      "source",
+      "predicted_form",
+      "predicted_intent",
+      "confidence_bin",
+      "abstention",
+      "query_length_bin",
+      "passage_length_bin"
+    ],
+    "concept_audit": [
+      "domain",
+      "passage_length_bin",
+      "has_numbers",
+      "has_units",
+      "has_entity_signal",
+      "concept_count_bin"
+    ],
+    "algorithm": "deterministic-greedy-marginal-coverage-v1",
+    "small_domains": {
+      "minimum_population": 30,
+      "allocation_bucket": "__small_domains__",
+      "report_original_domain": true,
+      "minimum_reportable_count": 30
+    }
+  },
+  "classifier": {
+    "taxonomy_version": "form-intent-rules-pl-v1",
+    "implementation": "doc2query.data.style_labels.label_query",
+    "form_confidence_threshold": 0.9,
+    "intent_confidence_threshold": 0.7,
+    "unknown": "explicit classifier output; never imputed or mapped to a majority class",
+    "abstention": "predicted form=unknown or predicted intent=unknown",
+    "intent_applicable": "passage-only conservative rules-pl-v1; null means abstention"
+  },
+  "concept_extractor": {
+    "version": "model-free-concepts-v1",
+    "implementation": "doc2query.generation.concepts.extract_concepts",
+    "normalizer": "simple_pl:v1:nfkc:stopwords-v1",
+    "max_concepts": 24
+  },
+  "confidence_bins": [0.0, 0.5, 0.7, 0.9, 1.0],
+  "query_length_bins_words": [3, 6, 12],
+  "passage_length_bins_words": [50, 100, 200],
+  "allowed_inputs": ["natural_query", "positive_passage", "frozen_dev_metadata"],
+  "forbidden_inputs": ["D01_results", "synthetic_queries", "final_tests"],
+  "final_tests_used": []
+}
