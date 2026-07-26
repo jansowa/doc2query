@@ -219,6 +219,7 @@ def test_label_aggregator_is_fail_closed_then_computes_metrics(
         [incomplete_ratings],
         adjudication=None,
         output_dir=tmp_path / "agg-incomplete",
+        required_reviewers=2,
     )
     assert report["status"] == "incomplete"
     ratings = tmp_path / "two.csv"
@@ -245,6 +246,38 @@ def test_label_aggregator_is_fail_closed_then_computes_metrics(
     assert report["agreement"]["form"]["method"] == "cohen_kappa"
     form = key[0]["predicted_form"]
     assert report["form"]["confusion_matrix"][form][form] >= 1
+
+
+def test_single_reviewer_completes_without_claiming_agreement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output, _ = _materialize(tmp_path, monkeypatch, [_record(0)])
+    item = next(read_records(output / "label_audit_machine_key.jsonl"))
+    ratings = tmp_path / "single.csv"
+    _write_ratings(
+        ratings,
+        [
+            {
+                "audit_id": item["audit_id"],
+                "reviewer_id": "owner",
+                "gold_form": item["predicted_form"],
+                "gold_intent": item["predicted_intent"],
+                "intent_adequate": "yes",
+            }
+        ],
+    )
+    report = natural_audits.aggregate_label_audit(
+        output / "label_audit_machine_key.jsonl",
+        [ratings],
+        adjudication=None,
+        output_dir=tmp_path / "single-agg",
+    )
+    assert report["status"] == "complete"
+    assert report["agreement"]["form"] == {
+        "method": "not_measured_fewer_than_two_reviewers",
+        "value": None,
+        "reviewer_count": 1,
+    }
 
 
 def test_concept_aggregator_counts_audit_error_types(

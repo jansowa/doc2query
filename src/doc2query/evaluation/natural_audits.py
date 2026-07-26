@@ -50,9 +50,10 @@ Concept audit values:
 - `numbers_units_correct`, `over_fragmented`, `duplicate_concepts`,
   `useful_for_coverage`, `ambiguous`, `encoding_error`: `yes`, `no`, or `uncertain`.
 
-Every row requires `reviewer_id`. Two independent ratings are required by the
-contract. Resolve every disagreement in the separate adjudication CSV. Aggregators
-remain `incomplete` while ratings or required adjudications are missing.
+Every row requires `reviewer_id`. The current contract permits one reviewer;
+inter-rater agreement is then explicitly `NOT MEASURED`. Resolve any later
+multi-reviewer disagreement in the separate adjudication CSV. Aggregators remain
+`incomplete` while ratings or required adjudications are missing.
 """
 
 
@@ -632,6 +633,12 @@ def _agreement(grouped: Mapping[str, Sequence[Mapping[str, str]]], field: str) -
         sorted(rows, key=lambda row: row["reviewer_id"]) for _, rows in sorted(grouped.items())
     ]
     reviewer_count = min((len(rows) for rows in ordered), default=0)
+    if reviewer_count < 2:
+        return {
+            "method": "not_measured_fewer_than_two_reviewers",
+            "value": None,
+            "reviewer_count": reviewer_count,
+        }
     if reviewer_count == 2:
         return {
             "method": "cohen_kappa",
@@ -714,7 +721,7 @@ def aggregate_label_audit(
     *,
     adjudication: Path | None,
     output_dir: Path,
-    required_reviewers: int = 2,
+    required_reviewers: int = 1,
 ) -> dict[str, Any]:
     key = {str(row["audit_id"]): row for row in read_records(machine_key)}
     raw = _read_csvs(ratings)
@@ -843,7 +850,7 @@ def aggregate_concept_audit(
     *,
     adjudication: Path | None,
     output_dir: Path,
-    required_reviewers: int = 2,
+    required_reviewers: int = 1,
 ) -> dict[str, Any]:
     key = {str(row["audit_id"]): row for row in read_records(machine_proposals)}
     grouped: defaultdict[str, list[dict[str, str]]] = defaultdict(list)

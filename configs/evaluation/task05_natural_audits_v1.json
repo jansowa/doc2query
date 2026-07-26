@@ -6,7 +6,7 @@
   "seed": 20260726,
   "label_audit_size": 500,
   "concept_audit_size": 200,
-  "required_reviewers": 2,
+  "required_reviewers": 1,
   "stratification": {
     "label_audit": [
       "domain",

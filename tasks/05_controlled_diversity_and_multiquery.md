@@ -43,7 +43,8 @@ analogiczny pakiet dla 200 unikalnych pasaży i ekstrakcji koncepcji. Journale
 są crash-safe i identity-bound, a agregatory liczą confusion/PRF, coverage,
 accuracy po abstention, slice'y domenowe, reliability bins i Cohen/Fleiss
 kappa oraz odmawiają statusu `complete` przy brakach lub nierozstrzygniętej
-adjudykacji. Oba formularze nadal są puste: audyty 500/200 pozostają
+adjudykacji. Kontrakt dopuszcza jednego właściciela-oceniającego; wtedy kappa
+pozostaje jawnie `NOT MEASURED`. Oba formularze nadal są puste: audyty 500/200 pozostają
 `NOT MEASURED`, nie wyznaczono progu style accuracy. Plan, hashe i komendy:
 [`task05_natural_audits_2026-07-26.md`](../reports/plans/task05_natural_audits_2026-07-26.md).
 

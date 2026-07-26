@@ -29,13 +29,13 @@ def main() -> None:
     labels.add_argument("--ratings", type=Path, nargs="+", required=True)
     labels.add_argument("--adjudication", type=Path)
     labels.add_argument("--output-dir", type=Path, required=True)
-    labels.add_argument("--required-reviewers", type=int, default=2)
+    labels.add_argument("--required-reviewers", type=int, default=1)
     concepts = sub.add_parser("aggregate-concepts")
     concepts.add_argument("--machine-proposals", type=Path, required=True)
     concepts.add_argument("--ratings", type=Path, nargs="+", required=True)
     concepts.add_argument("--adjudication", type=Path)
     concepts.add_argument("--output-dir", type=Path, required=True)
-    concepts.add_argument("--required-reviewers", type=int, default=2)
+    concepts.add_argument("--required-reviewers", type=int, default=1)
     args = parser.parse_args()
     if args.command == "materialize":
         result = materialize_natural_audits(
