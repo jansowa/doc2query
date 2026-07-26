@@ -23,6 +23,14 @@ Artefakty są lokalne w `artifacts/task05/natural_audits_v1/` i celowo nie są
 commitowane, ponieważ zawierają tekst danych. Manifest ma status
 `materialized_unreviewed`; audyty etykiet i koncepcji są `NOT MEASURED`.
 
+Przygotowano również automatycznego anotatora Groq jako zastępstwo dla
+ręcznego wypełniania formularzy. Dwa niezależnie limitowane workery używają
+`qwen/qwen3.6-27b` (reasoning `none`) i `openai/gpt-oss-120b` (reasoning
+`low`). Każdy request i response trafia do trwałego JSONL, a resume pomija
+kompletne odpowiedzi. Plan v2 przenosi siedem poprawnych ocen z pilota i
+obejmuje 693 pozostałe rekordy w 224 paczkach. LLM-y są automatycznym proxy,
+nie ludzkimi oceniającymi; zgodność człowieka pozostanie `NOT MEASURED`.
+
 ## Wynik opisowej kalibracji (nie accuracy)
 
 Na 6598 rekordach reguły przewidziały 4453 `full_question`, 1720
@@ -71,6 +79,48 @@ Pełna materializacja (już wykonana; komenda jest bezpiecznie wznawialna):
   --contract configs/evaluation/task05_natural_audits_v1.json \
   --output-dir artifacts/task05/natural_audits_v1
 ```
+
+Plan Groq bez użycia limitu API:
+
+```bash
+.venv/bin/python scripts/run_task05_groq_audits.py --plan-only
+```
+
+Docelowe uruchomienie wykonuje właściciel projektu. Bieżący ledger ma jeden
+request GPT-OSS przerwany po zapisie `request_started`, dlatego pierwsze
+wznowienie wymaga jawnej zgody na jego potencjalne, jednorazowe powtórzenie:
+
+```bash
+.venv/bin/python scripts/run_task05_groq_audits.py \
+  --allow-ambiguous-resend
+```
+
+Kolejne zwykłe wznowienia nie wymagają flagi, o ile poprzedni proces zakończył
+się czysto. Klucz jest czytany z pola `api_key` w `.env` i nigdy nie trafia do
+ledgerów. Dwa workery mają osobne liczniki, odstęp 2,1 s, lokalną rezerwację
+TPM/dzień i retry wyłącznie dla jednoznacznego HTTP 429. Flagi
+`--allow-ambiguous-resend` nie należy używać rutynowo: dopuszcza duplikat tylko
+wtedy, gdy operator świadomie rozstrzyga request bez zapisanej odpowiedzi.
+
+Po statusie `complete` wyniki automatyczne agreguje się tymi samymi,
+fail-closed agregatorami, lecz do osobnych katalogów raportowych:
+
+```bash
+.venv/bin/python scripts/task05_natural_audits.py aggregate-labels \
+  --machine-key artifacts/task05/natural_audits_v1/label_audit_machine_key.jsonl \
+  --ratings artifacts/task05/groq_llm_audit_v2/label_llm_ratings.csv \
+  --adjudication artifacts/task05/natural_audits_v1/label_adjudication.csv \
+  --output-dir reports/measurements/task05_groq_label_audit_v2
+
+.venv/bin/python scripts/task05_natural_audits.py aggregate-concepts \
+  --machine-proposals artifacts/task05/natural_audits_v1/concept_audit_machine_proposals.jsonl \
+  --ratings artifacts/task05/groq_llm_audit_v2/concept_llm_ratings.csv \
+  --adjudication artifacts/task05/natural_audits_v1/concept_adjudication.csv \
+  --output-dir reports/measurements/task05_groq_concept_audit_v2
+```
+
+Raporty te muszą pozostać oznaczone jako LLM-proxy; nie są pomiarem człowieka
+ani agreement między oceniającymi.
 
 Właściciel projektu wypełnia po jednej kopii `label_audit_blind.csv` i
 `concept_audit_blind.csv`, nie otwierając wcześniej machine key/proposals.

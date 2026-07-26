@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "contract": "task05-groq-llm-audit-v1",
+  "source_materialization_manifest": "artifacts/task05/natural_audits_v1/materialization_manifest.json",
+  "label_blind_csv": "artifacts/task05/natural_audits_v1/label_audit_blind.csv",
+  "concept_blind_csv": "artifacts/task05/natural_audits_v1/concept_audit_blind.csv",
+  "seed": 20260726,
+  "prompt_version": "task05-groq-polish-audit-v1",
+  "models": [
+    {
+      "model_id": "qwen/qwen3.6-27b",
+      "reviewer_id": "groq-qwen3.6-27b-v1",
+      "reasoning_effort": "none"
+    },
+    {
+      "model_id": "openai/gpt-oss-120b",
+      "reviewer_id": "groq-gpt-oss-120b-low-v1",
+      "reasoning_effort": "low"
+    }
+  ],
+  "batch_sizes": {"label": 4, "concept": 2},
+  "max_completion_tokens_per_item": {"label": 110, "concept": 220},
+  "limits_per_model": {
+    "minimum_seconds_between_requests": 2.1,
+    "requests_per_minute": 30,
+    "requests_per_day": 1000,
+    "tokens_per_minute": 8000,
+    "tokens_per_day": 200000,
+    "safety_requests_per_day": 950,
+    "safety_tokens_per_minute": 7600,
+    "safety_tokens_per_day": 185000
+  },
+  "retry": {
+    "max_rate_limit_retries": 8,
+    "default_retry_after_seconds": 10.0,
+    "maximum_retry_after_seconds": 65.0
+  },
+  "token_estimator": {"characters_per_token": 3.2, "fixed_request_tokens": 24},
+  "api": {
+    "url": "https://api.groq.com/openai/v1/chat/completions",
+    "timeout_seconds": 120,
+    "temperature": 0.0,
+    "response_format": "json_object",
+    "include_reasoning": false
+  },
+  "final_tests_used": [],
+  "d01_results_used": []
+}

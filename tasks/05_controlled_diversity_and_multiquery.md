@@ -45,7 +45,10 @@ accuracy po abstention, slice'y domenowe, reliability bins i Cohen/Fleiss
 kappa oraz odmawiają statusu `complete` przy brakach lub nierozstrzygniętej
 adjudykacji. Kontrakt dopuszcza jednego właściciela-oceniającego; wtedy kappa
 pozostaje jawnie `NOT MEASURED`. Oba formularze nadal są puste: audyty 500/200 pozostają
-`NOT MEASURED`, nie wyznaczono progu style accuracy. Plan, hashe i komendy:
+`NOT MEASURED`, nie wyznaczono progu style accuracy. Powstał wznawialny,
+quota-safe anotator Groq dla obu formularzy; jego docelowy run pozostaje do
+uruchomienia przez właściciela, a wyniki będą automatycznym proxy, nie oceną
+człowieka. Plan, hashe i komendy:
 [`task05_natural_audits_2026-07-26.md`](../reports/plans/task05_natural_audits_2026-07-26.md).
 
 Do statusu `DONE` pozostają: eksperymenty D00–D12 na wspólnych kandydatach i
