@@ -43,6 +43,14 @@ wyłącznie do małego P06-T disagreement/manual audit. Nie kończyć pełnego
 scoringu train ani nie wyprowadzać z niego drop/weights. ADR:
 [`task03_p06_source_provenance_2026-07-26.md`](../docs/decisions/task03_p06_source_provenance_2026-07-26.md).
 
+P06-T ma teraz zamrożony train-only panel 300 rekordów (seed 42), wersjonowany
+manifest oraz ślepy formularz z polami intent preservation, answerability,
+semantic damage, encoding/text error i opcjonalną klasą powtarzalnego błędu.
+Osobny plik triage zawiera wyłącznie lekkie heurystyki tekstowe; pola
+primary/shadow/disagreement są `null`, nie zdefiniowano progu drop ani wag i
+nie użyto testów finalnych. Ręczne oceny nie zostały jeszcze wykonane. Raport:
+[`task03_p06_t_freeze_2026-07-26.md`](../docs/experiments/task03_p06_t_freeze_2026-07-26.md).
+
 Aktualny stan (21 lipca): Harness v1.1 P-01–P-04 jest zaimplementowany i ma
 testy CPU. P-03 został rzeczywiście zmierzony na 1 000 rekordów zamrożonego
 dev; wynik `statistically_separated` nie otworzył żadnego testu finalnego.
