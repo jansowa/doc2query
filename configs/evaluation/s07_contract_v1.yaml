@@ -1,0 +1,118 @@
+schema_version: 1
+contract_version: task03-s07-plt5-v1
+status: prospective
+frozen_at: "2026-07-25"
+
+model_selection:
+  selected:
+    name_or_path: allegro/plt5-base
+    revision: 56379680948ce8b42d3d48df86569cfc210d3060
+    architecture: seq2seq_lm
+    tokenizer: Polish SentencePiece unigram, 50000 tokens
+    license: CC-BY-4.0
+    trust_remote_code: false
+    rationale: Polish-only pretraining and tokenizer make this the lower-cost, language-matched architectural control.
+  rejected_alternative:
+    name_or_path: google/mt5-base
+    revision: 2eb15465c5dd7f72a8f7984306ad05ebc3dd1e1f
+    architecture: seq2seq_lm
+    license: Apache-2.0
+    rationale: Multilingual vocabulary and pretraining add cost without a preregistered Polish advantage; no post-result model switching is allowed.
+
+w05_alignment:
+  reference_experiment: W05-1.5B-50K-8GB
+  reference_summary: runs/W05-1.5B-50K-8GB/sft_summary.json
+  train_path: data/processed/v1/doc2query_train.parquet
+  eval_path: data/processed/v1/doc2query_dev.parquet
+  dataset_fingerprint: 017a26ebcf6c5811d5c84498d44881d943c919680e9eed482a649409dfc06b73
+  train_pairs: 50000
+  eval_pairs: 1000
+  seed: 42
+  epochs: 1.0
+  effective_batch_size: 16
+  optimizer_steps: 3125
+  source_max_tokens: 512
+  target_max_tokens: 64
+  prompt_baseline: b1
+  sampling: deterministic_hash_cap_from_prepare_datasets
+
+training:
+  config: configs/experiments/s07_plt5_base_50k.yaml
+  method: full_finetuning
+  learning_rate: 0.0001
+  optimizer: adamw_torch
+  scheduler: cosine
+  warmup_ratio: 0.03
+  checkpoint_every_steps: 50
+  resume_identity_required: true
+  memory_probe_lengths: [512]
+  memory_probe_steps: 2
+  memory_gate:
+    requires_cuda: true
+    maximum_reserved_fraction: 0.90
+    require_success: true
+  cost_cap:
+    gpu_count: 1
+    full_runs: 1
+    maximum_wall_hours: 8
+    maximum_peak_reserved_fraction: 0.90
+    stop_on_non_finite_loss: true
+
+smoke:
+  config: configs/experiments/s07_tiny_smoke.yaml
+  steps: 20
+  train_pairs: 128
+  eval_pairs: 32
+  require_finite_loss: true
+  require_saved_model: true
+  require_generation: true
+
+generation:
+  decoding:
+    deterministic: {do_sample: false, num_return_sequences: 1, max_new_tokens: 64}
+    diverse: {do_sample: true, num_return_sequences: 4, max_new_tokens: 64, temperature: 0.8, top_p: 0.95}
+  harness_input_subset: dev_intrinsic_rank10
+  harness_input_size: 5000
+  harness_version: "1.1"
+  corpus_index: data/processed/v1/evaluation/corpus-bm25-v1
+  primary_judge: configs/reranker/primary_polish_roberta_v3_p03_gpu.yaml
+  shadow_judge: configs/reranker/shadow_bge_v2_m3.yaml
+  cost_metrics: [elapsed_seconds, generations_per_second, peak_vram_allocated_bytes, peak_vram_reserved_bytes]
+
+downstream_probe:
+  stage: dev_screen
+  recipe: configs/evaluation/probe_v1.yaml
+  train_input: artifacts/task04/p05/common_cohort/gold_natural.jsonl
+  synthetic_output: artifacts/task03/s07/p05/s07_synthetic.jsonl
+  generator_id: S07-PLT5-BASE-50K-S42
+  evaluation_subset: dev_intrinsic_rank10
+  train_prefix_pairs: 2486
+  generated_pairs: 2486
+  max_steps: 250
+  seed: 42
+  queries_per_passage: 1
+  negative_recipe: HN0+filter
+
+data_access:
+  development_only: true
+  final_tests_used: []
+  forbidden_subsets: [dev_confirm, test_native_pl, test_translated_msmarco_pl, test_embedder, test_intrinsic, test_generator_panel_rank10]
+
+execution_order:
+  - preflight
+  - unit_tests
+  - tiny_smoke
+  - memory_probe
+  - full_train
+  - dev_harness
+  - dev_screen_probe
+gates:
+  full_train_requires: [preflight_pass, unit_tests_pass, tiny_smoke_pass, memory_probe_pass]
+  no_dev_confirm: true
+  no_final_tests: true
+  no_p06: true
+reporting:
+  compare_against: [W05-1.5B-50K-8GB, S00-zero_shot-dev-v1, P05-GOLD-NATURAL-S42, P05-W05-SYNTHETIC-S42]
+  required_generator_metrics: [corpus_round_trip_at_20, candidate_pool_mrr, candidate_pool_ndcg_at_10, format_valid_rate, duplicate_rate]
+  required_probe_metrics: [corpus_recall_at_10, corpus_mrr_at_10, corpus_ndcg_at_10, corpus_map, hard_negative_win_rate]
+  selection_rule: No architecture winner or scale promotion without the preregistered dev Harness and equal-budget downstream probe; this S07 run cannot authorize dev_confirm.

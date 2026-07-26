@@ -28,6 +28,10 @@ from doc2query.evaluation.datasets import (
     load_frozen_records,
     verify_frozen_manifest,
 )
+from doc2query.evaluation.dense_retrieval import (
+    ShardedEmbeddingIndex,
+    exact_retrieval_batch,
+)
 from doc2query.evaluation.diversity import diversity_metrics
 from doc2query.evaluation.embedder_probe import ProbeRecipe, prepare_probe_pairs, train_probe
 from doc2query.evaluation.format import format_metrics
@@ -334,6 +338,119 @@ def test_probe_resume_rejects_recipe_identity_mismatch(tmp_path: Path) -> None:
         )
 
 
+def test_probe_resumes_atomic_training_checkpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class TinyBackbone(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.projection = torch.nn.Linear(1, 2)
+
+        def forward(self, values: torch.Tensor) -> torch.Tensor:
+            return self.projection(values)
+
+        def save_pretrained(self, path: Path, *, safe_serialization: bool) -> None:
+            assert safe_serialization
+            path.mkdir(parents=True)
+            torch.save(self.state_dict(), path / "model.safetensors")
+
+    class TinyEncoder(torch.nn.Module):
+        def __init__(self, _name: str, _revision: str) -> None:
+            super().__init__()
+            self.backbone = TinyBackbone()
+
+        def forward(self, encoded: dict[str, torch.Tensor]) -> torch.Tensor:
+            result = torch.nn.functional.normalize(self.backbone(encoded["values"]), dim=-1)
+            return cast(torch.Tensor, result)
+
+    class TinyTokenizer:
+        def save_pretrained(self, path: Path) -> None:
+            (path / "tokenizer.json").write_text("{}", encoding="utf-8")
+
+    import transformers
+
+    monkeypatch.setattr(embedder_probe, "MeanPoolEncoder", TinyEncoder)
+    monkeypatch.setattr(
+        transformers.AutoTokenizer,
+        "from_pretrained",
+        lambda *_args, **_kwargs: TinyTokenizer(),
+    )
+    monkeypatch.setattr(
+        embedder_probe,
+        "_tokenize",
+        lambda _tokenizer, texts, _max_length, device, **_kwargs: {
+            "values": torch.tensor(
+                [[float(len(text) % 7 + 1)] for text in texts], device=device
+            )
+        },
+    )
+    recipe = ProbeRecipe(
+        model_name_or_path="fixture/encoder",
+        revision="a" * 40,
+        recipe_version="probe-checkpoint-fixture-v1",
+        negative_recipe=NegativeRecipe(version=NEGATIVE_RECIPE_VERSION, strategy="hn0"),
+        max_length=8,
+        batch_size=2,
+        max_steps=4,
+    )
+    contract = StatisticalContract(
+        payload={
+            "contract_version": "fixture-v1",
+            "adr": {
+                "id": "ADR-fixture",
+                "version": "v1",
+                "path": "reports/adr/fixture.md",
+                "sha256": "b" * 64,
+            },
+        },
+        fingerprint="c" * 64,
+    )
+    rows = [
+        {
+            "example_id": f"q-{index}",
+            "query": f"query {index}",
+            "positive_doc_id": "d-1",
+            "positive": f"positive {index}",
+            "negative": f"negative {index}",
+            "demoted_negative": "",
+        }
+        for index in range(4)
+    ]
+    original_progress = embedder_probe._progress
+
+    def interrupt_at_step_three(stage: str, current: int, total: int, started: float) -> None:
+        del total, started
+        if stage == "train" and current == 3:
+            raise RuntimeError("simulated interruption")
+
+    monkeypatch.setattr(embedder_probe, "_progress", interrupt_at_step_three)
+    def run_training() -> dict[str, Any]:
+        return train_probe(
+            rows,
+            recipe=recipe,
+            output_dir=tmp_path / "probe",
+            query_source="synthetic",
+            train_fingerprint="d" * 64,
+            negative_contract={"hard_negative_strategy": "hn0"},
+            false_negative_report={"status": "not_applicable"},
+            negative_audit_rows=[],
+            statistical_contract=contract,
+            checkpoint_interval_steps=2,
+        )
+
+    with pytest.raises(RuntimeError, match="simulated interruption"):
+        run_training()
+    checkpoint = tmp_path / "probe" / "training_checkpoint.pt"
+    assert checkpoint.is_file()
+    assert torch.load(checkpoint, map_location="cpu", weights_only=False)["completed_steps"] == 2
+
+    monkeypatch.setattr(embedder_probe, "_progress", original_progress)
+    summary = run_training()
+    assert summary["steps"] == 4
+    assert not checkpoint.exists()
+    assert (tmp_path / "probe" / "model" / "model.safetensors").is_file()
+
+
 def test_corpus_encoding_cache_reuses_completed_shards(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -373,6 +490,65 @@ def test_corpus_encoding_cache_reuses_completed_shards(
     assert torch.equal(first, second)
     with pytest.raises(ValueError, match="identity mismatch"):
         embedder_probe._encode_batched(**(arguments | {"cache_identity": {"fixture": "v2"}}))
+
+
+def test_sharded_exact_retrieval_matches_legacy_ranks_and_ties(tmp_path: Path) -> None:
+    corpus = torch.tensor(
+        [
+            [1.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [0.8, 0.2, 0.0],
+            [0.2, 0.8, 0.0],
+            [-1.0, 0.0, 0.0],
+        ]
+    )
+    torch.save(corpus[:3], tmp_path / "chunk-00000.pt")
+    torch.save(corpus[3:6], tmp_path / "chunk-00001.pt")
+    torch.save(corpus[6:], tmp_path / "chunk-00002.pt")
+    index = ShardedEmbeddingIndex.load(tmp_path, row_count=7, chunk_size=3)
+    queries = torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+    positives = [[1], [4, 5]]
+    negatives = [[2, 6], [2, 3]]
+    result = exact_retrieval_batch(
+        queries,
+        positive_rows=positives,
+        negative_rows=negatives,
+        index=index,
+        device=torch.device("cpu"),
+    )
+    expected = []
+    for query, rows in zip(queries, positives, strict=True):
+        scores = query @ corpus.T
+        expected.append(
+            [
+                1
+                + int((scores > scores[row]).sum().item())
+                + int((scores[:row] == scores[row]).sum().item())
+                for row in rows
+            ]
+        )
+    assert result.positive_ranks == expected
+    assert result.hard_negative_win_rates == [1.0, 0.5]
+    assert index.size_bytes > corpus.nelement() * corpus.element_size()
+
+
+def test_sharded_embedding_index_rejects_incomplete_cache(tmp_path: Path) -> None:
+    torch.save(torch.ones(3, 2), tmp_path / "chunk-00000.pt")
+    with pytest.raises(ValueError, match="first missing shard"):
+        ShardedEmbeddingIndex.load(tmp_path, row_count=7, chunk_size=3)
+
+
+def test_probe_retrieval_journal_recovers_only_truncated_final_row(tmp_path: Path) -> None:
+    journal = tmp_path / "rows.jsonl"
+    journal.write_bytes(b'{"example_id":"q1"}\n{"example_id":"q2"')
+    assert embedder_probe._read_resume_jsonl(journal) == [{"example_id": "q1"}]
+    assert journal.read_bytes() == b'{"example_id":"q1"}\n'
+
+    journal.write_bytes(b'{broken}\n{"example_id":"q2"}\n')
+    with pytest.raises(ValueError, match="corrupt before its final row"):
+        embedder_probe._read_resume_jsonl(journal)
 
 
 def test_ranking_requires_probe_metric() -> None:
@@ -422,6 +598,11 @@ class _InterruptingOverlapScorer(_OverlapScorer):
         if self.calls == self.fail_on_call:
             raise RuntimeError("fixture interruption")
         return super().score_pairs(pairs)
+
+
+class _ConfiguredOverlapScorer(_OverlapScorer):
+    def __init__(self, config: str) -> None:
+        self.config = config
 
 
 def test_intrinsic_smoke_writes_null_for_unmeasured(tmp_path: Path) -> None:
@@ -512,6 +693,63 @@ def test_intrinsic_scoring_resumes_only_durable_batches(tmp_path: Path) -> None:
             experiment_id="fixture",
             scoring_batch_size=1,
         )
+
+
+def test_intrinsic_explicitly_archives_incompatible_scoring(tmp_path: Path) -> None:
+    source = _canonical("archive")
+    record = {
+        "evaluation_id": "archive::deterministic::0",
+        "experiment_id": "fixture",
+        "example_id": "archive",
+        "mode": "deterministic",
+        "candidate_index": 0,
+        "generated": "Gdzie leży Warszawa?",
+        "reference": source["query"],
+        "positive": source["positives"][0],
+        "hard_negatives": source["hard_negatives"],
+        "positive_count": 1,
+        "metadata": source["metadata"],
+    }
+    evaluate_intrinsic_records(
+        [record],
+        primary=_ConfiguredOverlapScorer("cpu"),
+        shadow=None,
+        output_dir=tmp_path,
+        test_fingerprint="f" * 64,
+        experiment_id="fixture",
+    )
+    summary = evaluate_intrinsic_records(
+        [record],
+        primary=_ConfiguredOverlapScorer("cuda"),
+        shadow=None,
+        output_dir=tmp_path,
+        test_fingerprint="f" * 64,
+        experiment_id="fixture",
+        archive_incompatible_scoring=True,
+    )
+    archived = Path(summary["resume"]["archived_incompatible_scoring"])
+    assert archived.is_dir()
+    assert (archived / "scoring.journal.jsonl").is_file()
+    assert len(list(read_records(tmp_path / "scoring.journal.jsonl"))) == 1
+
+
+def test_bm25_reuses_worker_pool_and_connections(tmp_path: Path) -> None:
+    documents = tmp_path / "documents.jsonl"
+    _write_jsonl(documents, _corpus_documents())
+    index_dir = tmp_path / "bm25"
+    build_bm25_index(documents, output_dir=index_dir, config=BM25IndexConfig())
+    requests = [
+        ("Gdzie leży Warszawa?", ("d-000",)),
+        ("Kraków zabytek", ("d-001",)),
+    ]
+    with BM25CorpusIndex(index_dir) as index:
+        first = evaluate_round_trip_queries(index, requests, workers=2)
+        executor = index._worker_executor
+        second = evaluate_round_trip_queries(index, requests, workers=2)
+        assert executor is not None
+        assert index._worker_executor is executor
+        assert len(index._worker_connections) == 2
+    assert first == second
 
 
 def _corpus_documents(count: int = 100) -> list[dict[str, Any]]:

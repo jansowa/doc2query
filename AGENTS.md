@@ -274,6 +274,23 @@ Wymagania:
 - raportuj konflikty i przykłady odrzucone;
 - zapisuj fingerprint danych, wersję kodu i konfigurację.
 
+### 5.1. Autorytet źródłowych score'ów `msmarco_pl`
+
+W `speakleash/msmarco_pl` score'y pozytywów i negatywów oraz ich marginesy
+zostały policzone na angielskich danych przez silny reranker użyty do budowy
+zbioru. Są zachowane jako `source_en_score`/`source_en_difference_between_max_scores`.
+Adapter projektu odrzuca pozytywy z `source_en_score < 23.50`; granica jest
+inkluzywna. Tego sygnału nie wolno zastępować masowym rescoringiem słabszym
+lokalnym polskim rerankerem ani używać lokalnego marginu do `drop` lub ważenia
+naturalnych par SFT.
+
+Lokalne primary/shadow rerankery służą do oceny nowych syntetycznych query.
+Dla naturalnych par mogą być użyte tylko na małej, prospektywnie zamrożonej
+próbce jako diagnostyka disagreement i triage ręcznego audytu tłumaczeń. Nie
+stanowią samodzielnej podstawy zmiany etykiety. Automatyczny filtr tłumaczeń
+może powstać dopiero po wykazaniu ręcznie potwierdzonej, powtarzalnej klasy
+błędu oraz zapisaniu osobnego prospektywnego ADR.
+
 ---
 
 ## 6. Szablon SFT

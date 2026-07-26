@@ -39,9 +39,16 @@ The source `pos_scores`, `neg_scores`, and aggregate differences were computed o
 copied into the Polish rows. The adapter therefore stores them as `source_en_score` with
 `source_score_language: en`.
 
-These values may be used for provenance, stratification, and a separately named difficulty slice.
-They must not be used as Polish reranker calibration labels, grounding rewards, or substitutes for
-scores recomputed by the frozen primary and shadow judges on Polish text.
+For source document labels these values are authoritative provenance: the source builder scored the
+positive before mining negatives and required a positive margin. The frozen train v1 audit found no
+missing scores, no retained positive below `23.50`, and a minimum max-positive versus max-negative
+source margin of `6.0`. A weaker local Polish reranker must not replace this signal, mass-filter the
+natural SFT pairs, or define their training weights.
+
+Source scores still must not be treated as Polish grounding rewards for newly generated queries.
+Frozen primary and shadow judges are used for synthetic-query evaluation. On natural translated
+pairs they may only support a small prospective disagreement/manual translation audit and cannot
+change labels without separately validated evidence of a repeatable translation failure.
 
 ## Evaluation policy
 

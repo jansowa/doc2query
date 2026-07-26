@@ -17,6 +17,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--adapter", type=Path)
+    parser.add_argument("--model-checkpoint", type=Path)
     parser.add_argument(
         "--input",
         type=Path,
@@ -38,7 +39,11 @@ def main() -> None:
     if input_path is None:
         raise ValueError("panel generation requires a materialized input_path")
     tokenizer = load_tokenizer(config)
-    model, _ = load_generator(config, for_training=False)
+    model, _ = load_generator(
+        config,
+        for_training=False,
+        model_path=str(args.model_checkpoint) if args.model_checkpoint else None,
+    )
     if args.adapter:
         from peft import PeftModel
 

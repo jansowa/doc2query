@@ -58,7 +58,11 @@ def generate_panel(
                 )
             output = model.generate(**encoded, **generation_kwargs)
             for candidate_index, sequence in enumerate(output):
-                generated_ids = sequence[encoded["input_ids"].shape[1] :]
+                generated_ids = (
+                    sequence
+                    if bool(getattr(model.config, "is_encoder_decoder", False))
+                    else sequence[encoded["input_ids"].shape[1] :]
+                )
                 generated = tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
                 writer.write(
                     {

@@ -17,9 +17,12 @@ def main() -> None:
     parser.add_argument("--subset", default="test_generator_panel_rank10")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--adapter", type=Path)
+    parser.add_argument("--model-checkpoint", type=Path)
     parser.add_argument("--primary-judge", type=Path)
     parser.add_argument("--shadow-judge", type=Path)
     parser.add_argument("--judge-device", choices=("cpu", "cuda"))
+    parser.add_argument("--primary-judge-device", choices=("cpu", "cuda"))
+    parser.add_argument("--shadow-judge-device", choices=("cpu", "cuda"))
     parser.add_argument("--max-examples", type=int)
     parser.add_argument("--generations", type=Path)
     parser.add_argument(
@@ -28,9 +31,15 @@ def main() -> None:
         help="Frozen BM25 or auxiliary bi-encoder index directory for corpus round-trip.",
     )
     parser.add_argument("--generation-only", action="store_true")
-    parser.add_argument("--scoring-batch-size", type=int, default=64)
-    parser.add_argument("--bm25-workers", type=int, default=8)
+    parser.add_argument("--generation-batch-size", type=int, default=8)
+    parser.add_argument("--scoring-batch-size", type=int, default=16)
+    parser.add_argument("--bm25-workers", type=int, default=2)
     parser.add_argument("--progress-every", type=int, default=100)
+    parser.add_argument(
+        "--archive-incompatible-scoring",
+        action="store_true",
+        help="Recoverably archive an incompatible scoring journal before restarting.",
+    )
     args = parser.parse_args()
     result = run_checkpoint_evaluation(
         args.config,
@@ -38,9 +47,12 @@ def main() -> None:
         subset=args.subset,
         output_dir=args.output_dir,
         adapter_path=args.adapter,
+        model_path=args.model_checkpoint,
         primary_config=args.primary_judge,
         shadow_config=args.shadow_judge,
         judge_device=args.judge_device,
+        primary_judge_device=args.primary_judge_device,
+        shadow_judge_device=args.shadow_judge_device,
         max_examples=args.max_examples,
         generations_path=args.generations,
         generation_only=args.generation_only,
@@ -48,6 +60,8 @@ def main() -> None:
         scoring_batch_size=args.scoring_batch_size,
         bm25_workers=args.bm25_workers,
         progress_every=args.progress_every,
+        generation_batch_size=args.generation_batch_size,
+        archive_incompatible_scoring=args.archive_incompatible_scoring,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
 

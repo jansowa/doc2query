@@ -68,6 +68,29 @@ Markdown and HTML artifacts:
   --output-dir reports/evaluation/W03-1.5B-10K-LR2E4-S42
 ```
 
+Kosztowne uruchomienia mogą osobno przypisać urządzenia sędziów i batch
+generacji:
+
+```bash
+.venv-gpu/bin/python scripts/evaluate_generator.py \
+  --config configs/experiments/s07_plt5_base_50k.yaml \
+  --model-checkpoint runs/S07-PLT5-BASE-50K-S42/model \
+  --frozen-manifest data/processed/v1/evaluation/task04-v1/manifest.json \
+  --subset dev_intrinsic_rank10 --max-examples 5000 \
+  --output-dir reports/evaluation/S07-PLT5-BASE-50K-S42-dev \
+  --primary-judge configs/reranker/primary_polish_roberta_v3_s07_gpu.yaml \
+  --shadow-judge configs/reranker/shadow_bge_v2_m3.yaml \
+  --primary-judge-device cuda --shadow-judge-device cuda \
+  --generation-batch-size 16 --scoring-batch-size 16 --bm25-workers 2
+```
+
+`--archive-incompatible-scoring` jest operacją jawną i odzyskiwalną: przenosi
+poprzedni journal oraz raporty do `interrupted-scoring/`, gdy zmieniła się
+tożsamość scoringu. Nie wolno mieszać w jednym journalu wyników shadow CPU i
+CUDA. Dobór workerów można odtworzyć przez
+`scripts/benchmark_evaluation_runtime.py`; benchmark musi używać frozen-dev,
+nie finalnego testu.
+
 `generation_report.json` records decoding parameters, throughput and peak
 VRAM. `evaluation_manifest.json` records the resolved training config,
 checkpoint, test fingerprint, judges and code provenance. A supplied
@@ -107,6 +130,58 @@ Recall@K is rejected when the corpus contains fewer than K documents. Paired
 bootstrap rejects different test or corpus fingerprints. Variant ranking is
 emitted only when measured probe metrics exist; intrinsic reward never
 substitutes for them.
+
+Probe corpus retrieval uses a persistent exact dense index made from the
+atomically written `corpus_embedding_cache/chunk-*.pt` shards. Query embeddings
+are encoded in batches and cached separately. Evaluation then scans every
+corpus shard once per query batch (matrix-matrix multiplication), rather than
+once per query, and computes exact positive ranks without materializing a
+corpus-sized relevance vector. The trained model and negative-filtering judge
+are not loaded when their completed artifacts are already present; the encoder
+is also released before dense retrieval.
+
+The execution controls below do not change the frozen training recipe or its
+fingerprint:
+
+```bash
+.venv-gpu/bin/python scripts/train_probe_embedder.py \
+  ... \
+  --evaluation-encode-batch-size 64 \
+  --retrieval-query-batch-size 512 \
+  --retrieval-device cuda
+```
+
+The backend is exact, records its device, dimension, shard count and stable tie
+rule, and therefore needs no ANN recall estimate. CUDA runs additionally audit
+the first eight new queries against the CPU exact backend and fall back to CPU
+before writing the batch if ranks or hard-negative wins differ. The JSONL
+journal is fsynced after every batch; a truncated final line is recoverable,
+while corruption before the last row remains fail-closed. Existing corpus
+shards and the valid prefix produced by the former per-query implementation are
+accepted after full identity validation.
+
+Run the lightweight reference benchmark with:
+
+```bash
+.venv/bin/python scripts/benchmark_probe_retrieval.py \
+  --corpus-size 20000 --query-count 256 --dimension 128 \
+  --query-batch-sizes 8 32 128 256 \
+  --output reports/measurements/task03_s07/probe_retrieval_benchmark_v1.json
+```
+
+The S07 real-artifact runtime benchmark (512 queries, 2,404,263 documents,
+768 dimensions, 100 existing shards) measured 225.68 queries/s on CUDA versus
+the interrupted legacy phase's observed 2.653 queries/s: 85.06x. CPU exact
+parity on eight queries matched every positive rank and hard-negative win. This
+is a runtime measurement only, not a completed probe result. Its machine-
+readable artifact is
+`reports/measurements/task03_s07/probe_retrieval_real_artifacts_v1.json`.
+
+An ANN backend was deliberately not made the comparison default: every probe
+has model-specific corpus embeddings, while the exact sharded backend already
+reuses their persistent representation and avoids approximation drift. Any
+future ANN backend must use the same cache identity and publish recall/rank
+agreement against this exact implementation on a frozen query sample.
 
 ### P-03 hard-negative contract and fail-closed calibration
 

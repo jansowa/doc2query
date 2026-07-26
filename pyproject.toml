@@ -45,6 +45,8 @@ training = [
   "accelerate>=1.2,<2",
   "bitsandbytes>=0.45,<1; sys_platform == 'linux' and platform_machine == 'x86_64'",
   "peft>=0.14,<1",
+  "protobuf>=5,<8",
+  "sentencepiece>=0.2,<1",
   "torch>=2.5,<3",
   "transformers>=4.47,<6",
   "trl>=0.13,<1",

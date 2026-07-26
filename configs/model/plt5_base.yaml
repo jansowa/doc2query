@@ -1,0 +1,4 @@
+name_or_path: allegro/plt5-base
+revision: 56379680948ce8b42d3d48df86569cfc210d3060
+trust_remote_code: false
+architecture: seq2seq_lm

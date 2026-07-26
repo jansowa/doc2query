@@ -55,10 +55,14 @@ htmlcov/
 !/reports/decisions/task04_p04_statistical_budget_contract.md
 !/reports/decisions/task03_s00_after_p05_2026-07-23.md
 !/reports/decisions/task03_s07_p06_after_s00_2026-07-25.md
+!/reports/decisions/task03_s07_contract_2026-07-25.md
 !/reports/measurements/
 /reports/measurements/*
 !/reports/measurements/task03_s00_preflight_2026-07-23.md
 !/reports/measurements/task03_s00_result_2026-07-25.md
+!/reports/measurements/task03_s07/
+/reports/measurements/task03_s07/*
+!/reports/measurements/task03_s07/s07_batch_probe_2026-07-25.md
 
 # Editors and OS
 .idea/

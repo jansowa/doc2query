@@ -1,0 +1,26 @@
+# @package _global_
+defaults:
+  - s07_plt5_base_50k
+  - _self_
+run:
+  experiment_id: S07-TINY-SEQ2SEQ-SMOKE
+  output_dir: runs/S07-TINY-SEQ2SEQ-SMOKE
+model:
+  name_or_path: artifacts/task03/s07/tiny-random-t5
+  revision: local-s07-smoke-v1
+  trust_remote_code: false
+  architecture: seq2seq_lm
+data:
+  max_train_examples: 128
+  max_eval_examples: 32
+training:
+  max_length: 128
+  max_completion_tokens: 32
+  per_device_train_batch_size: 4
+  gradient_accumulation_steps: 1
+  max_steps: 20
+  gradient_checkpointing: false
+  logging_steps: 1
+  eval_steps: 10
+  save_steps: 10
+  save_total_limit: 2

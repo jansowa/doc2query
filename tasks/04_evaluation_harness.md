@@ -6,6 +6,43 @@
 
 `IMPLEMENTED`
 
+Generyczna optymalizacja Harnessu po pomiarze S07 jest gotowa i zmierzona:
+batchowana generacja causal/encoder-decoder, jawne umieszczanie modelu
+inferencyjnego na CUDA, niezależne urządzenia sędziów, trwała pula BM25,
+crash-safe resume i odzyskiwalne archiwizowanie niezgodnej trajektorii.
+64-rekordowy frozen-dev benchmark obu sędziów CUDA osiągnął `3,417` rekordu/s
+przy dwóch workerach BM25 i peak reserved `4,152 GiB`; pełny run zakończył
+5 tys. przykładów i 25 tys. generacji. Raport:
+[`runtime_optimization_2026-07-26.md`](../reports/measurements/task03_s07/runtime_optimization_2026-07-26.md).
+
+Pełnokorpusowy retrieval probe został następnie przebudowany z 6598 osobnych
+skanów macierzy na persistent exact sharded index i batched GEMM. Bieżące 100
+shardów S07 (2 404 263 dokumenty) jest zgodne i nie wymaga konwersji. Query ma
+osobny cache, journal jest crash-safe, model oraz primary judge są pomijane,
+gdy ich etap jest kompletny, a postęp zawiera throughput i ETA. Backend zapisuje
+`approximate=false`; CUDA audytuje rank/win na ośmiu query względem CPU exact i
+automatycznie przechodzi na CPU przed zapisem przy niezgodności. Lekki benchmark
+CPU potwierdził identyczne rangi (w tym remisy). Ograniczony benchmark na
+rzeczywistych shardach 2 404 263×768 osiągnął 225,68 query/s, czyli 85,06×
+wobec obserwowanej starej fazy 2,653 query/s; rank i hard-negative win były
+identyczne na 8-query audycie CPU exact. Pełny probe S07 został następnie
+ukończony na 6598 query i zapisany jako `development_complete`. Ze względu na
+budżet `864000` tokenów wobec `1152000` w P-05 pozostaje jednak
+`comparison_eligible=false` i nie może rozstrzygać architektury. Raport:
+[`probe_retrieval_optimization_2026-07-26.md`](../reports/measurements/task03_s07/probe_retrieval_optimization_2026-07-26.md).
+
+ADR zamyka S07 jako wynik diagnostyczny bez matched-budget rerunu, promocji do
+`dev_confirm` i otwierania testów finalnych:
+[`task03_s07_diagnostic_closure_2026-07-26.md`](../reports/decisions/task03_s07_diagnostic_closure_2026-07-26.md).
+
+P-06 mass rescoring naturalnego train został później oznaczony `SUPERSEDED`:
+źródłowe etykiety mają kompletne provenance silniejszego rerankera, próg
+`23.50` jest już wyegzekwowany, a minimalny source margin wynosi `6.0`.
+Lokalne primary/shadow służą do syntetycznych query; dla naturalnych tłumaczeń
+wyłącznie do małego P06-T disagreement/manual audit. Nie kończyć pełnego
+scoringu train ani nie wyprowadzać z niego drop/weights. ADR:
+[`task03_p06_source_provenance_2026-07-26.md`](../docs/decisions/task03_p06_source_provenance_2026-07-26.md).
+
 Aktualny stan (21 lipca): Harness v1.1 P-01–P-04 jest zaimplementowany i ma
 testy CPU. P-03 został rzeczywiście zmierzony na 1 000 rekordów zamrożonego
 dev; wynik `statistically_separated` nie otworzył żadnego testu finalnego.
@@ -69,6 +106,12 @@ Logi są dopisywane, więc historia kolejnych uruchomień zostaje zachowana.
 Szczegóły:
 [`task04_p05_dev_screen_2026-07-21.md`](../reports/blockers/task04_p05_dev_screen_2026-07-21.md).
 
+Po dwóch przerwaniach S07 probe trening zapisuje także atomowy, kroczący
+checkpoint modelu, optymalizatora, schedulera, RNG i kroku. Wznowienie
+odtwarza identyczną kolejność microbatchy i odrzuca niezgodny fingerprint.
+Runner włącza postęp filtrowania, treningu, shardów korpusu i zapytań oraz
+domyślnie wybiera najwcześniejszy nieukończony etap.
+
 Centralny harness, zamrożone manifesty/ID, metryki i slice’y, raporty
 HTML/Markdown, ślepy eksport A/B, bootstrap oraz zamrożona recepta probe
 embeddera są zaimplementowane i przetestowane. P-03 ma gotowy kod i testy
@@ -84,7 +127,8 @@ probe’a.
 
 Pozostają pełne, porównywalne runy probe natural/copy/W03/W05/W06, niezależny
 BGE shadow judge, embeddingowe miary diversity, oceny ludzi dla co najmniej
-300 przypadków, pełny test rank10/embedder i S00 prompting baseline. Bez tych
+300 przypadków i pełny test rank10/embedder. S00 i diagnostyczny S07 są już
+zmierzone. Bez pozostałych
 pomiarów bramka Fazy B i główny ranking generatorów nie są zamknięte.
 Dotychczasowy zakres W03/W05 opisuje
 `docs/experiments/task04_8gb_evaluation_2026-07-18.md`, a porównanie z W06

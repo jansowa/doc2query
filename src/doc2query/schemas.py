@@ -157,6 +157,7 @@ class ModelConfig(StrictModel):
     name_or_path: str = Field(min_length=1)
     revision: str = Field(default="main", min_length=1)
     trust_remote_code: bool = False
+    architecture: Literal["causal_lm", "seq2seq_lm"] = "causal_lm"
 
 
 class QuantizationConfig(StrictModel):
@@ -205,6 +206,7 @@ class TrainingConfig(StrictModel):
     early_stopping_metric: Literal["eval_loss"] | None = None
     early_stopping_patience: int = Field(default=3, ge=1)
     resume_if_available: bool = False
+    finetuning: Literal["lora", "full"] = "lora"
 
     @model_validator(mode="after")
     def precision_is_unambiguous(self) -> "TrainingConfig":

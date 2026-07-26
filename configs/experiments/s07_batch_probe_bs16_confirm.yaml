@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+  - s07_batch_probe_bs16
+  - _self_
+run:
+  experiment_id: S07-PLT5-BATCH-PROBE-BS16-CONFIRM
+  output_dir: runs/task03_s07/batch_probe/bs16-confirm
+training:
+  max_steps: 30
+  logging_steps: 5

@@ -1,0 +1,60 @@
+# @package _global_
+defaults:
+  - /data: default
+  - /model: plt5_base
+  - /train@training: qlora_16gb
+  - /generation: default
+  - _self_
+
+run:
+  experiment_id: S07-PLT5-BASE-50K-S42
+  seed: 42
+  output_dir: runs/S07-PLT5-BASE-50K-S42
+data:
+  input_path: data/processed/v1/doc2query_train.parquet
+  input_format: parquet
+  eval_path: data/processed/v1/doc2query_dev.parquet
+  train_split: train
+  eval_split: dev
+  max_train_examples: 50000
+  max_eval_examples: 1000
+quantization:
+  load_in_4bit: false
+  bnb_4bit_quant_type: nf4
+  bnb_4bit_use_double_quant: true
+  compute_dtype: auto
+lora:
+  r: 8
+  alpha: 16
+  dropout: 0.05
+  target_modules: auto
+  minimum_target_modules: 4
+  expected_layer_patterns: [attn, "mlp|proj|fc"]
+training:
+  finetuning: full
+  max_length: 512
+  max_completion_tokens: 64
+  per_device_train_batch_size: 16
+  gradient_accumulation_steps: 1
+  learning_rate: 0.0001
+  num_train_epochs: 1.0
+  max_steps: -1
+  gradient_checkpointing: true
+  baseline: b1
+  strategy: ordinary
+  packing: false
+  optimizer: adamw_torch
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.03
+  logging_steps: 10
+  eval_steps: 100
+  save_steps: 50
+  save_total_limit: 2
+  resume_if_available: true
+generation:
+  max_new_tokens: 64
+  num_return_sequences: 1
+  do_sample: false
+  temperature: 0.8
+  top_p: 0.95
+tracking: {backend: offline, online: false}

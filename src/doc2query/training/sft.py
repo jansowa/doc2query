@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
+import math
 import os
 import shutil
 import time
@@ -13,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from transformers import EarlyStoppingCallback, Trainer, TrainingArguments
+from transformers import EarlyStoppingCallback, Trainer, TrainerCallback, TrainingArguments
 
 from doc2query.models.load_generator import (
     PrecisionSelection,
@@ -21,12 +22,13 @@ from doc2query.models.load_generator import (
     load_tokenizer,
     resolved_optimizer,
 )
-from doc2query.models.lora import attach_lora
+from doc2query.models.lora import attach_lora, trainable_parameter_stats
 from doc2query.schemas import AppConfig
 from doc2query.training.data import (
     CompletionOnlyCollator,
     PreparedDatasets,
     PromptCompletionDataset,
+    Seq2SeqCompletionCollator,
     prepare_datasets,
 )
 from doc2query.training.panel import generate_panel
@@ -104,6 +106,17 @@ class CompletionOnlySFTTrainer(AtomicCheckpointMixin, Trainer):
 
 class AtomicWeightedSFTTrainer(AtomicCheckpointMixin, WeightedSFTTrainer):
     """Weighted SFT with the same atomic checkpoint contract as ordinary SFT."""
+
+
+class StopOnNonFiniteLossCallback(TrainerCallback):
+    """Abort immediately when Trainer reports a non-finite train or eval loss."""
+
+    def on_log(self, args: Any, state: Any, control: Any, logs: Any = None, **kwargs: Any) -> None:
+        del args, state, control, kwargs
+        for name in ("loss", "eval_loss"):
+            value = logs.get(name) if isinstance(logs, dict) else None
+            if value is not None and not math.isfinite(float(value)):
+                raise RuntimeError(f"non-finite {name} detected: {value}")
 
 
 def _training_arguments(
@@ -240,9 +253,15 @@ def checkpoint_is_complete(path: Path) -> bool:
         return False
     if not all((path / name).is_file() for name in _CHECKPOINT_REQUIRED_FILES):
         return False
-    adapter_present = (path / "adapter_model.safetensors").is_file() or (
-        path / "adapter_model.bin"
-    ).is_file()
+    adapter_present = any(
+        (path / name).is_file()
+        for name in (
+            "adapter_model.safetensors",
+            "adapter_model.bin",
+            "model.safetensors",
+            "pytorch_model.bin",
+        )
+    )
     rng_present = any(path.glob("rng_state*.pth"))
     return adapter_present and rng_present
 
@@ -337,7 +356,8 @@ def run_sft(
         resume_if_available=resume_enabled,
     )
     summary_path = effective.run.output_dir / "sft_summary.json"
-    adapter_path = effective.run.output_dir / "adapter"
+    artifact_name = "model" if effective.training.finetuning == "full" else "adapter"
+    adapter_path = effective.run.output_dir / artifact_name
     if resume_enabled and summary_path.is_file() and adapter_path.is_dir():
         loaded = json.loads(summary_path.read_text(encoding="utf-8"))
         if not isinstance(loaded, dict):
@@ -352,20 +372,37 @@ def run_sft(
     write_json(effective.run.output_dir / "example_weights.json", prepared.weight_report)
     tokenizer = load_tokenizer(effective)
     model, precision = load_generator(effective, for_training=True)
-    model, targets, parameter_stats = attach_lora(model, effective.lora)
-    collator = CompletionOnlyCollator(
-        tokenizer,
-        max_length=effective.training.max_length,
-        max_completion_tokens=effective.training.max_completion_tokens,
-        min_prompt_tokens=effective.training.min_prompt_tokens,
-        pad_to_max_length=effective.training.pad_to_max_length,
-    )
+    if effective.training.finetuning == "lora":
+        model, targets, parameter_stats = attach_lora(
+            model,
+            effective.lora,
+            seq2seq=effective.model.architecture == "seq2seq_lm",
+        )
+    else:
+        targets = []
+        parameter_stats = trainable_parameter_stats(model)
+    collator: Any
+    if effective.model.architecture == "seq2seq_lm":
+        collator = Seq2SeqCompletionCollator(
+            tokenizer,
+            max_length=effective.training.max_length,
+            max_completion_tokens=effective.training.max_completion_tokens,
+            pad_to_max_length=effective.training.pad_to_max_length,
+        )
+    else:
+        collator = CompletionOnlyCollator(
+            tokenizer,
+            max_length=effective.training.max_length,
+            max_completion_tokens=effective.training.max_completion_tokens,
+            min_prompt_tokens=effective.training.min_prompt_tokens,
+            pad_to_max_length=effective.training.pad_to_max_length,
+        )
     train_dataset = PromptCompletionDataset(prepared.train)
     eval_dataset = PromptCompletionDataset(prepared.evaluation) if prepared.evaluation else None
     arguments = _training_arguments(
         effective, has_eval=eval_dataset is not None, precision=precision
     )
-    callbacks: list[Any] = []
+    callbacks: list[Any] = [StopOnNonFiniteLossCallback()]
     if effective.training.early_stopping_metric and eval_dataset is not None:
         callbacks.append(
             EarlyStoppingCallback(
@@ -430,7 +467,8 @@ def run_sft(
         "panel": panel_report,
         "probe_embedder_score": None,
         "intrinsic_metrics": None,
-        "adapter_path": str(adapter_path),
+        "adapter_path": str(adapter_path) if effective.training.finetuning == "lora" else None,
+        "model_path": str(adapter_path) if effective.training.finetuning == "full" else None,
         "resume": {
             "enabled": resume_enabled,
             "checkpoint": str(resume_checkpoint) if resume_checkpoint else None,
@@ -439,7 +477,7 @@ def run_sft(
     }
     write_json(summary_path, summary)
     artifacts = {
-        "adapter": str(adapter_path),
+        artifact_name: str(adapter_path),
         "summary": str(summary_path),
     }
     if panel_report is not None:

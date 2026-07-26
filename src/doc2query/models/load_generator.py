@@ -65,12 +65,19 @@ def load_tokenizer(config: AppConfig) -> Any:
     return tokenizer
 
 
+def _place_inference_model(model: Any, config: AppConfig, *, for_training: bool) -> Any:
+    """Place ordinary inference models explicitly; quantized loaders place themselves."""
+    if for_training or config.quantization.load_in_4bit or not torch.cuda.is_available():
+        return model
+    return model.to(torch.device("cuda", torch.cuda.current_device()))
+
+
 def load_generator(
-    config: AppConfig, *, for_training: bool = True
+    config: AppConfig, *, for_training: bool = True, model_path: str | None = None
 ) -> tuple[Any, PrecisionSelection]:
-    """Load a causal LM with optional NF4 and prepare it for k-bit adapter training."""
+    """Load the configured causal or encoder-decoder LM."""
     try:
-        from transformers import AutoModelForCausalLM, BitsAndBytesConfig
+        from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM, BitsAndBytesConfig
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError("install the training dependency group to load a generator") from exc
     precision = select_precision(config)
@@ -91,8 +98,15 @@ def load_generator(
             bnb_4bit_compute_dtype=precision.dtype,
         )
         kwargs["device_map"] = {"": torch.cuda.current_device()}
-    loader: Any = getattr(AutoModelForCausalLM, "from_" + "pretrained")
-    model = loader(config.model.name_or_path, **kwargs)
+    model_class = (
+        AutoModelForSeq2SeqLM if config.model.architecture == "seq2seq_lm" else AutoModelForCausalLM
+    )
+    loader: Any = getattr(model_class, "from_" + "pretrained")
+    source = model_path or config.model.name_or_path
+    if model_path is not None:
+        kwargs.pop("revision", None)
+    model = loader(source, **kwargs)
+    model = _place_inference_model(model, config, for_training=for_training)
     model.config.use_cache = False if for_training else True
     if for_training and config.quantization.load_in_4bit:
         try:

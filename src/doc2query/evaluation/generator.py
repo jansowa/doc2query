@@ -5,6 +5,7 @@ from __future__ import annotations
 import gc
 import hashlib
 import json
+import os
 import time
 from collections import Counter
 from pathlib import Path
@@ -18,12 +19,13 @@ from doc2query.evaluation.corpus import backfill_candidate_pools, load_corpus_in
 from doc2query.evaluation.datasets import evaluation_fingerprint, load_frozen_records
 from doc2query.evaluation.intrinsic import evaluate_intrinsic_records
 from doc2query.evaluation.report import build_generator_report
+from doc2query.generation.batching import generate_text_batch
 from doc2query.models.load_generator import load_generator, load_tokenizer
 from doc2query.models.templates import render_prompt
 from doc2query.reranker.base import FrozenRerankerConfig, PairScorer
 from doc2query.reranker.load import load_frozen_reranker
 from doc2query.schemas import AppConfig
-from doc2query.utils.records import JsonlWriter, read_records, write_json
+from doc2query.utils.records import read_durable_jsonl_prefix, read_records, write_json
 from doc2query.utils.reproducibility import set_seed
 from doc2query.utils.tracking import collect_code_provenance
 
@@ -43,6 +45,7 @@ DIVERSE = {
     "num_return_sequences": 4,
     "max_new_tokens": 64,
 }
+GENERATION_TRAJECTORY_VERSION = "evaluation-batched-v1"
 
 
 def _generation_id(experiment_id: str, mode: dict[str, Any]) -> str:
@@ -84,15 +87,23 @@ def generate_evaluation_queries(
     records: list[dict[str, Any]],
     *,
     adapter_path: Path | None,
+    model_path: Path | None = None,
     output_path: Path,
     modes: list[dict[str, Any]] | None = None,
+    batch_size: int = 8,
 ) -> dict[str, Any]:
     if output_path.exists():
         raise FileExistsError(f"generation artifact already exists: {output_path}")
+    if batch_size < 1:
+        raise ValueError("generation batch size must be positive")
     modes = modes or [DETERMINISTIC, DIVERSE]
     set_seed(config.run.seed)
     tokenizer = load_tokenizer(config)
-    model, precision = load_generator(config, for_training=False)
+    model, precision = load_generator(
+        config,
+        for_training=False,
+        model_path=str(model_path) if model_path is not None else None,
+    )
     if adapter_path is not None:
         from peft import PeftModel
 
@@ -100,48 +111,84 @@ def generate_evaluation_queries(
         model = adapter_loader(model, adapter_path, is_trainable=False)
     model.eval()
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    journal_path = output_path.with_suffix(output_path.suffix + ".partial")
+    expected_ids = [
+        f"{record['example_id']}::{mode['mode']}::{candidate_index}"
+        for record in records
+        for mode in modes
+        for candidate_index in range(int(mode["num_return_sequences"]))
+    ]
+    completed = read_durable_jsonl_prefix(journal_path)
+    completed_ids = [str(row.get("evaluation_id")) for row in completed]
+    if completed_ids != expected_ids[: len(completed_ids)]:
+        raise RuntimeError("generation journal is not the expected evaluation prefix")
+    if len(completed) > len(expected_ids):
+        raise RuntimeError("generation journal contains more rows than the contract")
+    outputs_per_source = sum(int(mode["num_return_sequences"]) for mode in modes)
+    trajectory = {
+        "schema_version": 1,
+        "trajectory_version": GENERATION_TRAJECTORY_VERSION,
+        "batch_size": batch_size,
+        "seed": config.run.seed,
+        "expected_ids_sha256": hashlib.sha256("\n".join(expected_ids).encode()).hexdigest(),
+    }
+    trajectory_path = journal_path.with_suffix(journal_path.suffix + ".resume.json")
+    if trajectory_path.exists():
+        if json.loads(trajectory_path.read_text(encoding="utf-8")) != trajectory:
+            raise ValueError("generation resume trajectory mismatch")
+    elif completed:
+        raise ValueError("batched generation journal exists without resume trajectory")
+    else:
+        write_json(trajectory_path, trajectory)
     started = time.perf_counter()
-    generation_count = 0
-    with JsonlWriter(output_path) as writer, torch.inference_mode():
-        for source in records:
-            expanded = _expand_source(source)
-            passage = str(expanded["positive"]["text"])
-            prompt_ids = _prompt_ids(tokenizer, passage, config)
-            encoded = torch.tensor(
-                [prompt_ids], dtype=torch.long, device=next(model.parameters()).device
+    generation_count = len(completed)
+    completed_sources = len(completed) // outputs_per_source
+    first_batch = (completed_sources // batch_size) * batch_size
+    prepared: list[tuple[dict[str, Any], list[int]]] = []
+    for source in records:
+        expanded = _expand_source(source)
+        prepared.append(
+            (
+                expanded,
+                _prompt_ids(tokenizer, str(expanded["positive"]["text"]), config),
             )
-            attention = torch.ones_like(encoded)
+        )
+    with journal_path.open("a", encoding="utf-8") as handle, torch.inference_mode():
+        for batch_start in range(first_batch, len(prepared), batch_size):
+            chunk = prepared[batch_start : batch_start + batch_size]
+            example_ids = [str(expanded["example_id"]) for expanded, _ids in chunk]
+            mode_outputs: list[list[str]] = []
             for mode in modes:
-                seed_offset = int(
-                    hashlib.sha256(
-                        f"{config.run.seed}:{expanded['example_id']}:{mode['mode']}".encode()
-                    ).hexdigest()[:8],
-                    16,
+                seed_payload = (
+                    f"{config.run.seed}:{mode['mode']}:{batch_start}:" + ":".join(example_ids)
                 )
-                torch.manual_seed(seed_offset)
-                if torch.cuda.is_available():
-                    torch.cuda.manual_seed_all(seed_offset)
-                kwargs: dict[str, Any] = {
-                    "input_ids": encoded,
-                    "attention_mask": attention,
-                    "max_new_tokens": int(mode["max_new_tokens"]),
-                    "do_sample": bool(mode["do_sample"]),
-                    "num_return_sequences": int(mode["num_return_sequences"]),
-                    "pad_token_id": tokenizer.pad_token_id,
-                    "eos_token_id": tokenizer.eos_token_id,
-                }
-                if mode["do_sample"]:
-                    kwargs.update(
-                        temperature=float(mode["temperature"]),
-                        top_p=float(mode["top_p"]),
+                set_seed(int(hashlib.sha256(seed_payload.encode()).hexdigest()[:8], 16))
+                mode_outputs.append(
+                    generate_text_batch(
+                        model,
+                        tokenizer,
+                        [ids for _expanded, ids in chunk],
+                        mode=mode,
+                        max_new_tokens=int(mode["max_new_tokens"]),
                     )
-                generated_sequences = model.generate(**kwargs)
-                generation_run_id = _generation_id(config.run.experiment_id, mode)
-                for candidate_index, sequence in enumerate(generated_sequences):
-                    completion_ids = sequence[encoded.shape[1] :]
-                    generated = tokenizer.decode(completion_ids, skip_special_tokens=True).strip()
-                    writer.write(
-                        {
+                )
+            for chunk_index, (expanded, _ids) in enumerate(chunk):
+                for mode_index, mode in enumerate(modes):
+                    candidate_count = int(mode["num_return_sequences"])
+                    generation_run_id = _generation_id(config.run.experiment_id, mode)
+                    for candidate_index in range(candidate_count):
+                        absolute_position = (
+                            (batch_start + chunk_index) * outputs_per_source
+                            + sum(
+                                int(previous["num_return_sequences"])
+                                for previous in modes[:mode_index]
+                            )
+                            + candidate_index
+                        )
+                        if absolute_position < len(completed):
+                            continue
+                        text_index = chunk_index * candidate_count + candidate_index
+                        row = {
                             **expanded,
                             "experiment_id": config.run.experiment_id,
                             "generation_run_id": generation_run_id,
@@ -151,16 +198,27 @@ def generate_evaluation_queries(
                             "mode": mode["mode"],
                             "candidate_index": candidate_index,
                             "generation_config": mode,
-                            "generated": generated,
+                            "generation_batch_size": len(chunk),
+                            "generation_trajectory_version": GENERATION_TRAJECTORY_VERSION,
+                            "generated": mode_outputs[mode_index][text_index],
                         }
-                    )
-                    generation_count += 1
+                        handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+                        generation_count += 1
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.fsync(handle.fileno())
+    if generation_count != len(expected_ids):
+        raise RuntimeError("generation journal did not reach the expected row count")
+    os.replace(journal_path, output_path)
     elapsed = time.perf_counter() - started
     return {
         "status": "measured",
         "precision": precision.label,
         "source_examples": len(records),
         "generation_count": generation_count,
+        "resumed_generation_count": len(completed),
+        "generation_batch_size": batch_size,
+        "generation_trajectory_version": GENERATION_TRAJECTORY_VERSION,
         "elapsed_seconds": elapsed,
         "generations_per_second": generation_count / elapsed if elapsed else None,
         "peak_vram_allocated_bytes": (
@@ -211,6 +269,8 @@ def score_generation_artifact(
     primary_config: Path,
     shadow_config: Path | None,
     judge_device: str | None,
+    primary_judge_device: str | None = None,
+    shadow_judge_device: str | None = None,
     output_dir: Path,
     test_fingerprint: str,
     experiment_id: str,
@@ -218,6 +278,7 @@ def score_generation_artifact(
     scoring_batch_size: int = 64,
     bm25_workers: int = 8,
     progress_every: int = 100,
+    archive_incompatible_scoring: bool = False,
 ) -> dict[str, Any]:
     generation_records = list(read_records(generations_path))
     dedup_map = Path("data/processed/v1/dedup_map.parquet")
@@ -229,9 +290,11 @@ def score_generation_artifact(
             doc_id = str(row.get("positive", {}).get("doc_id", ""))
             metadata["near_duplicate_cluster_size"] = cluster_sizes.get(doc_id, "unknown")
             row["metadata"] = metadata
-    primary: PairScorer = load_frozen_reranker(_judge_config(primary_config, judge_device))
+    primary_device = primary_judge_device or judge_device
+    shadow_device = shadow_judge_device or judge_device
+    primary: PairScorer = load_frozen_reranker(_judge_config(primary_config, primary_device))
     shadow: PairScorer | None = (
-        load_frozen_reranker(_judge_config(shadow_config, judge_device)) if shadow_config else None
+        load_frozen_reranker(_judge_config(shadow_config, shadow_device)) if shadow_config else None
     )
     corpus_index = load_corpus_index(corpus_index_path) if corpus_index_path is not None else None
     try:
@@ -246,6 +309,7 @@ def score_generation_artifact(
             scoring_batch_size=scoring_batch_size,
             bm25_workers=bm25_workers,
             progress_every=progress_every,
+            archive_incompatible_scoring=archive_incompatible_scoring,
         )
     finally:
         if corpus_index is not None:
@@ -259,9 +323,12 @@ def run_checkpoint_evaluation(
     subset: str,
     output_dir: Path,
     adapter_path: Path | None = None,
+    model_path: Path | None = None,
     primary_config: Path | None = None,
     shadow_config: Path | None = None,
     judge_device: str | None = None,
+    primary_judge_device: str | None = None,
+    shadow_judge_device: str | None = None,
     max_examples: int | None = None,
     generations_path: Path | None = None,
     generation_only: bool = False,
@@ -269,6 +336,8 @@ def run_checkpoint_evaluation(
     scoring_batch_size: int = 64,
     bm25_workers: int = 8,
     progress_every: int = 100,
+    generation_batch_size: int = 8,
+    archive_incompatible_scoring: bool = False,
 ) -> dict[str, Any]:
     """Generate two decoding modes, score them, and build all cheap report artifacts."""
     config = load_config(config_path)
@@ -295,7 +364,7 @@ def run_checkpoint_evaluation(
         adapter_path
         if adapter_path is not None
         else None
-        if generations_path is not None
+        if generations_path is not None or model_path is not None
         else config.run.output_dir / "adapter"
     )
     generation_report_path = output_dir / "generation_report.json"
@@ -304,7 +373,9 @@ def run_checkpoint_evaluation(
             config,
             selected,
             adapter_path=effective_adapter,
+            model_path=model_path,
             output_path=local_generations,
+            batch_size=generation_batch_size,
         )
         write_json(generation_report_path, generation_report)
         _release_cuda()
@@ -326,10 +397,13 @@ def run_checkpoint_evaluation(
         "config_path": str(config_path),
         "config": config.model_dump(mode="json"),
         "adapter_path": str(effective_adapter) if effective_adapter is not None else None,
+        "model_path": str(model_path) if model_path is not None else None,
         "generations_path": str(local_generations),
         "generation": generation_report,
         "primary_judge_config": str(primary_config) if primary_config else None,
         "shadow_judge_config": str(shadow_config) if shadow_config else None,
+        "primary_judge_device_override": primary_judge_device or judge_device,
+        "shadow_judge_device_override": shadow_judge_device or judge_device,
         "corpus_index": str(corpus_index_path) if corpus_index_path else None,
         "code": collect_code_provenance(),
     }
@@ -343,6 +417,8 @@ def run_checkpoint_evaluation(
         primary_config=primary_config,
         shadow_config=shadow_config,
         judge_device=judge_device,
+        primary_judge_device=primary_judge_device,
+        shadow_judge_device=shadow_judge_device,
         output_dir=output_dir,
         test_fingerprint=test_fingerprint,
         experiment_id=config.run.experiment_id,
@@ -350,6 +426,7 @@ def run_checkpoint_evaluation(
         scoring_batch_size=scoring_batch_size,
         bm25_workers=bm25_workers,
         progress_every=progress_every,
+        archive_incompatible_scoring=archive_incompatible_scoring,
     )
     report = build_generator_report(
         output_dir / "summary.json",

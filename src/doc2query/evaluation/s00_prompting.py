@@ -20,6 +20,11 @@ import yaml
 from doc2query.config import load_config
 from doc2query.data.style_labels import label_query
 from doc2query.evaluation.datasets import load_frozen_records
+from doc2query.generation.batching import (
+    generate_text_batch,
+    is_cuda_oom,
+    pad_token_sequences,
+)
 from doc2query.models.load_generator import load_generator, load_tokenizer
 from doc2query.utils.records import JsonlWriter, write_json
 from doc2query.utils.reproducibility import set_seed
@@ -371,22 +376,16 @@ def _save_oom_batch_ceiling(
 def _left_pad_batch(
     sequences: Sequence[Sequence[int]], *, pad_token_id: int, device: torch.device
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    if not sequences:
-        raise ValueError("cannot pad an empty S00 generation batch")
-    width = max(len(sequence) for sequence in sequences)
-    input_ids = torch.full((len(sequences), width), pad_token_id, dtype=torch.long, device=device)
-    attention_mask = torch.zeros_like(input_ids)
-    for row, sequence in enumerate(sequences):
-        length = len(sequence)
-        input_ids[row, width - length :] = torch.tensor(sequence, dtype=torch.long, device=device)
-        attention_mask[row, width - length :] = 1
-    return input_ids, attention_mask
+    return pad_token_sequences(
+        sequences,
+        pad_token_id=pad_token_id,
+        device=device,
+        padding_side="left",
+    )
 
 
 def _is_cuda_oom(error: BaseException) -> bool:
-    return isinstance(error, torch.cuda.OutOfMemoryError) or (
-        "out of memory" in str(error).casefold() and "cuda" in str(error).casefold()
-    )
+    return is_cuda_oom(error)
 
 
 def _generate_model_batch(
@@ -397,33 +396,13 @@ def _generate_model_batch(
     mode: Mapping[str, Any],
     max_new_tokens: int,
 ) -> list[str]:
-    """Keep CUDA batch tensors in a short-lived frame so OOM retry can release them."""
-    device = next(model.parameters()).device
-    tensor, attention_mask = _left_pad_batch(
+    return generate_text_batch(
+        model,
+        tokenizer,
         prompt_ids,
-        pad_token_id=int(tokenizer.pad_token_id),
-        device=device,
+        mode=mode,
+        max_new_tokens=max_new_tokens,
     )
-    kwargs: dict[str, Any] = {
-        "input_ids": tensor,
-        "attention_mask": attention_mask,
-        "max_new_tokens": max_new_tokens,
-        "do_sample": bool(mode["do_sample"]),
-        "num_return_sequences": int(mode["num_return_sequences"]),
-        "pad_token_id": tokenizer.pad_token_id,
-        "eos_token_id": tokenizer.eos_token_id,
-    }
-    if mode["do_sample"]:
-        kwargs.update(
-            temperature=float(mode["temperature"]),
-            top_p=float(mode["top_p"]),
-        )
-    with torch.inference_mode():
-        sequences = model.generate(**kwargs)
-    return [
-        tokenizer.decode(sequence[tensor.shape[1] :], skip_special_tokens=True).strip()
-        for sequence in sequences
-    ]
 
 
 def _batch_seed(target_seed: int, strategy: str, mode: str, example_ids: Sequence[str]) -> int:

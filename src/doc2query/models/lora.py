@@ -73,6 +73,8 @@ def validate_lora_coverage(
 def attach_lora(
     model: Any,
     settings: LoraSettings,
+    *,
+    seq2seq: bool = False,
 ) -> tuple[Any, list[str], TrainableParameterStats]:
     """Attach a causal-LM LoRA adapter using explicit or discovered targets."""
     try:
@@ -92,7 +94,7 @@ def attach_lora(
         lora_dropout=settings.dropout,
         target_modules=targets,
         bias="none",
-        task_type=TaskType.CAUSAL_LM,
+        task_type=TaskType.SEQ_2_SEQ_LM if seq2seq else TaskType.CAUSAL_LM,
     )
     adapted: Any = get_peft_model(model, peft_config)
     stats = validate_lora_coverage(

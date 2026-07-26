@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import threading
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -323,13 +324,57 @@ class BM25CorpusIndex:
             raise ValueError("BM25 query normalizer does not match the frozen index")
         self._database_path = database_path
         self._connection = self._open_connection()
+        self._validation_connection = self._open_connection(check_same_thread=False)
+        self._validation_lock = threading.Lock()
+        self._validated_doc_ids: set[str] = set()
+        self._worker_lock = threading.Lock()
+        self._worker_local = threading.local()
+        self._worker_connections: list[sqlite3.Connection] = []
+        self._worker_executor: ThreadPoolExecutor | None = None
+        self._worker_count = 0
         raw_config = manifest.get("config", {})
         if not isinstance(raw_config, dict):
             raise ValueError("invalid BM25 config in corpus manifest")
         self._config = BM25IndexConfig(**raw_config)
 
-    def _open_connection(self) -> sqlite3.Connection:
-        return sqlite3.connect(f"file:{self._database_path}?mode=ro", uri=True)
+    def _open_connection(self, *, check_same_thread: bool = True) -> sqlite3.Connection:
+        connection = sqlite3.connect(
+            f"file:{self._database_path}?mode=ro",
+            uri=True,
+            check_same_thread=check_same_thread,
+        )
+        connection.execute("PRAGMA query_only=ON")
+        return connection
+
+    def _worker_connection(self) -> sqlite3.Connection:
+        connection = getattr(self._worker_local, "connection", None)
+        if connection is None:
+            connection = self._open_connection(check_same_thread=False)
+            self._worker_local.connection = connection
+            with self._worker_lock:
+                self._worker_connections.append(connection)
+        return connection
+
+    def _executor(self, workers: int) -> ThreadPoolExecutor:
+        with self._worker_lock:
+            if self._worker_executor is not None and self._worker_count == workers:
+                return self._worker_executor
+            previous = self._worker_executor
+            self._worker_executor = None
+        if previous is not None:
+            previous.shutdown(wait=True)
+            with self._worker_lock:
+                for connection in self._worker_connections:
+                    connection.close()
+                self._worker_connections.clear()
+                self._worker_local = threading.local()
+        with self._worker_lock:
+            self._worker_executor = ThreadPoolExecutor(
+                max_workers=workers,
+                thread_name_prefix="doc2query-bm25",
+            )
+            self._worker_count = workers
+            return self._worker_executor
 
     @property
     def metadata(self) -> Mapping[str, Any]:
@@ -491,46 +536,39 @@ class BM25CorpusIndex:
         wanted_ids = tuple(
             dict.fromkeys(doc_id for _terms, doc_ids in prepared for doc_id in doc_ids)
         )
-        if wanted_ids:
-            placeholders = ", ".join("?" for _ in wanted_ids)
-            validation_connection = self._open_connection()
-            try:
+        unseen = tuple(doc_id for doc_id in wanted_ids if doc_id not in self._validated_doc_ids)
+        if unseen:
+            with self._validation_lock:
+                unseen = tuple(
+                    doc_id for doc_id in unseen if doc_id not in self._validated_doc_ids
+                )
+                placeholders = ", ".join("?" for _ in unseen)
                 present = {
                     str(row[0])
-                    for row in validation_connection.execute(
+                    for row in self._validation_connection.execute(
                         f"SELECT doc_id FROM documents WHERE doc_id IN ({placeholders})",
-                        wanted_ids,
+                        unseen,
                     )
                 }
-            finally:
-                validation_connection.close()
-            missing = sorted(set(wanted_ids) - present)
-            if missing:
-                raise KeyError(f"documents are absent from frozen corpus: {missing[:3]}")
+                missing = sorted(set(unseen) - present)
+                if missing:
+                    raise KeyError(f"documents are absent from frozen corpus: {missing[:3]}")
+                self._validated_doc_ids.update(present)
 
-        def process_shard(
-            shard: Sequence[tuple[int, tuple[str, ...], tuple[str, ...]]],
-        ) -> list[tuple[int, tuple[CorpusSearchResult, dict[str, float]]]]:
-            connection = self._open_connection()
-            try:
-                return [
-                    (
-                        index,
-                        self._search_and_score_documents(
-                            connection, terms, limit=limit, doc_ids=doc_ids
-                        ),
-                    )
-                    for index, terms, doc_ids in shard
-                ]
-            finally:
-                connection.close()
+        def process_one(
+            item: tuple[int, tuple[str, ...], tuple[str, ...]],
+        ) -> tuple[int, tuple[CorpusSearchResult, dict[str, float]]]:
+            index, terms, doc_ids = item
+            return (
+                index,
+                self._search_and_score_documents(
+                    self._worker_connection(), terms, limit=limit, doc_ids=doc_ids
+                ),
+            )
 
         indexed = [(index, terms, doc_ids) for index, (terms, doc_ids) in enumerate(prepared)]
         worker_count = min(workers, len(indexed)) if indexed else 1
-        shards = [indexed[offset::worker_count] for offset in range(worker_count)]
-        with ThreadPoolExecutor(max_workers=worker_count) as executor:
-            nested = list(executor.map(process_shard, shards))
-        ordered = [item for shard in nested for item in shard]
+        ordered = list(self._executor(worker_count).map(process_one, indexed))
         ordered.sort(key=lambda item: item[0])
         return [value for _index, value in ordered]
 
@@ -559,6 +597,16 @@ class BM25CorpusIndex:
         return scores
 
     def close(self) -> None:
+        with self._worker_lock:
+            executor = self._worker_executor
+            self._worker_executor = None
+        if executor is not None:
+            executor.shutdown(wait=True)
+        with self._worker_lock:
+            for connection in self._worker_connections:
+                connection.close()
+            self._worker_connections.clear()
+        self._validation_connection.close()
         self._connection.close()
 
     def __enter__(self) -> BM25CorpusIndex:

@@ -7,10 +7,9 @@ from itertools import cycle
 from pathlib import Path
 from typing import Any
 
-import torch
-
 from doc2query.data.focus_labels import split_sentences
 from doc2query.data.style_labels import intent_applicable
+from doc2query.generation.batching import generate_text_batch
 from doc2query.generation.controlled import generate_query_set
 from doc2query.models.load_generator import load_generator, load_tokenizer
 from doc2query.schemas import AppConfig, FocusMode, QueryControl
@@ -79,8 +78,6 @@ def run_controlled_generation(
         model = adapter_loader(model, adapter_path)
     model.eval()
     set_seed(config.run.seed)
-    device = next(model.parameters()).device
-
     def backend(prompt: str, seed: int) -> str:
         set_seed(seed)
         prompt_ids = list(tokenizer.encode(prompt, add_special_tokens=False))
@@ -88,23 +85,22 @@ def run_controlled_generation(
             prefix = min(config.training.min_prompt_tokens, config.training.max_length)
             suffix = config.training.max_length - prefix
             prompt_ids = prompt_ids[:prefix] + (prompt_ids[-suffix:] if suffix else [])
-        input_ids = torch.tensor([prompt_ids], dtype=torch.long, device=device)
-        kwargs: dict[str, Any] = {
-            "input_ids": input_ids,
-            "attention_mask": torch.ones_like(input_ids),
-            "max_new_tokens": config.generation.max_new_tokens,
+        mode: dict[str, Any] = {
             "do_sample": config.generation.do_sample,
-            "pad_token_id": tokenizer.pad_token_id,
-            "eos_token_id": tokenizer.eos_token_id,
+            "num_return_sequences": 1,
         }
         if config.generation.do_sample:
-            kwargs.update(
+            mode.update(
                 temperature=config.generation.temperature,
                 top_p=config.generation.top_p,
             )
-        with torch.inference_mode():
-            sequence = model.generate(**kwargs)[0]
-        return str(tokenizer.decode(sequence[input_ids.shape[1] :], skip_special_tokens=True))
+        return generate_text_batch(
+            model,
+            tokenizer,
+            [prompt_ids],
+            mode=mode,
+            max_new_tokens=config.generation.max_new_tokens,
+        )[0]
 
     started = time.perf_counter()
     attempts = duplicates = invalid = generated = exhausted_groups = 0

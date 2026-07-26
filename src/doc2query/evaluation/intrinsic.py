@@ -330,6 +330,54 @@ def _append_checkpoint_rows(path: Path, rows: Sequence[dict[str, Any]]) -> None:
         os.fsync(handle.fileno())
 
 
+def _archive_incompatible_scoring_state(
+    output_dir: Path,
+    *,
+    previous_identity: dict[str, Any],
+    next_identity: dict[str, Any],
+) -> Path:
+    """Move an incompatible scoring run aside without deleting its artifacts."""
+    def fingerprint(value: dict[str, Any]) -> str:
+        return hashlib.sha256(
+            json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()[:12]
+    root = output_dir / "interrupted-scoring"
+    destination = root / (
+        f"{fingerprint(previous_identity)}-to-{fingerprint(next_identity)}"
+    )
+    suffix = 1
+    while destination.exists():
+        destination = root / (
+            f"{fingerprint(previous_identity)}-to-{fingerprint(next_identity)}-{suffix}"
+        )
+        suffix += 1
+    destination.mkdir(parents=True)
+    artifact_names = (
+        "scoring.resume.json",
+        "scoring.journal.jsonl",
+        "summary.json",
+        "per_generation.jsonl",
+        "per_group_diversity.jsonl",
+        "report.md",
+        "report.html",
+        "result.json",
+    )
+    for name in artifact_names:
+        source = output_dir / name
+        if source.exists():
+            os.replace(source, destination / name)
+    write_json(
+        destination / "archive_manifest.json",
+        {
+            "schema_version": 1,
+            "reason": "explicitly_archived_incompatible_scoring_identity",
+            "previous_identity": previous_identity,
+            "next_identity": next_identity,
+        },
+    )
+    return destination
+
+
 def _read_checkpoint_rows(path: Path) -> list[dict[str, Any]]:
     """Read a durable prefix and discard only a crash-truncated final line."""
     if not path.exists():
@@ -369,6 +417,7 @@ def evaluate_intrinsic_records(
     scoring_batch_size: int = 64,
     bm25_workers: int = 8,
     progress_every: int = 100,
+    archive_incompatible_scoring: bool = False,
 ) -> dict[str, Any]:
     if not records:
         raise ValueError("intrinsic evaluation requires generations")
@@ -386,10 +435,18 @@ def evaluate_intrinsic_records(
         experiment_id=experiment_id,
         corpus_index=corpus_index,
     )
+    archived_scoring: Path | None = None
     if identity_path.exists():
         existing_identity = json.loads(identity_path.read_text(encoding="utf-8"))
         if existing_identity != identity:
-            raise ValueError("intrinsic scoring resume identity mismatch")
+            if not archive_incompatible_scoring:
+                raise ValueError("intrinsic scoring resume identity mismatch")
+            archived_scoring = _archive_incompatible_scoring_state(
+                output_dir,
+                previous_identity=existing_identity,
+                next_identity=identity,
+            )
+            write_json(identity_path, identity)
     elif journal_path.exists() and journal_path.stat().st_size:
         raise ValueError("intrinsic scoring journal exists without resume identity")
     else:
@@ -654,12 +711,17 @@ def evaluate_intrinsic_records(
             "journal": str(journal_path),
             "resumed_generation_count": resumed_count,
             "durable_generation_count": len(measured),
+            "archived_incompatible_scoring": (
+                str(archived_scoring) if archived_scoring is not None else None
+            ),
         },
         "execution": {
             "scoring_batch_size": scoring_batch_size,
             "bm25_workers": bm25_workers,
             "progress_every": progress_every,
             "gpu_and_corpus_overlapped": corpus_index is not None,
+            "primary_device": getattr(getattr(primary, "config", None), "device", None),
+            "shadow_device": getattr(getattr(shadow, "config", None), "device", None),
         },
         "judges": {
             "primary": primary.name,

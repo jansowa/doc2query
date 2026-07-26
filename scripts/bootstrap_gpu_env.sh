@@ -61,6 +61,8 @@ expected = {
     "bitsandbytes": "0.49.2",
     "peft": "0.19.1",
     "pl_core_news_lg": "3.8.0",
+    "protobuf": "7.35.1",
+    "sentencepiece": "0.2.2",
     "torch": "2.6.0",
     "transformers": "5.13.1",
     "trl": "0.29.1",

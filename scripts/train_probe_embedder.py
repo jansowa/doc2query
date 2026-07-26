@@ -89,6 +89,38 @@ def main() -> None:
         help="Explicit preregistered P-04 halving-stage step budget.",
     )
     parser.add_argument(
+        "--batch-size",
+        type=int,
+        help="Explicit microbatch override, recorded in the resolved probe recipe.",
+    )
+    parser.add_argument(
+        "--checkpoint-interval-steps",
+        type=int,
+        default=0,
+        help="Atomically save a resumable rolling training checkpoint every N steps (0 disables).",
+    )
+    parser.add_argument(
+        "--evaluation-encode-batch-size",
+        type=int,
+        default=64,
+        help=(
+            "Execution-only batch size for corpus/query encoding; "
+            "does not alter the frozen recipe."
+        ),
+    )
+    parser.add_argument(
+        "--retrieval-query-batch-size",
+        type=int,
+        default=512,
+        help="Number of cached query embeddings per exact blockwise corpus scan.",
+    )
+    parser.add_argument(
+        "--retrieval-device",
+        choices=("auto", "cpu", "cuda"),
+        default="auto",
+        help="Device for exact sharded inner-product retrieval.",
+    )
+    parser.add_argument(
         "--smoke-steps",
         type=int,
         help="Explicit smoke override; outputs are not comparable to frozen full-budget runs.",
@@ -110,6 +142,14 @@ def main() -> None:
         if args.max_steps < 1:
             raise ValueError("--max-steps must be positive")
         recipe_updates["max_steps"] = args.max_steps
+    if args.batch_size is not None:
+        if args.batch_size < 1:
+            raise ValueError("--batch-size must be positive")
+        recipe_updates["batch_size"] = args.batch_size
+    if args.checkpoint_interval_steps < 0:
+        raise ValueError("--checkpoint-interval-steps cannot be negative")
+    if min(args.evaluation_encode_batch_size, args.retrieval_query_batch_size) < 1:
+        raise ValueError("evaluation and retrieval batch sizes must be positive")
     if recipe_updates:
         recipe = ProbeRecipe.from_dict(asdict(recipe) | recipe_updates)
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -124,7 +164,10 @@ def main() -> None:
                 raise ProbeNegativeBlocker("P-03 BLOCKED: HN1 requires --bm25-index")
             corpus_index = load_corpus_index(args.bm25_index)
         primary = None
-        if recipe.negative_recipe.requires_filter:
+        completed_training_artifacts = (args.output_dir / "train_summary.json").is_file() and (
+            args.output_dir / "model"
+        ).is_dir()
+        if recipe.negative_recipe.requires_filter and not completed_training_artifacts:
             if args.primary_judge_config is None:
                 raise ProbeNegativeBlocker(
                     "P-03 BLOCKED: filtered probe recipe requires --primary-judge-config"
@@ -140,6 +183,11 @@ def main() -> None:
                 raise ProbeNegativeBlocker(
                     "P-03 BLOCKED: primary judge config does not match calibration provenance"
                 )
+            print(
+                f"[probe] loading primary judge for negative filtering on "
+                f"{judge_config.device}",
+                flush=True,
+            )
             primary = load_frozen_reranker(judge_config)
             models_loaded = True
         result = run_probe_experiment(
@@ -160,6 +208,10 @@ def main() -> None:
             primary_scorer=primary,
             bm25_index=corpus_index,
             generator_id=args.generator_id,
+            checkpoint_interval_steps=args.checkpoint_interval_steps,
+            evaluation_encode_batch_size=args.evaluation_encode_batch_size,
+            retrieval_query_batch_size=args.retrieval_query_batch_size,
+            retrieval_device=args.retrieval_device,
         )
     except ProbeNegativeBlocker as exc:
         blocker = {

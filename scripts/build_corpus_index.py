@@ -15,7 +15,11 @@ from doc2query.evaluation.corpus import (
     build_biencoder_index,
     build_bm25_index,
 )
-from doc2query.text.normalization import SimplePolishNormalizer, SpacyPolishNormalizer
+from doc2query.text.normalization import (
+    SimplePolishNormalizer,
+    SpacyPolishNormalizer,
+    TextNormalizer,
+)
 
 
 def main() -> None:
@@ -37,6 +41,7 @@ def main() -> None:
         if not isinstance(normalizer_config, dict):
             raise ValueError("corpus config requires a bm25_normalizer mapping")
         normalizer_backend = normalizer_config.get("backend")
+        normalizer: TextNormalizer
         if normalizer_backend == "spacy_pl":
             normalizer = SpacyPolishNormalizer(str(normalizer_config["model_name"]))
         elif normalizer_backend == "simple":

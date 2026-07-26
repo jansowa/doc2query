@@ -237,6 +237,66 @@ class CompletionOnlyCollator:
         }
 
 
+class Seq2SeqCompletionCollator:
+    """Tokenize encoder input and completion labels with independent budgets."""
+
+    def __init__(
+        self,
+        tokenizer: Any,
+        *,
+        max_length: int,
+        max_completion_tokens: int,
+        pad_to_max_length: bool = False,
+    ) -> None:
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+        self.max_completion_tokens = max_completion_tokens
+        self.pad_to_max_length = pad_to_max_length
+        if tokenizer.pad_token_id is None or tokenizer.eos_token_id is None:
+            raise ValueError("seq2seq tokenizer requires pad_token_id and eos_token_id")
+
+    def _encode(self, example: dict[str, Any]) -> tuple[list[int], list[int]]:
+        source = list(self.tokenizer.encode(example["prompt"], add_special_tokens=False))
+        source = [*source[: self.max_length - 1], int(self.tokenizer.eos_token_id)]
+        target = list(self.tokenizer.encode(example["completion"], add_special_tokens=False))
+        target = [
+            *target[: self.max_completion_tokens - 1],
+            int(self.tokenizer.eos_token_id),
+        ]
+        if not source or not target:
+            raise RuntimeError("seq2seq source/target encoding cannot be empty")
+        return source, target
+
+    def __call__(self, examples: list[dict[str, Any]]) -> dict[str, torch.Tensor]:
+        encoded = [self._encode(example) for example in examples]
+        source_width = (
+            self.max_length if self.pad_to_max_length else max(len(x[0]) for x in encoded)
+        )
+        target_width = (
+            self.max_completion_tokens
+            if self.pad_to_max_length
+            else max(len(x[1]) for x in encoded)
+        )
+        input_ids: list[list[int]] = []
+        labels: list[list[int]] = []
+        attention_mask: list[list[int]] = []
+        for source, target in encoded:
+            source_padding = source_width - len(source)
+            target_padding = target_width - len(target)
+            input_ids.append(source + [int(self.tokenizer.pad_token_id)] * source_padding)
+            attention_mask.append([1] * len(source) + [0] * source_padding)
+            labels.append(target + [IGNORE_INDEX] * target_padding)
+        return {
+            "input_ids": torch.tensor(input_ids, dtype=torch.long),
+            "labels": torch.tensor(labels, dtype=torch.long),
+            "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
+            "sample_weight": torch.tensor(
+                [float(example.get("sample_weight", 1.0)) for example in examples],
+                dtype=torch.float,
+            ),
+        }
+
+
 def _convert_record(
     record: dict[str, Any],
     baseline: BaselineName,

@@ -7,6 +7,7 @@ import argparse
 import json
 import subprocess
 import sys
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +28,9 @@ def main() -> None:
     for length in args.lengths:
         run_dir = root / f"length-{length}"
         summary_path = run_dir / "sft_summary.json"
-        if summary_path.is_file() and (run_dir / "adapter").is_dir():
+        if summary_path.is_file() and (
+            (run_dir / "adapter").is_dir() or (run_dir / "model").is_dir()
+        ):
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
             reports.append(
                 {
@@ -55,11 +58,23 @@ def main() -> None:
             "--no-panel",
             "--resume-if-available",
         ]
-        completed = subprocess.run(command, check=False, text=True, capture_output=True)
+        process = subprocess.Popen(
+            command,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        tail: deque[str] = deque(maxlen=200)
+        if process.stdout is None:
+            raise RuntimeError("memory probe subprocess has no output pipe")
+        for line in process.stdout:
+            print(line, end="", flush=True)
+            tail.append(line)
+        returncode = process.wait()
         entry: dict[str, Any] = {
             "max_length": length,
-            "status": "ok" if completed.returncode == 0 else "failed",
-            "returncode": completed.returncode,
+            "status": "ok" if returncode == 0 else "failed",
+            "returncode": returncode,
             "run_dir": str(run_dir),
         }
         if summary_path.is_file():
@@ -72,11 +87,13 @@ def main() -> None:
                 }
             )
         else:
-            entry["stderr_tail"] = completed.stderr[-4000:]
+            entry["stderr_tail"] = "".join(tail)[-4000:]
         reports.append(entry)
     output = root / "memory_probe.json"
     write_json(output, {"experiment_id": config.run.experiment_id, "probes": reports})
     print(output)
+    if any(report["status"] == "failed" for report in reports):
+        raise SystemExit(2)
 
 
 if __name__ == "__main__":

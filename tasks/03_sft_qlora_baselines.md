@@ -17,10 +17,35 @@ Wśród runów 10k najniższy eval loss uzyskał LR `2e-4` (1.2505); run 50k z L
 Zadanie pozostaje `IMPLEMENTED`, ponieważ loss i panel nie otwierają bramki
 jakościowej. Pierwszy zredukowany probe P-05 oraz pełna bramka P-04
 `dev_screen` są zmierzone, ale oba warianty mają tylko
-`non_inferior_only`; `dev_confirm_authorized_arms=[]`. Pozostały również S00,
-S07, pełniejsze probe, 4.5B base vs instruct oraz ordinary/balanced/weighted.
+`non_inferior_only`; `dev_confirm_authorized_arms=[]`. S07 jest kompletnym
+wynikiem diagnostycznym, ale nieporównywalny budżet probe uniemożliwia wybór
+architektury i nie będzie wykonywany matched-budget rerun. Pozostały również
+P06-T, pełniejsze porównywalne probe, 4.5B base vs instruct oraz
+ordinary/balanced/weighted.
 Do czasu prospektywnej decyzji o dalszej ścieżce nie ma podstaw do przejścia
 do DPO.
+
+26 lipca kompletny artefakt S07 `dev_screen` osiągnął
+`report_status=development_complete`: trening probe, 100 shardów embeddingów
+2 404 263 dokumentów i exact retrieval 6598 query są zakończone. nDCG@10 to
+`0,046142`, MRR@10 `0,043947`, MAP `0,040625`, a Recall@100 `0,159604`.
+Probe S07 ma jednak budżet `2485 par / 864000 tokenów / batch 6`, podczas gdy
+P-05 ma `2486 / 1152000 / batch 8`; `comparison_eligible=false`. S07 jest więc
+zamkniętym wynikiem diagnostycznym, nie rozstrzyga plT5 kontra Bielik, nie
+będzie powtarzany w matched budget i nie jest promowany do `dev_confirm` ani
+testów finalnych. ADR:
+[`task03_s07_diagnostic_closure_2026-07-26.md`](../reports/decisions/task03_s07_diagnostic_closure_2026-07-26.md).
+
+Późniejszy audyt provenance unieważnił założenie P-06 o potrzebie masowego
+rescoringu naturalnego train. Wszystkie 384 576 pozytywne pary mają
+`source_en_score >= 23.50`, wszystkie dokumenty mają źródłowe score'y, a
+źródłowy margin ma minimum `6.0`. Został on policzony podczas budowy danych
+silniejszym rerankerem niż lokalnie dostępny. Nie kończyć pełnego scoringu
+`artifacts/task03/p06/train_margins_v1` i nie używać jego niekompletnego
+journalu do `drop` ani wag. P-06 mass rescoring jest `SUPERSEDED`; zastępuje go
+mały, ślepy audyt integralności tłumaczeń P06-T, bez automatycznej zmiany
+etykiet. ADR:
+[`task03_p06_source_provenance_2026-07-26.md`](../docs/decisions/task03_p06_source_provenance_2026-07-26.md).
 
 18 lipca uruchomiono nocną kolejkę W06 dla Bielika 4.5B Instruct na 8 GB.
 Po wstępnym potwierdzeniu, że BS1/L512 wykonuje backward bez OOM, kolejkę
@@ -199,6 +224,71 @@ Nie autoryzuje `dev_confirm`, finalnych testów ani dalszej kampanii 4.5B:
 S00 ma teraz stan `measured`; S07 i P-06 pozostają niewykonane, dlatego status
 Task 03 pozostaje `IMPLEMENTED`.
 
+25 lipca zamrożono kompletny prospektywny kontrakt S07 przed pobraniem wag:
+`allegro/plt5-base` revision `56379680948ce8b42d3d48df86569cfc210d3060`,
+pełny fine-tuning na dokładnie 50 tys. par W05, 1 tys. dev, seed 42, efektywny
+batch 16, 3125 kroków, source/target 512/64. mT5-base został jawnie odrzucony,
+ale jego alternatywny revision również przypięto. Dodano obsługę seq2seq,
+atomowe pełne checkpointy, wznowienie, osobną kolację source/target, poprawne
+odcinanie outputu encoder–decoder, memory probe, wznawialną generację kohorty
+probe oraz jeden runner egzekwujący kolejność preflight → smoke → memory probe
+→ 50k → Harness v1.1 dev → probe `dev_screen`. Kontrakt i wynik tanich bramek:
+[`task03_s07_contract_2026-07-25.md`](../reports/decisions/task03_s07_contract_2026-07-25.md).
+
+Preflight przeszedł, `ruff`, strict `mypy` dla 119 plików i 184 testy są
+zielone. Lokalny mini-T5 ukończył 20 kroków na 128/32 rekordach, zapisał dwa
+pełne checkpointy i model, wznowił się jako `already_complete`, a osobna
+generacja smoke zapisała 100/100 rekordów. Następnie poza sandboxem wykonano
+wyłącznie dwukrokowy memory probe rzeczywistego plT5 na RTX 3060 Ti. Probe
+odtworzył fingerprint W05, zakończył się kodem 0 i zmierzył peak VRAM
+allocated/reserved `2,683/2,717 GiB` oraz throughput `0,500 przykładu/s`.
+Pełnego S07, Harness v1.1 ani downstream probe nie uruchomiono. S07 ma stan
+`contract_frozen_memory_probe_passed_full_run_pending`, P-06 pozostaje `HOLD`,
+a `dev_confirm` i finalne testy są nieotwarte. Status Task 03 pozostaje
+`IMPLEMENTED`.
+
+Po przerwaniu pierwszego startu pełnego treningu wykonano sweep microbatch
+`1/2/4/8/16` przy stałym effective batch 16 i 6 optimizer steps, a BS8/BS16
+potwierdzono na 30 krokach. BS16 osiągnął `28,684` examples/s wobec `16,468`
+dla BS8 (+74,2%), peak reserved `3,256 GiB` i nie wykazał OOM ani
+niefinitywnych wartości. Przypięto BS16/GA1 z pozostawionym gradient
+checkpointingiem. Stary checkpoint-50 BS1 zachowano w katalogu interrupted i
+nie będzie mieszany z nową trajectory identity. Raport:
+[`s07_batch_probe_2026-07-25.md`](../reports/measurements/task03_s07/s07_batch_probe_2026-07-25.md).
+Pełny run BS16 nadal jest niewykonany i musi zacząć się od kroku 0; Harness,
+probe `dev_screen`, P-06, `dev_confirm` i testy finalne pozostają zamknięte.
+Harness S07 ma konserwatywne ustawienia wykonawcze po wcześniejszych problemach
+ze stabilnością: scoring/primary batch 16, shadow batch 8 i dwa workery BM25.
+
+26 lipca pełny S07 BS16 zakończył 3125 kroków w `1761,997 s`, osiągając
+`28,402` przykładu/s, last eval loss `2,35868` i peak allocated/reserved
+`3,256/4,532 GB`. Wygenerowano komplet 25 tys. completionów frozen dev, lecz
+pierwotna ścieżka plT5 działała omyłkowo na CPU i zajęła `9145,048 s`.
+Scoring primary-GPU/shadow-CPU przerwano po 10 144/25 000 wierszach przy
+projekcji około 15 godzin.
+
+Wspólny Harness zoptymalizowano bez zmiany kohorty, modeli ani metryk.
+Niekwantyzowana inferencja trafia teraz jawnie na CUDA, oba zamrożone sądy
+mieszczą się na GPU, generacja jest batchowana, a BM25 używa trwałych pul i
+połączeń. Frozen-dev benchmark 64 rekordów wybrał dwa workery i osiągnął
+`3,417` rekordu/s przy peak reserved `4,152 GiB`, co daje wyłącznie liniową
+projekcję `2,03 h` dla pełnego scoringu. Starego CPU shadow journalu nie wolno
+mieszać z CUDA; runner archiwizuje go odzyskiwalnie i restartuje jednorodny
+scoring. Pełny Harness zakończył później 5 tys. przykładów i 25 tys. generacji;
+downstream `dev_screen` został następnie ukończony, lecz jego odmienny budżet
+probe czyni wynik wyłącznie diagnostycznym.
+Raport:
+[`runtime_optimization_2026-07-26.md`](../reports/measurements/task03_s07/runtime_optimization_2026-07-26.md).
+
+Pierwsze dwa uruchomienia probe przerwało wyłączenie hosta. Log wskazuje, że
+GPU wykonywał filtrowanie lub trening probe, lecz wcześniejsza implementacja
+zapisywała pierwszy trwały artefakt dopiero po wszystkich 250 krokach; katalog
+wynikowy pozostał pusty. Probe ma teraz jawne logi podfaz, domyślny dla S07
+batch 6 zamiast 8, atomowy kroczący checkpoint treningu co 25 kroków oraz
+istniejące już wznawianie shardów kodowania korpusu i prefiksu zapytań.
+Zmiana batcha jest częścią rozwiązanego recipe fingerprintu, dlatego wszystkie
+późniejsze porównywane ramiona muszą użyć tego samego batcha 6.
+
 ## Cel
 
 Zaimplementować stabilny trening passage→query i uruchomić serię tanich baseline’ów, zanim projekt przejdzie do DPO lub RL.
@@ -318,14 +408,19 @@ Identyczne dane, seed i budżet tokenów.
 
 Sprawdź, czy kontrola rozkładu danych poprawia overlap/style bez utraty grounding.
 
-### S06 — czyszczenie naturalnych par
+### S06/P-06 — source provenance i integralność tłumaczeń
 
-Na 1.5B/50k porównaj kontrolę bez zmian, odrzucenie dolnych około 5–10%
-naturalnych par według skalibrowanego primary margin oraz ważenie jako funkcję
-tego marginesu. Score źródłowy `pos_score >= 23.50` nie jest wystarczającym
-filtrem po tłumaczeniu. Zachowaj score offline i oceniaj wyłącznie Harnessem
-v1.1. Zwycięski wariant może stać się przygotowaniem danych 4.5B dopiero po
-potwierdzeniu wyniku.
+Masowe porównanie `ordinary/drop/weighted` według lokalnego primary marginu
+jest `SUPERSEDED`. Adapter już egzekwuje `source_en_score >= 23.50`, a
+źródłowe etykiety i margin pochodzą z silniejszego rerankera użytego przed
+kopaniem negatywów. Nie nadpisuj ich słabszym lokalnym sędzią.
+
+Następnym krokiem jest P06-T z prospektywnego ADR: ślepa, deterministyczna
+próbka 300 train obejmująca niski source score, niski source margin, flagi
+jakości/translation-risk i losową kontrolę. Lokalne primary/shadow mogą służyć
+wyłącznie do disagreement/triage. Przygotuj ręczny formularz answerability i
+integralności tłumaczenia. Bez powtarzalnej ręcznie potwierdzonej klasy błędu
+nie zmieniaj danych, nie trenuj wariantów drop/weighted i nie ustalaj progów.
 
 ### S07 — polski baseline seq2seq
 
@@ -333,12 +428,13 @@ Dostrój plT5-base/large albo mT5 na tym samym splicie, liczbie par i budżecie
 co Bielik 1.5B. Porównaj koszt generacji, filtering i downstream probe.
 Angielski docT5query pozostaje kontekstem historycznym, nie polskim baseline'em.
 
-### Bramka P-05/P-06 przed kolejną kampanią 4.5B
+### Bramka P-05/P06-T przed kolejną kampanią 4.5B
 
 Po ukończeniu Harness v1.1 porównaj S00 zero/few-shot, S03/W05, S07 oraz
 gold-data control na candidate-pool, corpus, translated i native. Pierwsza
 mała macierz probe obejmuje gold-data control, W05 synthetic-only i jedną
-budżetowo dopasowaną mieszankę natural+synthetic. Następnie wykonaj S06.
+budżetowo dopasowaną mieszankę natural+synthetic. Następnie wykonaj mały audyt
+P06-T; nie wykonuj masowego rescoringu ani SFT drop/weighted bez nowego ADR.
 Decyzja o dalszej skali musi opierać się na retrieval i ADR, nie eval loss.
 
 ## Checkpointing i wznowienie

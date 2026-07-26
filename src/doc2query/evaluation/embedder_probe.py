@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import bisect
+import gc
 import hashlib
 import heapq
 import json
@@ -11,6 +13,7 @@ import sys
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -21,6 +24,10 @@ from torch.utils.data import DataLoader, Dataset
 
 from doc2query.evaluation.corpus import CorpusIndex, sha256_file
 from doc2query.evaluation.datasets import evaluation_fingerprint, load_frozen_records
+from doc2query.evaluation.dense_retrieval import (
+    ShardedEmbeddingIndex,
+    exact_retrieval_batch,
+)
 from doc2query.evaluation.native_holdout import (
     HoldoutProfile,
     holdout_artifact_path,
@@ -63,8 +70,11 @@ def _progress(stage: str, current: int, total: int, started: float) -> None:
         return
     percent = 100.0 * current / max(1, total)
     elapsed = time.perf_counter() - started
+    rate = current / elapsed if elapsed > 0 else 0.0
+    eta = (total - current) / rate if rate > 0 else float("inf")
     print(
-        f"[{stage}] {current:,}/{total:,} ({percent:5.1f}%) elapsed={elapsed:.1f}s",
+        f"[{stage}] {current:,}/{total:,} ({percent:5.1f}%) elapsed={elapsed:.1f}s "
+        f"rate={rate:,.2f}/s eta={eta:.1f}s",
         file=sys.stderr,
         flush=True,
     )
@@ -81,6 +91,10 @@ def _progress_callback(stage: str) -> Callable[[int, int], None]:
             _progress(stage, current, total, started)
 
     return report
+
+
+def _stage(message: str) -> None:
+    print(f"[probe] {message}", file=sys.stderr, flush=True)
 
 
 @dataclass(frozen=True)
@@ -439,6 +453,7 @@ def train_probe(
     false_negative_report: Mapping[str, Any],
     negative_audit_rows: Sequence[dict[str, Any]],
     statistical_contract: StatisticalContract,
+    checkpoint_interval_steps: int = 0,
 ) -> dict[str, Any]:
     if not rows:
         raise ValueError("probe training set is empty")
@@ -461,8 +476,11 @@ def train_probe(
                 flush=True,
             )
         return resumed_summary
-    if output_dir.exists() and any(output_dir.iterdir()):
-        raise FileExistsError(f"probe output is not empty: {output_dir}")
+    checkpoint_path = output_dir / "training_checkpoint.pt"
+    existing = set(output_dir.iterdir()) if output_dir.exists() else set()
+    unexpected = existing - {checkpoint_path}
+    if unexpected:
+        raise FileExistsError(f"probe output contains non-resumable artifacts: {output_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
     set_seed(recipe.seed)
     from transformers import AutoTokenizer
@@ -474,6 +492,10 @@ def train_probe(
         trust_remote_code=False,
     )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    _stage(
+        f"loading train model on {device.type}; batch_size={recipe.batch_size}, "
+        f"max_length={recipe.max_length}, steps={recipe.max_steps}"
+    )
     model = MeanPoolEncoder(recipe.model_name_or_path, recipe.revision).to(device)
     model.train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=recipe.learning_rate)
@@ -493,11 +515,48 @@ def train_probe(
         generator=torch.Generator().manual_seed(recipe.seed),
     )
     iterator = iter(loader)
-    losses = []
+    losses: list[float] = []
+    completed_before_resume = 0
+    checkpoint_identity = {
+        "schema_version": 1,
+        "recipe_fingerprint": recipe.fingerprint,
+        "query_source": query_source,
+        "train_fingerprint": train_fingerprint,
+        "negative_contract": dict(negative_contract),
+        "statistical_contract": statistical_contract.reference(),
+    }
+    if checkpoint_path.is_file():
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+        if not isinstance(checkpoint, Mapping) or checkpoint.get("identity") != checkpoint_identity:
+            raise ValueError("probe training checkpoint identity mismatch")
+        completed_before_resume = int(checkpoint.get("completed_steps", 0))
+        if not 0 < completed_before_resume < recipe.max_steps:
+            raise ValueError("probe training checkpoint has an invalid completed step")
+        model.load_state_dict(checkpoint["model"])
+        optimizer.load_state_dict(checkpoint["optimizer"])
+        scheduler.load_state_dict(checkpoint["scheduler"])
+        losses = [float(value) for value in checkpoint["losses"]]
+        # Replay only the cheap sampler advancement so the next microbatch is identical.
+        for _ in range(completed_before_resume):
+            try:
+                next(iterator)
+            except StopIteration:
+                iterator = iter(loader)
+                next(iterator)
+        torch.set_rng_state(checkpoint["torch_rng_state"].cpu())
+        if torch.cuda.is_available() and checkpoint.get("cuda_rng_state_all") is not None:
+            torch.cuda.set_rng_state_all(
+                [state.cpu() for state in checkpoint["cuda_rng_state_all"]]
+            )
+        _stage(
+            f"resumed training at step {completed_before_resume}/{recipe.max_steps} "
+            f"from {checkpoint_path}"
+        )
     started = time.perf_counter()
     optimizer.zero_grad(set_to_none=True)
     report_every = max(1, recipe.max_steps // 20)
-    for _step in range(recipe.max_steps):
+    _stage("training started")
+    for _step in range(completed_before_resume, recipe.max_steps):
         try:
             batch = next(iterator)
         except StopIteration:
@@ -529,6 +588,28 @@ def train_probe(
         completed_steps = _step + 1
         if completed_steps == 1 or completed_steps % report_every == 0:
             _progress("train", completed_steps, recipe.max_steps, started)
+        if (
+            checkpoint_interval_steps > 0
+            and completed_steps < recipe.max_steps
+            and completed_steps % checkpoint_interval_steps == 0
+        ):
+            checkpoint = {
+                "identity": checkpoint_identity,
+                "completed_steps": completed_steps,
+                "model": model.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "scheduler": scheduler.state_dict(),
+                "losses": losses,
+                "torch_rng_state": torch.get_rng_state(),
+                "cuda_rng_state_all": (
+                    torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
+                ),
+            }
+            temporary_checkpoint = checkpoint_path.with_suffix(".pt.tmp")
+            torch.save(checkpoint, temporary_checkpoint)
+            os.replace(temporary_checkpoint, checkpoint_path)
+            _stage(f"training checkpoint saved at step {completed_steps}")
+    _stage("training complete; saving model")
     adapter_dir = output_dir / "model"
     model.backbone.save_pretrained(adapter_dir, safe_serialization=True)
     tokenizer.save_pretrained(adapter_dir)
@@ -576,6 +657,7 @@ def train_probe(
         for row in negative_audit_rows:
             writer.write(row)
     write_json(output_dir / "train_summary.json", summary)
+    checkpoint_path.unlink(missing_ok=True)
     return summary
 
 
@@ -671,6 +753,7 @@ def _encode_batched(
     device: torch.device,
     cache_dir: Path | None = None,
     cache_identity: Mapping[str, Any] | None = None,
+    progress_stage: str = "encode_corpus",
 ) -> torch.Tensor:
     if not texts:
         raise ValueError("cannot encode an empty corpus")
@@ -711,7 +794,7 @@ def _encode_batched(
                 raise ValueError(f"corpus embedding cache shard has wrong row count: {shard}")
             if _progress_enabled():
                 print(
-                    f"[resume] encode_corpus shard {chunk_index + 1} reused",
+                    f"[resume] {progress_stage} shard {chunk_index + 1} reused",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -733,8 +816,212 @@ def _encode_batched(
                 torch.save(chunk, temporary_shard)
                 os.replace(temporary_shard, shard)
         chunks.append(chunk)
-        _progress("encode_corpus", chunk_end, len(texts), started)
+        _progress(progress_stage, chunk_end, len(texts), started)
     return torch.cat(chunks)
+
+
+def _atomic_torch_save(value: torch.Tensor, path: Path) -> None:
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    torch.save(value, temporary)
+    os.replace(temporary, path)
+
+
+def _embedding_manifest(cache_dir: Path) -> dict[str, Any] | None:
+    path = cache_dir / "manifest.json"
+    if not path.is_file():
+        return None
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError("embedding cache manifest must contain a JSON object")
+    return value
+
+
+def _ensure_corpus_embedding_cache(
+    *,
+    cache_dir: Path,
+    cache_identity: Mapping[str, Any],
+    row_count: int,
+    texts: list[str] | None,
+    model: MeanPoolEncoder | None,
+    tokenizer: Any | None,
+    max_length: int,
+    batch_size: int,
+    device: torch.device,
+) -> ShardedEmbeddingIndex:
+    """Complete missing shards without concatenating the full corpus in RAM."""
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = cache_dir / "manifest.json"
+    manifest = _embedding_manifest(cache_dir)
+    if manifest is None:
+        chunk_size = max(batch_size, math.ceil(row_count / 100 / batch_size) * batch_size)
+        manifest = {
+            "schema_version": 1,
+            "status": "in_progress",
+            "row_count": row_count,
+            "chunk_size": chunk_size,
+            "identity": dict(cache_identity),
+        }
+        write_json(manifest_path.with_suffix(".json.tmp"), manifest)
+        os.replace(manifest_path.with_suffix(".json.tmp"), manifest_path)
+    required = {
+        "schema_version": 1,
+        "row_count": row_count,
+        "identity": dict(cache_identity),
+    }
+    mismatches = [key for key, value in required.items() if manifest.get(key) != value]
+    if mismatches:
+        raise ValueError(
+            "corpus embedding resume cache identity mismatch: " + ", ".join(mismatches)
+        )
+    chunk_size = int(manifest.get("chunk_size", 0))
+    if chunk_size < 1:
+        raise ValueError("corpus embedding cache has an invalid chunk_size")
+    shard_count = math.ceil(row_count / chunk_size)
+    started = time.perf_counter()
+    for shard_index in range(shard_count):
+        start = shard_index * chunk_size
+        end = min(start + chunk_size, row_count)
+        shard = cache_dir / f"chunk-{shard_index:05d}.pt"
+        if shard.is_file():
+            if _progress_enabled():
+                print(
+                    f"[resume] encode_corpus shard {shard_index + 1}/{shard_count} reused",
+                    file=sys.stderr,
+                    flush=True,
+                )
+        else:
+            if texts is None or model is None or tokenizer is None:
+                raise ValueError(
+                    "corpus embedding cache is incomplete and no encoder input is loaded"
+                )
+            encoded = []
+            for batch_start in range(start, end, batch_size):
+                encoded.append(
+                    _encode(
+                        model,
+                        tokenizer,
+                        texts[batch_start : min(batch_start + batch_size, end)],
+                        max_length=max_length,
+                        device=device,
+                    )
+                )
+            _atomic_torch_save(torch.cat(encoded), shard)
+        _progress("encode_corpus", end, row_count, started)
+    completed = dict(manifest) | {"status": "complete", "completed_shards": shard_count}
+    write_json(manifest_path.with_suffix(".json.tmp"), completed)
+    os.replace(manifest_path.with_suffix(".json.tmp"), manifest_path)
+    return ShardedEmbeddingIndex.load(cache_dir, row_count=row_count, chunk_size=chunk_size)
+
+
+def _corpus_ids_from_cache_or_source(
+    documents_path: Path,
+    *,
+    cache_dir: Path,
+    expected_count: int,
+    expected_digest: str,
+) -> list[str]:
+    path = cache_dir / "corpus_ids.jsonl"
+    if path.is_file():
+        ids = [str(json.loads(line)) for line in path.read_text(encoding="utf-8").splitlines()]
+    else:
+        ids = sorted(str(document["doc_id"]) for document in read_records(documents_path))
+        if any(left == right for left, right in pairwise(ids)):
+            raise ValueError("duplicate document in frozen corpus")
+        temporary = path.with_suffix(".jsonl.tmp")
+        with temporary.open("w", encoding="utf-8") as writer:
+            for doc_id in ids:
+                writer.write(json.dumps(doc_id, ensure_ascii=False) + "\n")
+            writer.flush()
+            os.fsync(writer.fileno())
+        os.replace(temporary, path)
+    digest = hashlib.sha256()
+    for doc_id in ids:
+        digest.update(doc_id.encode())
+        digest.update(b"\n")
+    if len(ids) != expected_count or digest.hexdigest() != expected_digest:
+        raise ValueError("corpus ID catalog does not match the embedding cache identity")
+    return ids
+
+
+def _query_embeddings(
+    *,
+    cache_dir: Path,
+    records: Sequence[Mapping[str, Any]],
+    cache_identity: Mapping[str, Any],
+    model: MeanPoolEncoder | None,
+    tokenizer: Any | None,
+    max_length: int,
+    batch_size: int,
+    device: torch.device,
+) -> torch.Tensor:
+    path = cache_dir / "query_embeddings.pt"
+    manifest_path = cache_dir / "query_embeddings_manifest.json"
+    expected = {
+        "schema_version": 1,
+        "status": "complete",
+        "row_count": len(records),
+        "identity": dict(cache_identity),
+    }
+    if path.is_file() and manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest != expected:
+            raise ValueError("query embedding cache identity mismatch")
+        value = torch.load(path, map_location="cpu", weights_only=True)
+        if not isinstance(value, torch.Tensor) or value.ndim != 2 or value.shape[0] != len(records):
+            raise ValueError("invalid query embedding cache")
+        if _progress_enabled():
+            print(f"[resume] query embeddings {len(records):,} reused", file=sys.stderr, flush=True)
+        return value
+    if path.exists() or manifest_path.exists():
+        raise ValueError("query embedding cache is incomplete")
+    if model is None or tokenizer is None:
+        raise ValueError("query embeddings are missing and no encoder is loaded")
+    value = _encode_batched(
+        model,
+        tokenizer,
+        [str(record["query"]) for record in records],
+        max_length=max_length,
+        batch_size=batch_size,
+        device=device,
+        progress_stage="encode_queries",
+    )
+    _atomic_torch_save(value, path)
+    write_json(manifest_path.with_suffix(".json.tmp"), expected)
+    os.replace(manifest_path.with_suffix(".json.tmp"), manifest_path)
+    return value
+
+
+def _read_resume_jsonl(path: Path) -> list[dict[str, Any]]:
+    """Recover only a truncated final JSONL write; reject corruption in the middle."""
+    if not path.is_file():
+        return []
+    rows: list[dict[str, Any]] = []
+    good_bytes = 0
+    size = path.stat().st_size
+    with path.open("rb") as reader:
+        while line := reader.readline():
+            try:
+                value = json.loads(line)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                if reader.tell() != size:
+                    raise ValueError(
+                        "corpus retrieval journal is corrupt before its final row"
+                    ) from None
+                with path.open("r+b") as recovery:
+                    recovery.truncate(good_bytes)
+                    recovery.flush()
+                    os.fsync(recovery.fileno())
+                print(
+                    "[resume] truncated incomplete final corpus retrieval journal row recovered",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                break
+            if not isinstance(value, dict):
+                raise ValueError("corpus retrieval journal rows must be JSON objects")
+            rows.append(value)
+            good_bytes = reader.tell()
+    return rows
 
 
 def _path_tree_fingerprint(path: Path) -> str:
@@ -763,49 +1050,146 @@ def evaluate_probe(
     negative_contract: Mapping[str, Any],
     statistical_contract: Mapping[str, Any],
     comparison_budget: Mapping[str, Any],
+    evaluation_encode_batch_size: int = 64,
+    retrieval_query_batch_size: int = 512,
+    retrieval_device: str = "auto",
 ) -> dict[str, Any]:
     from transformers import AutoTokenizer
 
+    if min(evaluation_encode_batch_size, retrieval_query_batch_size) < 1:
+        raise ValueError("evaluation and retrieval batch sizes must be positive")
+    if retrieval_device not in {"auto", "cpu", "cuda"}:
+        raise ValueError("retrieval_device must be auto, cpu or cuda")
     output_dir.mkdir(parents=True, exist_ok=True)
-    tokenizer_loader: Any = getattr(AutoTokenizer, "from_" + "pretrained")
-    tokenizer = tokenizer_loader(model_path, trust_remote_code=False)
-    model = MeanPoolEncoder(str(model_path), "main")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device).eval()
-    corpus: dict[str, str] = {}
-    for document in read_records(documents_path):
-        doc_id, text = str(document["doc_id"]), str(document["text"])
-        if doc_id in corpus:
-            raise ValueError(f"duplicate document in frozen corpus: doc_id={doc_id}")
-        corpus[doc_id] = text
-    corpus_ids = sorted(corpus)
-    if len(corpus_ids) < 100:
-        raise ValueError("corpus_retrieval requires at least 100 documents for Recall@100")
-    corpus_index = {doc_id: index for index, doc_id in enumerate(corpus_ids)}
     corpus_sha256 = sha256_file(documents_path)
     model_fingerprint = _path_tree_fingerprint(model_path)
-    corpus_ids_digest = hashlib.sha256()
-    for doc_id in corpus_ids:
-        corpus_ids_digest.update(doc_id.encode())
-        corpus_ids_digest.update(b"\n")
-    index_started = time.perf_counter()
-    corpus_embeddings = _encode_batched(
-        model,
-        tokenizer,
-        [corpus[doc_id] for doc_id in corpus_ids],
-        max_length=recipe.max_length,
-        batch_size=recipe.batch_size,
-        device=device,
-        cache_dir=output_dir / "corpus_embedding_cache",
-        cache_identity={
+    cache_dir = output_dir / "corpus_embedding_cache"
+    existing_manifest = _embedding_manifest(cache_dir)
+    corpus_texts: list[str] | None = None
+    if existing_manifest is not None:
+        identity = existing_manifest.get("identity")
+        if not isinstance(identity, Mapping):
+            raise ValueError("corpus embedding cache has no identity mapping")
+        expected_partial = {
             "recipe_fingerprint": recipe.fingerprint,
             "model_fingerprint": model_fingerprint,
             "corpus_sha256": corpus_sha256,
-            "corpus_ids_sha256": corpus_ids_digest.hexdigest(),
-        },
+        }
+        if any(identity.get(key) != value for key, value in expected_partial.items()):
+            raise ValueError("corpus embedding resume cache identity mismatch")
+        corpus_count = int(existing_manifest.get("row_count", 0))
+        corpus_ids_sha256 = str(identity.get("corpus_ids_sha256", ""))
+        corpus_ids = _corpus_ids_from_cache_or_source(
+            documents_path,
+            cache_dir=cache_dir,
+            expected_count=corpus_count,
+            expected_digest=corpus_ids_sha256,
+        )
+    else:
+        _stage(f"evaluation {dataset_name}/{profile}: cataloguing corpus {documents_path}")
+        corpus: dict[str, str] = {}
+        for document in read_records(documents_path):
+            doc_id, text = str(document["doc_id"]), str(document["text"])
+            if doc_id in corpus:
+                raise ValueError(f"duplicate document in frozen corpus: doc_id={doc_id}")
+            corpus[doc_id] = text
+        corpus_ids = sorted(corpus)
+        corpus_texts = [corpus[doc_id] for doc_id in corpus_ids]
+        corpus_count = len(corpus_ids)
+        corpus_ids_digest = hashlib.sha256()
+        for doc_id in corpus_ids:
+            corpus_ids_digest.update(doc_id.encode())
+            corpus_ids_digest.update(b"\n")
+        corpus_ids_sha256 = corpus_ids_digest.hexdigest()
+    if corpus_count < 100:
+        raise ValueError("corpus_retrieval requires at least 100 documents for Recall@100")
+    corpus_identity = {
+        "recipe_fingerprint": recipe.fingerprint,
+        "model_fingerprint": model_fingerprint,
+        "corpus_sha256": corpus_sha256,
+        "corpus_ids_sha256": corpus_ids_sha256,
+    }
+    manifest_chunk_size = int(existing_manifest.get("chunk_size", 0)) if existing_manifest else 0
+    expected_shards = math.ceil(corpus_count / manifest_chunk_size) if manifest_chunk_size else 0
+    corpus_cache_complete = bool(
+        existing_manifest
+        and expected_shards
+        and all((cache_dir / f"chunk-{index:05d}.pt").is_file() for index in range(expected_shards))
+    )
+    if not corpus_cache_complete and corpus_texts is None:
+        corpus = {str(row["doc_id"]): str(row["text"]) for row in read_records(documents_path)}
+        if len(corpus) != corpus_count:
+            raise ValueError("duplicate or missing document while resuming corpus encoding")
+        corpus_texts = [corpus[doc_id] for doc_id in corpus_ids]
+
+    evaluable_records = [record for record in records if record.get("positives")]
+    query_digest = hashlib.sha256()
+    for record in evaluable_records:
+        query_digest.update(str(record["example_id"]).encode())
+        query_digest.update(b"\0")
+        query_digest.update(str(record["query"]).encode())
+        query_digest.update(b"\n")
+    query_identity = {
+        "recipe_fingerprint": recipe.fingerprint,
+        "model_fingerprint": model_fingerprint,
+        "test_fingerprint": test_fingerprint,
+        "ordered_queries_sha256": query_digest.hexdigest(),
+    }
+    query_cache_complete = (cache_dir / "query_embeddings.pt").is_file() and (
+        cache_dir / "query_embeddings_manifest.json"
+    ).is_file()
+
+    encoder_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model: MeanPoolEncoder | None = None
+    tokenizer: Any | None = None
+    if not corpus_cache_complete or not query_cache_complete:
+        tokenizer_loader: Any = getattr(AutoTokenizer, "from_" + "pretrained")
+        _stage(f"evaluation {dataset_name}/{profile}: loading trained model for missing embeddings")
+        tokenizer = tokenizer_loader(model_path, trust_remote_code=False)
+        model = MeanPoolEncoder(str(model_path), "main")
+        model.to(encoder_device).eval()
+    else:
+        _stage(f"evaluation {dataset_name}/{profile}: all embeddings cached; model load skipped")
+    index_started = time.perf_counter()
+    _stage(
+        f"evaluation {dataset_name}/{profile}: preparing {corpus_count:,} corpus embeddings "
+        f"with batch_size={evaluation_encode_batch_size}"
+    )
+    sharded_index = _ensure_corpus_embedding_cache(
+        cache_dir=cache_dir,
+        cache_identity=corpus_identity,
+        row_count=corpus_count,
+        texts=corpus_texts,
+        model=model,
+        tokenizer=tokenizer,
+        max_length=recipe.max_length,
+        batch_size=evaluation_encode_batch_size,
+        device=encoder_device,
     )
     index_seconds = time.perf_counter() - index_started
-    evaluable_records = [record for record in records if record.get("positives")]
+    query_encode_started = time.perf_counter()
+    encoded_queries = _query_embeddings(
+        cache_dir=cache_dir,
+        records=evaluable_records,
+        cache_identity=query_identity,
+        model=model,
+        tokenizer=tokenizer,
+        max_length=recipe.max_length,
+        batch_size=evaluation_encode_batch_size,
+        device=encoder_device,
+    )
+    query_encode_seconds = time.perf_counter() - query_encode_started
+    del model, tokenizer, corpus_texts
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    if retrieval_device == "cuda" and not torch.cuda.is_available():
+        raise ValueError("CUDA retrieval was requested but CUDA is unavailable")
+    use_cuda = retrieval_device == "cuda" or (
+        retrieval_device == "auto" and torch.cuda.is_available()
+    )
+    score_device = torch.device("cuda" if use_cuda else "cpu")
     per_query_path = output_dir / "corpus_retrieval_per_query.jsonl"
     checkpoint_path = output_dir / "corpus_retrieval_checkpoint.json"
     checkpoint = {
@@ -829,7 +1213,7 @@ def evaluate_probe(
         temporary_checkpoint = checkpoint_path.with_suffix(".json.tmp")
         write_json(temporary_checkpoint, checkpoint)
         os.replace(temporary_checkpoint, checkpoint_path)
-    per_query = list(read_records(per_query_path)) if per_query_path.is_file() else []
+    per_query = _read_resume_jsonl(per_query_path)
     expected_ids = [str(record["example_id"]) for record in evaluable_records]
     resumed_ids = [str(row.get("example_id")) for row in per_query]
     if resumed_ids != expected_ids[: len(resumed_ids)]:
@@ -855,62 +1239,127 @@ def evaluate_probe(
             file=sys.stderr,
             flush=True,
         )
+    _stage(
+        f"evaluation {dataset_name}/{profile}: exact batched scoring of "
+        f"{len(evaluable_records):,} queries on {score_device.type}; "
+        f"query_batch_size={retrieval_query_batch_size}, shards={len(sharded_index.shards)}"
+    )
     with per_query_path.open("a", encoding="utf-8") as writer:
         query_started = time.perf_counter()
         query_total = len(evaluable_records)
-        query_report_every = max(1, query_total // 100)
-        for query_index, record in enumerate(
-            evaluable_records[len(per_query) :],
-            start=len(per_query) + 1,
-        ):
-            positives = record.get("positives", [])
-            negatives = record.get("hard_negatives", [])
-            started = time.perf_counter()
-            query_embedding = _encode(
-                model,
-                tokenizer,
-                [str(record["query"])],
-                max_length=recipe.max_length,
-                device=device,
+        resumed_query_count = len(per_query)
+        numerical_audit: dict[str, Any] = {
+            "status": "not_required_cpu_exact" if score_device.type == "cpu" else "pending",
+            "queries": 0,
+            "fallback_to_cpu": False,
+        }
+        for batch_start in range(resumed_query_count, query_total, retrieval_query_batch_size):
+            batch_end = min(batch_start + retrieval_query_batch_size, query_total)
+            batch_records = evaluable_records[batch_start:batch_end]
+            positive_rows: list[list[int]] = []
+            negative_rows: list[list[int]] = []
+            pool_sizes: list[int] = []
+            for record in batch_records:
+                positive_ids = [str(value["doc_id"]) for value in record.get("positives", [])]
+                negative_ids = [str(value["doc_id"]) for value in record.get("hard_negatives", [])]
+                positions: list[int] = []
+                for doc_id in (*positive_ids, *negative_ids):
+                    position = bisect.bisect_left(corpus_ids, doc_id)
+                    if position >= len(corpus_ids) or corpus_ids[position] != doc_id:
+                        raise ValueError(f"test document is absent from frozen corpus: {doc_id}")
+                    positions.append(position)
+                positive_rows.append(positions[: len(positive_ids)])
+                negative_rows.append(positions[len(positive_ids) :])
+                pool_sizes.append(len(positions))
+            batch_started = time.perf_counter()
+            scan_started = time.perf_counter()
+            report_every = max(1, len(sharded_index.shards) // 10)
+
+            def shard_progress(
+                current: int,
+                total: int,
+                *,
+                every: int = report_every,
+                first: int = batch_start,
+                last: int = batch_end,
+                started: float = scan_started,
+            ) -> None:
+                if current == total or current % every == 0:
+                    _progress(
+                        f"scan_shards[{first + 1}:{last}]",
+                        current,
+                        total,
+                        started,
+                    )
+
+            retrieved = exact_retrieval_batch(
+                encoded_queries[batch_start:batch_end],
+                positive_rows=positive_rows,
+                negative_rows=negative_rows,
+                index=sharded_index,
+                device=score_device,
+                shard_progress=shard_progress if _progress_enabled() else None,
             )
-            latencies.append(time.perf_counter() - started)
-            scores = (query_embedding @ corpus_embeddings.T).squeeze(0)
-            positive_ids = [str(value["doc_id"]) for value in positives]
-            negative_ids = [str(value["doc_id"]) for value in negatives]
-            missing = [doc_id for doc_id in positive_ids if doc_id not in corpus_index]
-            if missing:
-                raise ValueError(f"test positives are absent from frozen corpus: {missing[:3]}")
-            positive_ranks = []
-            for doc_id in positive_ids:
-                index = corpus_index[doc_id]
-                score = scores[index]
-                better = int(torch.sum(scores > score).item())
-                tied_before = int(torch.sum(scores[:index] == score).item())
-                positive_ranks.append(1 + better + tied_before)
-            pairwise_wins = [
-                float(scores[corpus_index[positive_id]] > scores[corpus_index[negative_id]])
-                for positive_id in positive_ids
-                for negative_id in negative_ids
-            ]
-            metrics = corpus_metrics_from_positive_ranks(
-                positive_ranks,
-                candidate_count=len(corpus_ids),
-            )
-            row = {
-                "example_id": str(record["example_id"]),
-                **metrics,
-                "pool_candidate_count": len(positive_ids) + len(negative_ids),
-                "pool_hard_negative_win_rate": (
-                    sum(pairwise_wins) / len(pairwise_wins) if pairwise_wins else None
-                ),
-                "latency_seconds": latencies[-1],
-            }
-            writer.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+            if numerical_audit["status"] == "pending":
+                audit_count = min(8, len(batch_records))
+                cpu_result = exact_retrieval_batch(
+                    encoded_queries[batch_start : batch_start + audit_count],
+                    positive_rows=positive_rows[:audit_count],
+                    negative_rows=negative_rows[:audit_count],
+                    index=sharded_index,
+                    device=torch.device("cpu"),
+                )
+                cuda_ranks = retrieved.positive_ranks[:audit_count]
+                cuda_wins = retrieved.hard_negative_win_rates[:audit_count]
+                parity = cuda_ranks == cpu_result.positive_ranks and cuda_wins == (
+                    cpu_result.hard_negative_win_rates
+                )
+                numerical_audit = {
+                    "status": "passed" if parity else "failed_cpu_fallback",
+                    "queries": audit_count,
+                    "rank_match": cuda_ranks == cpu_result.positive_ranks,
+                    "pool_win_match": cuda_wins == cpu_result.hard_negative_win_rates,
+                    "fallback_to_cpu": not parity,
+                }
+                if not parity:
+                    _stage("CUDA/CPU exact parity audit failed; recomputing on CPU")
+                    score_device = torch.device("cpu")
+                    retrieved = exact_retrieval_batch(
+                        encoded_queries[batch_start:batch_end],
+                        positive_rows=positive_rows,
+                        negative_rows=negative_rows,
+                        index=sharded_index,
+                        device=score_device,
+                    )
+            batch_seconds = time.perf_counter() - batch_started
+            latency = batch_seconds / len(batch_records)
+            latencies.extend([latency] * len(batch_records))
+            for offset, record in enumerate(batch_records):
+                metrics = corpus_metrics_from_positive_ranks(
+                    retrieved.positive_ranks[offset], candidate_count=corpus_count
+                )
+                row = {
+                    "example_id": str(record["example_id"]),
+                    **metrics,
+                    "pool_candidate_count": pool_sizes[offset],
+                    "pool_hard_negative_win_rate": retrieved.hard_negative_win_rates[offset],
+                    "latency_seconds": latency,
+                }
+                writer.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+                per_query.append(row)
+                metric_rows.append(metrics)
             writer.flush()
-            per_query.append(row)
-            metric_rows.append(metrics)
-            if query_index == query_total or query_index % query_report_every == 0:
-                _progress("evaluate_queries", query_index, query_total, query_started)
+            os.fsync(writer.fileno())
+            _progress(
+                "evaluate_queries",
+                batch_end - resumed_query_count,
+                query_total - resumed_query_count,
+                query_started,
+            )
+    if numerical_audit["status"] == "pending":
+        numerical_audit["status"] = "not_run_all_queries_resumed"
+    retrieval_wall_seconds = time.perf_counter() - query_started
+    newly_scored_queries = query_total - resumed_query_count
     aggregate = aggregate_query_metrics(metric_rows)
     summary = {
         "schema_version": 2,
@@ -927,9 +1376,20 @@ def evaluate_probe(
         "comparison_budget": dict(comparison_budget),
         "query_count": len(per_query),
         "metrics": aggregate,
-        "metric_candidate_count": {metric: len(corpus_ids) for metric in aggregate},
+        "metric_candidate_count": {metric: corpus_count for metric in aggregate},
         "latency_seconds_per_query": sum(latencies) / len(latencies) if latencies else None,
-        "corpus_candidate_count": len(corpus_ids),
+        "execution_invocation": {
+            "resumed_queries": resumed_query_count,
+            "newly_scored_queries": newly_scored_queries,
+            "retrieval_wall_seconds": retrieval_wall_seconds,
+            "new_queries_per_second": (
+                newly_scored_queries / retrieval_wall_seconds
+                if newly_scored_queries and retrieval_wall_seconds > 0
+                else None
+            ),
+            "legacy_latency_rows_reused": resumed_query_count,
+        },
+        "corpus_candidate_count": corpus_count,
         "corpus_path": str(documents_path),
         "corpus_sha256": corpus_sha256,
         "candidate_pool_diagnostics": {
@@ -952,7 +1412,18 @@ def evaluate_probe(
             "pool_candidate_count": sorted({int(row["pool_candidate_count"]) for row in per_query}),
         },
         "index_build_seconds": index_seconds,
-        "index_size_bytes": corpus_embeddings.nelement() * corpus_embeddings.element_size(),
+        "query_encoding_seconds": query_encode_seconds,
+        "index_size_bytes": sharded_index.size_bytes,
+        "retrieval_backend": {
+            "name": "torch_sharded_exact_ip",
+            "approximate": False,
+            "device": score_device.type,
+            "query_batch_size": retrieval_query_batch_size,
+            "corpus_shards": len(sharded_index.shards),
+            "embedding_dimension": sharded_index.dimension,
+            "stable_tie_break": "score_desc_then_sorted_doc_id",
+            "numerical_parity_audit": numerical_audit,
+        },
         "model_size_bytes": sum(
             path.stat().st_size for path in model_path.rglob("*") if path.is_file()
         ),
@@ -981,6 +1452,10 @@ def run_probe_experiment(
     primary_scorer: PairScorer | None = None,
     bm25_index: CorpusIndex | None = None,
     generator_id: str | None = None,
+    checkpoint_interval_steps: int = 0,
+    evaluation_encode_batch_size: int = 64,
+    retrieval_query_batch_size: int = 512,
+    retrieval_device: str = "auto",
 ) -> dict[str, Any]:
     calibration = recipe.negative_recipe.load_calibration()
     negative_contract = recipe.negative_recipe.manifest(calibration) | {
@@ -995,6 +1470,7 @@ def run_probe_experiment(
         statistical_contract=statistical_contract,
     )
     if train_summary is None:
+        _stage("preparing training pairs and filtering possible false negatives")
         pairs, train_fingerprint, false_negative_report, negative_audit_rows = prepare_probe_pairs(
             read_records(train_path),
             query_source=query_source,
@@ -1019,6 +1495,7 @@ def run_probe_experiment(
             false_negative_report=false_negative_report,
             negative_audit_rows=negative_audit_rows,
             statistical_contract=statistical_contract,
+            checkpoint_interval_steps=checkpoint_interval_steps,
         )
     else:
         report = train_summary.get("possible_false_negative_report")
@@ -1075,6 +1552,9 @@ def run_probe_experiment(
         negative_contract=negative_contract,
         statistical_contract=train_summary["statistical_contract"],
         comparison_budget=train_summary["comparison_budget"],
+        evaluation_encode_batch_size=evaluation_encode_batch_size,
+        retrieval_query_batch_size=retrieval_query_batch_size,
+        retrieval_device=retrieval_device,
     )
     native: dict[str, Any]
     if holdout_manifest is None:
@@ -1135,6 +1615,9 @@ def run_probe_experiment(
                 negative_contract=negative_contract,
                 statistical_contract=train_summary["statistical_contract"],
                 comparison_budget=train_summary["comparison_budget"],
+                evaluation_encode_batch_size=evaluation_encode_batch_size,
+                retrieval_query_batch_size=retrieval_query_batch_size,
+                retrieval_device=retrieval_device,
             )
     if holdout_manifest is None:
         report_status = "development_complete"

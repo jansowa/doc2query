@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+  - s07_batch_probe_bs1
+  - _self_
+run:
+  experiment_id: S07-PLT5-BATCH-PROBE-BS16
+  output_dir: runs/task03_s07/batch_probe/bs16
+training:
+  per_device_train_batch_size: 16
+  gradient_accumulation_steps: 1

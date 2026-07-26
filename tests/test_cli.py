@@ -1,3 +1,5 @@
+import subprocess
+import sys
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -56,6 +58,53 @@ def test_sft_help_documents_automatic_resume() -> None:
     result = runner.invoke(app, ["train", "sft", "--help"])
     assert result.exit_code == 0
     assert "--resume-if-available" in result.stdout
+
+
+def test_generator_script_help_exposes_runtime_optimization_controls() -> None:
+    result = subprocess.run(
+        [sys.executable, "scripts/evaluate_generator.py", "--help"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    for option in (
+        "--generation-batch-size",
+        "--primary-judge-device",
+        "--shadow-judge-device",
+        "--archive-incompatible-scoring",
+    ):
+        assert option in result.stdout
+    benchmark = subprocess.run(
+        [sys.executable, "scripts/benchmark_evaluation_runtime.py", "--help"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "--component" in benchmark.stdout
+    assert "--bm25-workers" in benchmark.stdout
+    probe = subprocess.run(
+        [sys.executable, "scripts/train_probe_embedder.py", "--help"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "--retrieval-query-batch-size" in probe.stdout
+    assert "--retrieval-device" in probe.stdout
+    probe_benchmark = subprocess.run(
+        [sys.executable, "scripts/benchmark_probe_retrieval.py", "--help"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "--query-batch-sizes" in probe_benchmark.stdout
+    artifact_benchmark = subprocess.run(
+        [sys.executable, "scripts/benchmark_probe_artifacts.py", "--help"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "--embedding-cache" in artifact_benchmark.stdout
+    assert "--parity-queries" in artifact_benchmark.stdout
 
 
 def test_generate_command_invokes_task05_pipeline(monkeypatch: object) -> None:

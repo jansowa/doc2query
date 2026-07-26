@@ -7,7 +7,13 @@ import pytest
 import torch
 import torch.nn.functional as functional
 from peft import PeftModel
-from transformers import LlamaConfig, LlamaForCausalLM, TrainingArguments
+from transformers import (
+    LlamaConfig,
+    LlamaForCausalLM,
+    T5Config,
+    T5ForConditionalGeneration,
+    TrainingArguments,
+)
 
 from doc2query.models.lora import attach_lora, discover_linear_target_modules
 from doc2query.schemas import FocusMode, GenerationConfig, LoraConfig
@@ -16,12 +22,14 @@ from doc2query.training.data import (
     BalancedBatchSampler,
     CompletionOnlyCollator,
     PromptCompletionDataset,
+    Seq2SeqCompletionCollator,
     add_balance_buckets,
     compute_example_weights,
     prepare_datasets,
 )
 from doc2query.training.sft import (
     CompletionOnlySFTTrainer,
+    StopOnNonFiniteLossCallback,
     _resolve_resume_checkpoint,
     checkpoint_is_complete,
     find_latest_complete_checkpoint,
@@ -127,6 +135,59 @@ def test_fixed_padding_provides_equal_token_budget() -> None:
     batch = collator([{"prompt": "krótki prompt", "completion": "pytanie"}])
     assert batch["input_ids"].shape == (1, 12)
     assert torch.all(batch["labels"][batch["attention_mask"] == 0] == IGNORE_INDEX)
+
+
+def test_seq2seq_collator_separates_source_and_completion_budgets() -> None:
+    tokenizer = ToyTokenizer()
+    collator = Seq2SeqCompletionCollator(tokenizer, max_length=8, max_completion_tokens=4)
+    batch = collator(
+        [
+            {"prompt": " ".join(["długi"] * 30), "completion": "ważne krótkie pytanie"},
+            {"prompt": "krótki prompt", "completion": "inne pytanie"},
+        ]
+    )
+    assert batch["input_ids"].shape[1] == 8
+    assert batch["labels"].shape[1] == 4
+    assert batch["labels"][0].tolist() == [*tokenizer.encode("ważne krótkie pytanie"), 1]
+    assert batch["labels"][1][2].item() == tokenizer.eos_token_id
+    assert batch["labels"][1][3].item() == IGNORE_INDEX
+
+
+def test_seq2seq_lora_uses_encoder_decoder_task_type() -> None:
+    model = T5ForConditionalGeneration(
+        T5Config(
+            vocab_size=64,
+            d_model=32,
+            d_kv=8,
+            d_ff=64,
+            num_layers=1,
+            num_decoder_layers=1,
+            num_heads=4,
+            decoder_start_token_id=0,
+            pad_token_id=0,
+            eos_token_id=1,
+        )
+    )
+    adapted, targets, stats = attach_lora(
+        model,
+        LoraConfig(
+            r=2,
+            alpha=4,
+            dropout=0.0,
+            minimum_target_modules=2,
+            expected_layer_patterns=["attention"],
+        ),
+        seq2seq=True,
+    )
+    assert targets
+    assert 0 < stats.trainable < stats.total
+    assert adapted.peft_config["default"].task_type.value == "SEQ_2_SEQ_LM"
+
+
+def test_non_finite_loss_callback_fails_closed() -> None:
+    callback = StopOnNonFiniteLossCallback()
+    with pytest.raises(RuntimeError, match="non-finite eval_loss"):
+        callback.on_log(None, None, None, {"eval_loss": float("nan")})
 
 
 def test_dataset_caps_are_deterministic_by_pair_id(tmp_path: Path) -> None:

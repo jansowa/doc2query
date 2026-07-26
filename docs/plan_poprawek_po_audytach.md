@@ -31,7 +31,7 @@ unieważnia wcześniejsze porównania i wymusza ponowne runy. Dlatego:
 - **BLOKUJĄCE** (pakiet „Harness v1.1", zadania P-01…P-04): wykonać przed
   pierwszą ewaluacją porównawczą W03/W05, przed S00 traktowanym jako baseline,
   przed eksperymentami D z Task 05 i przed całym Task 06.
-- **BRAMKA PRZED SKALĄ** (P-05, P-06): wykonać przed decyzją o kampanii 4.5B
+- **BRAMKA PRZED SKALĄ** (P-05, P06-T): wykonać przed decyzją o kampanii 4.5B
   i przed Task 09; nie blokują implementacji kodu Task 05.
 - **ROZSZERZENIA TASK 05/06** (P-07, P-08): wdrażać w ramach normalnej
   realizacji tych tasków.
@@ -212,19 +212,24 @@ raporcie etapu z odwołaniem do wyników.
 
 ---
 
-## P-06 — S06: czyszczenie naturalnych par SFT polskim rerankerem [BRAMKA PRZED SKALĄ]
+## P-06/P06-T — source provenance i audyt integralności tłumaczeń [BRAMKA PRZED SKALĄ]
 
-**Modyfikuje:** `tasks/03`, wykorzystuje istniejący `WeightedSFTTrainer`.
+**Modyfikuje:** `tasks/03`; rozstrzygający ADR:
+`docs/decisions/task03_p06_source_provenance_2026-07-26.md`.
 
-**Zakres:** filtr `pos_score >= 23.50` działa na angielskich score'ach
-źródłowych; część tłumaczonych par jest uszkodzona, a SFT uczy się na nich
-1:1. Offline policzyć primary rerankerem margines naturalnej pary względem jej
-negatywów (artefakt i tak powstaje w benchmarku Task 02 — zachować wyniki dla
-train). Warianty na 1.5B/50k: (a) drop dolnych ~5–10% wg progu
-kalibracyjnego, (b) waga = funkcja marginesu, (c) kontrola bez zmian. Ocena
-standardowa harnessem v1.1. Jeśli poprawa jest istotna — wariant staje się
-domyślnym przygotowaniem danych dla 4.5B (DPO dziedziczy checkpoint SFT, więc
-jakość targetów ogranicza wszystko dalej).
+**Korekta:** masowy rescoring naturalnego train lokalnym polskim rerankerem i
+warianty `drop/weighted` są `SUPERSEDED`. Źródłowe pozytywy i negatywy zostały
+ocenione przed kopaniem przez silniejszy angielski reranker. Adapter już
+egzekwuje `source_en_score >= 23.50`; frozen train nie ma brakujących score'ów,
+pozytywów poniżej progu ani source marginu poniżej `6.0`. Słabszy lokalny
+sędzia nie może nadpisywać source labels.
+
+**Zakres P06-T:** zamrozić deterministyczną, ślepą próbkę 300 train według
+czterech warstw z ADR, przygotować formularz answerability/integralności
+tłumaczenia oraz opcjonalnie policzyć primary/shadow disagreement tylko dla tej
+próbki. Nie ustalać progu, nie filtrować train i nie trenować wariantów SFT.
+Zmiana danych wymaga ręcznie potwierdzonej, powtarzalnej klasy błędu i osobnego
+prospektywnego ADR z ordinary control.
 
 ---
 
@@ -346,7 +351,7 @@ P-01 ─┬─> P-03 ─┬─> pierwsze porównawcze probe (P-05.4)
 P-02 ─┤         │
 P-04 ─┴─────────┴─> eksperymenty D (Task 05), Task 06, Task 09
 
-P-05, P-06 ──> decyzja o 4.5B ──> kampania Task 09
+P-05, P06-T ──> decyzja o 4.5B ──> kampania Task 09
 P-07 (kod równolegle; eksperymenty po v1.1)
 P-08 ──> Task 07 (DPO)
 ```
