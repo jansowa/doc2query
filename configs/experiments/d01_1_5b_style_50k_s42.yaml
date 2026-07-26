@@ -1,0 +1,19 @@
+# @package _global_
+# Task 05 D01: style/intent controls only.  This is a dev-stage experiment;
+# it must not consume any frozen final-test subset.
+defaults:
+  - w05_1_5b_50k_8gb
+  - _self_
+
+run:
+  experiment_id: D01-1.5B-STYLE-50K-S42
+  seed: 42
+  output_dir: runs/D01-1.5B-STYLE-50K-S42
+
+generation:
+  controlled: true
+  target_query_count: 4
+  forms: [full_question, keyword_query]
+  intents: [fact_lookup, definition, entity_lookup, procedure, comparison]
+  focus_modes: [none]
+  max_attempts_per_query: 3

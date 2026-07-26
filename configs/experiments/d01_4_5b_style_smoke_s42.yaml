@@ -1,0 +1,18 @@
+# @package _global_
+defaults:
+  - d01_4_5b_style_50k_s42
+  - _self_
+
+run:
+  experiment_id: D01-4.5B-STYLE-SMOKE-S42
+  output_dir: runs/D01-4.5B-STYLE-SMOKE-S42
+
+data:
+  max_train_examples: 128
+  max_eval_examples: 32
+
+training:
+  max_steps: 3
+  logging_steps: 1
+  eval_steps: 3
+  save_steps: 3

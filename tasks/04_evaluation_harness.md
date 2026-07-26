@@ -55,14 +55,24 @@ tłumaczeń. P06-T nie jest już bramką; frozen train pozostaje bez zmian. ADR:
 Raport materializacji:
 [`task03_p06_t_freeze_2026-07-26.md`](../docs/experiments/task03_p06_t_freeze_2026-07-26.md).
 
-Aktualny stan (21 lipca): Harness v1.1 P-01–P-04 jest zaimplementowany i ma
+Harness v1.1 P-01–P-04 jest zaimplementowany i ma
 testy CPU. P-03 został rzeczywiście zmierzony na 1 000 rekordów zamrożonego
 dev; wynik `statistically_separated` nie otworzył żadnego testu finalnego.
 HN1 BM25 było istotnie gorsze od HN0 i HN0+filter, natomiast HN0+filter nie
 było odróżnialne od HN0. ADR
 `reports/decisions/task04_p03_w05_negative_recipe.md` wybiera HN0+filter z
 polityką `drop` dla pierwszych porównań probe. Nie jest to wybór generatora
-ani domknięcie pełnej bramki HN przed Task 09.
+ani otwarcie testów finalnych.
+
+26 lipca pełna, inference-only bramka HN0/HN0+filter/HN1/HN2/HN3 zakończyła
+się na wspólnej kohorcie 775/1000 frozen-dev query (`22.5%` common-legal drop).
+HN1 nie odróżniło się od HN0+filter według primary; HN2 było łatwiejsze także
+według shadow. Primary-perfect HN3 wynika z positive-aware veto tego samego
+sędziego i nie jest niezależnym dowodem jakości; shadow dał kierunek przeciwny
+oraz `9.81%` winner disagreement. Żaden nowy miner nie uzyskał zgodnej podstawy
+do promocji, więc utrzymano HN0+filter/drop. `final_tests_used=[]`,
+`training_runs=[]`. ADR:
+[`task04_hn_full_gate_v1.md`](../reports/decisions/task04_hn_full_gate_v1.md).
 
 P-04 ma wersjonowany ADR `1.0.0` i kontrakt `task04-p04-v1`: główną metrykę
 finalną, guardraile non-inferiority, minimalny efekt `0.01`, seedy i successive
@@ -72,7 +82,7 @@ zapisują fingerprint ADR i budżet, a comparatory fail-closed odrzucają braki
 lub różnice wersji i budżetu.
 
 Task pozostaje `IMPLEMENTED`, nie `DONE`: nie wykonano pełnych porównywalnych
-probe natural/copy/generator, niezależnego BGE shadow judge, embeddingowych
+probe natural/copy/generator, pełnego benchmarku primary/shadow, embeddingowych
 miar diversity, ocen ludzi dla co najmniej 300 przypadków, pełnych indeksów
 i finalnego rank10/embedder. D00–D12, Task 06 i finalne testy nie zostały
 uruchomione. Poniższe akapity zachowują chronologię wcześniejszej implementacji
@@ -137,8 +147,8 @@ deterministic oraz diverse na tym samym zamrożonym panelu 100 rekordów z co
 najmniej 10 hard negative’ami; wykonano też nieporównywalny 2-step smoke
 probe’a.
 
-Pozostają pełne, porównywalne runy probe natural/copy/W03/W05/W06, niezależny
-BGE shadow judge, embeddingowe miary diversity, oceny ludzi dla co najmniej
+Pozostają pełne, porównywalne runy probe natural/copy/W03/W05/W06, pełny
+benchmark primary/shadow, embeddingowe miary diversity, oceny ludzi dla co najmniej
 300 przypadków i pełny test rank10/embedder. S00 i diagnostyczny S07 są już
 zmierzone. Bez pozostałych
 pomiarów bramka Fazy B i główny ranking generatorów nie są zamknięte.
@@ -275,7 +285,7 @@ eksperymentalnego. Kolejną bramką Harness v1.1 jest P-03.
   różnych wersji;
 - jednorazowy sensitivity check W05: HN0, HN0+filter i HN1 BM25. Istotna
   różnica wymaga ADR przed dalszymi porównaniami;
-- pełne HN0/HN0+filter/HN1/HN2/HN3 pozostaje bramką przed Task 09.
+- pełne HN0/HN0+filter/HN1/HN2/HN3 jest wymagane przed Task 09.
 
 Kod, konfiguracja, manifesty, walidacja porównań i testy są gotowe. Domyślna
 recepta działa fail-closed: wymaga przypiętego artefaktu Task 02 utworzonego
@@ -294,7 +304,9 @@ ADR `reports/decisions/task04_p03_w05_negative_recipe.md` wybiera HN0+filter
 z polityką `drop` dla pierwszych porównań: zachowuje jakość dev w granicach
 niepewności i stosuje przypiętą ochronę przed false negative. HN1 jest w tym
 zakresie odrzucone. `final_tests_used=[]`; pomiar nie wybiera generatora.
-Pełna bramka HN0/HN0+filter/HN1/HN2/HN3 przed Task 09 pozostaje niewykonana.
+Pełna bramka HN0/HN0+filter/HN1/HN2/HN3 została zmierzona 26 lipca na
+zamrożonym dev; decyzja utrzymuje HN0+filter/drop z powodu braku zgodnej
+primary/shadow podstawy do promocji nowego minera i nie otwiera testów finalnych.
 Historia wznowienia:
 [`task04_p03_runtime_recovery_2026-07-20.md`](../docs/experiments/task04_p03_runtime_recovery_2026-07-20.md).
 

@@ -56,6 +56,10 @@ htmlcov/
 !/reports/decisions/task03_s00_after_p05_2026-07-23.md
 !/reports/decisions/task03_s07_p06_after_s00_2026-07-25.md
 !/reports/decisions/task03_s07_contract_2026-07-25.md
+!/reports/decisions/task04_hn_full_gate_v1.md
+!/reports/plans/
+/reports/plans/*
+!/reports/plans/task05_d01_overnight_2026-07-26.md
 !/reports/measurements/
 /reports/measurements/*
 !/reports/measurements/task03_s00_preflight_2026-07-23.md
@@ -63,6 +67,8 @@ htmlcov/
 !/reports/measurements/task03_s07/
 /reports/measurements/task03_s07/*
 !/reports/measurements/task03_s07/s07_batch_probe_2026-07-25.md
+!/reports/measurements/task04_hn_full_gate_v1/
+!/reports/measurements/task04_hn_full_gate_v1/summary.json
 
 # Editors and OS
 .idea/

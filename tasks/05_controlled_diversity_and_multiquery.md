@@ -11,7 +11,16 @@ taksonomię `form`/`intent` z abstention i `intent_applicable`, kompatybilny
 schemat evidence, focus F0–F3, kontrolowane SFT i inference, retry po
 deduplikacji, ścisły multi-query JSON z jawną drobną naprawą, model-free
 concept coverage oraz selektory top-N/MMR/coverage-aware. Nie uruchamiano
-modelu ani eksperymentów jakościowych.
+modelu ani eksperymentów jakościowych. Przygotowano fail-closed nocny runner
+D01 dla style/intent-only 1.5B/50k wraz z 3-step smoke i diagnostyczną
+generacją na dev; runner wymaga ukończonego dev-only full HN gate. Samo
+przygotowanie runnera nie stanowi wyniku D01. Full HN gate zakończył się po
+przygotowaniu runnera, więc D01 jest następnym dopuszczonym runem GPU. Kolejka
+24 h obejmuje dopasowane 50k runy 1.5B i 4.5B oraz osobne diagnostyczne panele
+dev; oba treningi poprzedza smoke i oba są wznawialne. Nie stanowi to jeszcze
+porównania kwalifikującego modele bez guardraili i probe.
+Plan i empiryczny budżet kolejki:
+[`task05_d01_overnight_2026-07-26.md`](../reports/plans/task05_d01_overnight_2026-07-26.md).
 
 Do statusu `DONE` pozostają: ukończenie Harness v1.1/P-04, eksperymenty
 D00–D12 na wspólnych kandydatach i budżetach, kalibracja rozkładów naturalnych

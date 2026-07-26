@@ -35,14 +35,14 @@ uruchomiono.
 |---|---|---|---|
 | [00](00_repository_bootstrap.md) | Bootstrap repozytorium i odtwarzalność | `DONE` | Szkielet projektu, środowisko, CLI, testy i rejestrowanie są gotowe. |
 | [01](01_data_contract_audit_and_splits.md) | Kontrakt danych, audyt, deduplikacja i splity | `IMPLEMENTED` | Pełny `msmarco_pl` przetworzono do zamrożonych splitów v1 i par doc2query bez leakage pozytywów. Dla rekordów z <10 negatywami przyjęto corpus retrieval oraz oznaczone, deterministyczne backfillowanie tylko w diagnostycznej puli. Pozostał raport tokenowych percentyli/HTML. |
-| [02](02_reranker_and_reward_proxies.md) | Zamrożone rerankery i proxy nagrody | `IMPLEMENTED` | Integracja, reward proxies i testy są gotowe; primary zmierzył pełny frozen dev, a query-macro próg Youdena `possible_false_negative` jest przypięty bez użycia testu. Pozostał pełny benchmark primary/shadow na dev/test z hard negative'ami. |
+| [02](02_reranker_and_reward_proxies.md) | Zamrożone rerankery i proxy nagrody | `IMPLEMENTED` | Integracja, reward proxies i testy są gotowe; primary zmierzył pełny frozen dev, a query-macro próg Youdena `possible_false_negative` jest przypięty bez użycia testu. Bramka HN domierzyła primary/shadow na 775 wspólnych dev query z 10 negatywami; nadal pozostał pełny benchmark obu sędziów na całym dev/test i wymaganych slice'ach. |
 | [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | S07 jest kompletną, nieporównywalną budżetowo diagnostyką bez promocji. P-06 mass rescoring jest `SUPERSEDED`. Właściciel świadomie anulował ręczne P06-T i zaakceptował resztkowe ryzyko tłumaczeń na podstawie wcześniejszego udanego treningu embeddera; frozen train i próg `>=23.50` pozostają bez zmian. Nie kończyć lokalnego scoringu ani trenować drop/weighted. |
-| [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IMPLEMENTED` | P-01–P-05 i pełny S07 Harness/probe są gotowe. Exact sharded retrieval ukończył 6598 query z audytem CUDA→CPU; artefakt S07 ma `development_complete`, ale fail-closed `comparison_eligible=false` z powodu różnego budżetu. P06-T nie jest już bramką; pozostały porównywalne probe, pełna bramka HN i testy finalne. |
-| [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `IMPLEMENTED` | Gotowe są kontrakty i kod CPU: `form`/`intent`, evidence i F0–F3, controlled SFT/inference, retry/deduplikacja, multi-query JSON, concept coverage oraz top-N/MMR/coverage-aware. D00–D12, audyty 500/200, kalibracja per domena, human check i probe z CI pozostają niewykonane; mogą ruszyć dopiero po bieżącej kolejce i pierwszych probe zgodnych z P-04. |
+| [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IMPLEMENTED` | P-01–P-05 i pełny S07 Harness/probe są gotowe. Pełna dev-only bramka HN0–HN3 ukończyła 775 wspólnych legalnych query i utrzymała HN0+filter/drop z powodu braku zgodnej primary/shadow podstawy do promocji nowego minera; nie otwarto testów finalnych. Artefakt S07 pozostaje `comparison_eligible=false`; pozostały porównywalne probe i testy finalistów. |
+| [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `IMPLEMENTED` | Gotowe są kontrakty i kod CPU: `form`/`intent`, evidence i F0–F3, controlled SFT/inference, retry/deduplikacja, multi-query JSON, concept coverage oraz top-N/MMR/coverage-aware. Fail-closed kolejka D01 style/intent-only ma dopasowane runy 1.5B i 4.5B po 50k oraz panele dev; jest odblokowana, ale nie została uruchomiona. D00–D12, audyty 500/200, kalibracja per domena, human check i probe z CI pozostają niewykonane. |
 | [06](06_candidate_scoring_and_preference_data.md) | Scoring kandydatów i dane preferencyjne | `TODO` | Wymaga stabilnego checkpointu SFT, ukończonego Harness v1.1 oraz Task 02 i 05. |
 | [07](07_dpo_training.md) | DPO i continued-SFT control | `TODO` | Wymaga danych preferencyjnych z Task 06. |
 | [08](08_grpo_multiobjective_rl.md) | Wielokryterialny GRPO/RL | `OPTIONAL / BLOCKED` | Uruchamiać wyłącznie po spełnieniu bramki i zapisaniu decyzji `reports/decisions/enable_grpo.md`. |
-| [09](09_experiment_campaign.md) | Kampania eksperymentalna | `BLOCKED` | P06-T zostało świadomie anulowane i nie jest już zależnością. Kampania nadal wymaga pełnej bramki hard negative'ów oraz wcześniejszych etapów dopuszczonych przez kontrakt statystyczny; P-06 mass rescoring również nie jest zależnością. |
+| [09](09_experiment_campaign.md) | Kampania eksperymentalna | `BLOCKED` | Pełna dev-only bramka HN jest ukończona, a P06-T anulowane. Kampanię nadal blokują eksperymenty Task 05 oraz Task 06–07 w zakresie dopuszczonym przez ich bramki; P-06 mass rescoring nie jest zależnością. |
 | [10](10_final_scaleup_inference_release.md) | Finalny trening, inference i release | `BLOCKED` | Wymaga wyników Task 09 i zatwierdzonego finalnego ADR. |
 | [11](11_judge_robustness_audit.md) | Audyt odporności sędziego i fallbacki | `OPTIONAL` | Późny eksperyment badawczy; nie obejmuje treningu ani dostrajania rerankera. |
 
@@ -55,8 +55,7 @@ backlogiem. Zakres P-xx został przeniesiony do wskazanych plików zadań.
 
 1. **Bramka P-05 dev screen rozstrzygnięta:** oba warianty są
    `non_inferior_only`; `dev_confirm_authorized_arms=[]`. Nie uruchamiać
-   `dev_confirm` dla gold/mixed/W05 synthetic z tej macierzy. Pełna bramka HN
-   przed Task 09 nadal pozostaje niewykonana.
+   `dev_confirm` dla gold/mixed/W05 synthetic z tej macierzy.
 2. **Następna kolejka baseline:** S00 i S07 są kompletne na frozen dev. S07
    pozostaje diagnostyką: jego probe użył `2485 par / 864000 tokenów / batch
    6`, a P-05 `2486 / 1152000 / batch 8`, dlatego nie wolno porównywać efektów
@@ -75,14 +74,21 @@ backlogiem. Zakres P-xx został przeniesiony do wskazanych plików zadań.
    Testy finalne wolno otworzyć raz dopiero po zamrożeniu rzeczywistych
    finalistów. W06 pozostaje eksploracyjnym dowodem wykonalności 4.5B/8 GB,
    a nie zgodą na dalszą kampanię skali.
-3. **Task 05:** implementacja CPU jest gotowa; D00–D12 pozostają niewykonane
-   do zakończenia kolejki baseline'ów i pierwszych probe zgodnych z P-04.
-4. **Po bramce:** eksperymenty Task 05, potem P-08 w Task 06 i Task 07.
-5. **Kampania:** Task 09 dopiero po baseline'ach, sensitivity check negatywów
-   i pełnej bramce HN; Task 10 dopiero po finalnym ADR.
-6. **Opcjonalne:** Task 08, P-09 i Task 11 wyłącznie po własnych bramkach.
+3. **Pełna bramka HN ukończona:** na wspólnej kohorcie 775/1000 query HN1
+   nie odróżniło się od HN0+filter według primary, HN2 było łatwiejsze także
+   według shadow, a HN3 miało konstrukcyjnie perfect primary przy przeciwnym
+   kierunku shadow i `9.81%` disagreement. Utrzymano HN0+filter/drop; testów
+   finalnych nie otwarto.
+4. **Task 05:** następną dopuszczoną kolejką jest D01 style/intent-only,
+   dopasowane 1.5B/50k i 4.5B/50k oraz diagnostyczne panele dev. Pozostałe
+   D00–D12 nadal wymagają własnych pomiarów i bramek.
+5. **Po Task 05:** P-08 w Task 06 i Task 07.
+6. **Kampania:** Task 09 dopiero po wcześniejszych etapach; Task 10 dopiero po
+   finalnym ADR.
+7. **Opcjonalne:** Task 08, P-09 i Task 11 wyłącznie po własnych bramkach.
 
-Najbliższy punkt wejścia to pełna bramka hard negative'ów na zamrożonym dev.
+Najbliższy punkt wejścia to D01 style/intent-only z Task 05 przez
+`scripts/run_task05_d01_overnight.sh`.
 Nie uruchamiać pełnego
 `scripts/score_train_margins.py`, nie ustalać lokalnego progu i nie trenować
 ordinary/drop/weighted bez nowego prospektywnego ADR opartego na ręcznie
@@ -92,7 +98,8 @@ Nie należy ponownie uruchamiać
 decyzje są kompletne. I02/I04/I05 pozostają odroczone, S00 jest zmierzone,
 S07 diagnostycznie kompletne, P-06 mass rescoring zamknięte jako
 `SUPERSEDED`, ręczne P06-T świadomie anulowano, a
-`dev_confirm`, D00–D12, Task 06 i wszystkie testy finalne pozostają zamknięte.
+`dev_confirm`, niewykonane D00–D12, Task 06 i wszystkie testy finalne pozostają
+zamknięte. D01 jest dopuszczony wyłącznie na train/dev.
 
 ## Kolejność bazowa
 

@@ -6,9 +6,10 @@
 
 `BLOCKED`
 
-Zadanie oczekuje na implementację wcześniejszych etapów w zakresie
-dopuszczonym przez bramki. W szczególności blokują je Harness v1.1 P-01…P-04,
-rozstrzygnięcie P-05 oraz pełna ablacja polityki hard negative'ów z Task 04.
+Zadanie oczekuje na wcześniejsze etapy w zakresie dopuszczonym przez bramki,
+przede wszystkim eksperymenty Task 05 oraz Task 06–07. Harness v1.1 P-01…P-04,
+P-05 i pełna dev-only ablacja polityki hard negative'ów z Task 04 są już
+rozstrzygnięte; nie otwarto testów finalnych.
 P06-T zostało świadomie anulowane decyzją właściciela i nie jest już bramką.
 P-06 mass rescoring i warianty
 drop/weighted według lokalnego marginu są `SUPERSEDED`, nie są zależnością.

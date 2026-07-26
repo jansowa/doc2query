@@ -1,0 +1,21 @@
+# @package _global_
+# Diagnostic controlled generation on natural development pairs only.
+defaults:
+  - d01_4_5b_style_50k_s42
+  - _self_
+
+run:
+  experiment_id: D01-4.5B-STYLE-DEV-GENERATION-S42
+  output_dir: runs/D01-4.5B-STYLE-DEV-GENERATION-S42
+
+data:
+  input_path: data/processed/v1/doc2query_dev.parquet
+  input_format: parquet
+  eval_path: null
+  max_train_examples: null
+  max_eval_examples: 500
+
+generation:
+  do_sample: true
+  temperature: 0.8
+  top_p: 0.95

@@ -1,0 +1,27 @@
+schema_version: 1
+gate_version: task04-hn-gate-v1
+evaluation_subset: dev_intrinsic_rank10
+dev_limit: 1000
+seed: 42
+candidate_count: 32
+retained_negatives: 10
+bootstrap_samples: 10000
+
+inputs:
+  frozen_manifest: data/processed/v1/evaluation/task04-v1/manifest.json
+  train_corpus: artifacts/task04/p03/train_corpus/documents.parquet
+  full_corpus: data/processed/v1/documents.parquet
+  bm25_index: artifacts/task04/p03/bm25_train_v1
+  dense_embedding_cache: runs/task04_p05_dev_screen/dev_screen/P05-GOLD-NATURAL-S42/corpus_embedding_cache
+  dense_model: runs/task04_p05_dev_screen/dev_screen/P05-GOLD-NATURAL-S42/model
+  dense_train_summary: runs/task04_p05_dev_screen/dev_screen/P05-GOLD-NATURAL-S42/train_summary.json
+  calibration: artifacts/task02/pfn_dev_v1/calibration.json
+
+judges:
+  primary: configs/reranker/primary_polish_roberta_v3_p03_gpu.yaml
+  shadow: configs/reranker/shadow_bge_v2_m3_hn_gate_gpu.yaml
+
+output_dir: artifacts/task04/hn_full_gate_v1
+report_dir: reports/measurements/task04_hn_full_gate_v1
+final_tests_used: []
+training_runs: []

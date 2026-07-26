@@ -11,6 +11,15 @@ Szybki `sdadas/polish-reranker-base-ranknet` oraz primary
 panelu 100 generacji W05. Pełny benchmark primary/shadow na projektowych
 splitach dev/test nadal oczekuje na inference z hard negative'ami.
 
+Pełna bramka recept HN z Task 04 domierzyła na wspólnej kohorcie 775/1000
+zamrożonych query dev zarówno primary, jak i niezależny shadow
+`BAAI/bge-reranker-v2-m3`, zawsze względem 10 negatywów. Zależnie od recepty
+winner disagreement wyniósł `3.87–10.06%`; HN0+filter miał `5.55%`. Jest to
+confirmatory slice dla polityki negatywów, nie pełny benchmark Task 02:
+nie obejmuje całego dev, slice'ów wymaganych w Części B ani żadnego testu
+finalnego. Raport i decyzja:
+[`task04_hn_full_gate_v1.md`](../reports/decisions/task04_hn_full_gate_v1.md).
+
 Na pełnym frozen dev zmierzono primary dla 21 241 pozytywnych i 145 441
 odziedziczonych negatywnych par. Próg `possible_false_negative` wyznaczono bez
 ręcznego wyboru jako query-macro maksimum Youdena J, wyłącznie na dev:

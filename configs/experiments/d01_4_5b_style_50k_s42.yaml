@@ -1,0 +1,22 @@
+# @package _global_
+# Task 05 D01 scale confirmation on the proven 8 GB W06 recipe.
+defaults:
+  - w06_4_5b_50k_8gb_bs8
+  - _self_
+
+run:
+  experiment_id: D01-4.5B-STYLE-50K-S42
+  seed: 42
+  output_dir: runs/D01-4.5B-STYLE-50K-S42
+
+training:
+  save_steps: 100
+  save_total_limit: 2
+
+generation:
+  controlled: true
+  target_query_count: 4
+  forms: [full_question, keyword_query]
+  intents: [fact_lookup, definition, entity_lookup, procedure, comparison]
+  focus_modes: [none]
+  max_attempts_per_query: 3
