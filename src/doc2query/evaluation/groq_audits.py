@@ -28,6 +28,10 @@ LEDGER_SCHEMA = "task05-groq-request-ledger-v1"
 RESULT_SCHEMA = "task05-groq-llm-ratings-v1"
 YES_NO_UNCERTAIN = frozenset({"yes", "no", "uncertain"})
 _JSON_OBJECT = re.compile(r"\{.*\}", re.DOTALL)
+JSON_RETRY_EXTRA_COMPLETION_TOKENS = 640
+MAX_TRANSIENT_HTTP_RETRIES = 8
+TRANSIENT_BACKOFF_INITIAL_SECONDS = 5.0
+TRANSIENT_BACKOFF_MAX_SECONDS = 60.0
 
 
 @dataclass(frozen=True)
@@ -415,6 +419,31 @@ def _has_ambiguous_tail(events: Sequence[Mapping[str, Any]]) -> bool:
     return events[-1].get("event") in {"request_started", "transport_error_ambiguous"}
 
 
+def _is_json_generation_failure(result: HttpResult) -> bool:
+    error = result.body.get("error")
+    return (
+        result.status == 400
+        and isinstance(error, Mapping)
+        and error.get("code") == "json_validate_failed"
+        and "max completion tokens reached" in str(error.get("failed_generation", ""))
+    )
+
+
+def _prior_json_generation_failures(events: Sequence[Mapping[str, Any]]) -> int:
+    count = 0
+    for event in events:
+        if event.get("event") not in {"http_error", "json_generation_failed"}:
+            continue
+        error = cast(
+            Mapping[str, Any], cast(Mapping[str, Any], event.get("body", {})).get("error", {})
+        )
+        if error.get("code") == "json_validate_failed" and "max completion tokens reached" in str(
+            error.get("failed_generation", "")
+        ):
+            count += 1
+    return count
+
+
 def _response_content(body: Mapping[str, Any]) -> str:
     try:
         return str(body["choices"][0]["message"]["content"])
@@ -544,7 +573,7 @@ def _ledger_usage(events: Sequence[Mapping[str, Any]], today: str) -> tuple[int,
     tokens = sum(
         int(cast(Mapping[str, Any], event.get("usage", {})).get("total_tokens", 0))
         for event in events
-        if event.get("event") == "response_received"
+        if event.get("event") in {"response_received", "json_generation_failed"}
         and str(event.get("timestamp", "")).startswith(today)
     )
     return attempts, tokens
@@ -636,13 +665,24 @@ def _run_model_worker(
         if max_new_requests is not None and new_requests >= max_new_requests:
             continue
         attempt = 0
+        transient_failures = 0
+        json_failures = _prior_json_generation_failures(events)
         while True:
             attempt += 1
+            api_request = dict(request.api_request)
+            if json_failures:
+                api_request["max_completion_tokens"] = (
+                    int(api_request["max_completion_tokens"])
+                    + JSON_RETRY_EXTRA_COMPLETION_TOKENS * json_failures
+                )
+            adjusted_estimate = request.estimated_tokens + (
+                JSON_RETRY_EXTRA_COMPLETION_TOKENS * json_failures
+            )
             if attempts_today + 1 > int(limits["safety_requests_per_day"]):
                 raise RuntimeError(f"daily request safety budget exhausted for {model_id}")
-            if tokens_today + request.estimated_tokens > int(limits["safety_tokens_per_day"]):
+            if tokens_today + adjusted_estimate > int(limits["safety_tokens_per_day"]):
                 raise RuntimeError(f"daily token safety budget exhausted for {model_id}")
-            reservation = limiter.reserve(request.estimated_tokens)
+            reservation = limiter.reserve(adjusted_estimate)
             started = {
                 "schema": LEDGER_SCHEMA,
                 "event": "request_started",
@@ -652,8 +692,8 @@ def _run_model_worker(
                 "model_id": model_id,
                 "audit_type": request.audit_type,
                 "item_ids": list(request.item_ids),
-                "estimated_tokens": request.estimated_tokens,
-                "api_request": request.api_request,
+                "estimated_tokens": adjusted_estimate,
+                "api_request": api_request,
             }
             _append_event(journal, started)
             attempts_today += 1
@@ -662,7 +702,7 @@ def _run_model_worker(
                 result = transport(
                     str(api["url"]),
                     api_key,
-                    request.api_request,
+                    api_request,
                     float(api["timeout_seconds"]),
                 )
             except Exception as exc:
@@ -702,6 +742,60 @@ def _run_model_worker(
                     float(retry["maximum_retry_after_seconds"]),
                 )
                 sleep(max(2.0, retry_after))
+                continue
+            if _is_json_generation_failure(result):
+                ModelLimiter.finalize(reservation, adjusted_estimate)
+                tokens_today += adjusted_estimate
+                json_failures += 1
+                _append_event(
+                    journal,
+                    {
+                        "schema": LEDGER_SCHEMA,
+                        "event": "json_generation_failed",
+                        "timestamp": _utc_now(),
+                        "request_id": request.request_id,
+                        "attempt": attempt,
+                        "status": result.status,
+                        "body": result.body,
+                        "usage": {
+                            "total_tokens": adjusted_estimate,
+                            "source": "conservative_estimate",
+                        },
+                        "next_max_completion_tokens": int(
+                            request.api_request["max_completion_tokens"]
+                        )
+                        + JSON_RETRY_EXTRA_COMPLETION_TOKENS * json_failures,
+                    },
+                )
+                if json_failures > int(retry["max_rate_limit_retries"]):
+                    raise RuntimeError(
+                        f"JSON generation retries exhausted for {request.request_id}"
+                    )
+                sleep(2.0)
+                continue
+            if 500 <= result.status <= 599:
+                ModelLimiter.finalize(reservation, 1)
+                transient_failures += 1
+                _append_event(
+                    journal,
+                    {
+                        "schema": LEDGER_SCHEMA,
+                        "event": "transient_http_error",
+                        "timestamp": _utc_now(),
+                        "request_id": request.request_id,
+                        "attempt": attempt,
+                        "status": result.status,
+                        "body": result.body,
+                    },
+                )
+                if transient_failures > MAX_TRANSIENT_HTTP_RETRIES:
+                    raise RuntimeError(f"transient HTTP retries exhausted for {request.request_id}")
+                sleep(
+                    min(
+                        TRANSIENT_BACKOFF_INITIAL_SECONDS * (2 ** (transient_failures - 1)),
+                        TRANSIENT_BACKOFF_MAX_SECONDS,
+                    )
+                )
                 continue
             if result.status != 200:
                 ModelLimiter.finalize(reservation, 1)

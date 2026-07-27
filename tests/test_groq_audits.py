@@ -27,7 +27,7 @@ def _request(model_id: str = "qwen/qwen3.6-27b") -> groq_audits.PlannedRequest:
         reviewer_id="reviewer",
         audit_type="label",
         item_ids=("L-1",),
-        api_request={"model": model_id, "messages": []},
+        api_request={"model": model_id, "messages": [], "max_completion_tokens": 100},
         estimated_tokens=100,
     )
 
@@ -151,6 +151,96 @@ def test_worker_retries_only_definitive_429_and_persists_every_attempt(
         "response_received",
     ]
     assert "secret-not-persisted" not in journal.read_text(encoding="utf-8")
+
+
+def test_worker_retries_over_capacity_with_exponential_backoff(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _config()
+    clock = 100.0
+    sleeps: list[float] = []
+
+    def monotonic() -> float:
+        return clock
+
+    def sleep(seconds: float) -> None:
+        nonlocal clock
+        sleeps.append(seconds)
+        clock += max(seconds, 0.001)
+
+    monkeypatch.setattr("doc2query.evaluation.groq_audits.time.monotonic", monotonic)
+    responses = [
+        groq_audits.HttpResult(503, {}, {"error": {"message": "over capacity"}}),
+        _success(),
+    ]
+    result = groq_audits._run_model_worker(
+        [_request()],
+        config=config,
+        output_dir=tmp_path,
+        api_key="secret",
+        transport=lambda *_args: responses.pop(0),
+        sleep=sleep,
+        max_new_requests=None,
+        allow_ambiguous_resend=False,
+    )
+    assert result["completed"] == 1
+    assert groq_audits.TRANSIENT_BACKOFF_INITIAL_SECONDS in sleeps
+    events = read_durable_jsonl_prefix(tmp_path / "ledgers" / "qwen__qwen3.6-27b.jsonl")
+    assert [event["event"] for event in events] == [
+        "request_started",
+        "transient_http_error",
+        "request_started",
+        "response_received",
+    ]
+
+
+def test_worker_expands_completion_budget_after_json_generation_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _config()
+    clock = 100.0
+
+    def sleep(seconds: float) -> None:
+        nonlocal clock
+        clock += max(seconds, 0.001)
+
+    monkeypatch.setattr("doc2query.evaluation.groq_audits.time.monotonic", lambda: clock)
+    responses = [
+        groq_audits.HttpResult(
+            400,
+            {},
+            {
+                "error": {
+                    "code": "json_validate_failed",
+                    "failed_generation": (
+                        "max completion tokens reached before generating a valid document"
+                    ),
+                }
+            },
+        ),
+        _success(),
+    ]
+    sent: list[dict[str, Any]] = []
+
+    def transport(_url: str, _key: str, payload: Any, _timeout: float) -> Any:
+        sent.append(dict(payload))
+        return responses.pop(0)
+
+    result = groq_audits._run_model_worker(
+        [_request()],
+        config=config,
+        output_dir=tmp_path,
+        api_key="secret",
+        transport=transport,
+        sleep=sleep,
+        max_new_requests=None,
+        allow_ambiguous_resend=False,
+    )
+    assert result["completed"] == 1
+    assert sent[0]["max_completion_tokens"] == 100
+    assert sent[1]["max_completion_tokens"] == (
+        100 + groq_audits.JSON_RETRY_EXTRA_COMPLETION_TOKENS
+    )
 
 
 def test_ambiguous_started_request_is_never_resent(tmp_path: Path) -> None:

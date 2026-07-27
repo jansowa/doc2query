@@ -102,6 +102,13 @@ TPM/dzień i retry wyłącznie dla jednoznacznego HTTP 429. Flagi
 `--allow-ambiguous-resend` nie należy używać rutynowo: dopuszcza duplikat tylko
 wtedy, gdy operator świadomie rozstrzyga request bez zapisanej odpowiedzi.
 
+Worker obsługuje również przejściowe HTTP 5xx przez ograniczony exponential
+backoff. Dla jednoznacznego `json_validate_failed`, gdy Groq raportuje
+wyczerpanie completion przed domknięciem dokumentu, ponawia tę samą paczkę ze
+stopniowo zwiększanym limitem completion. Każda próba i zmieniony payload są
+zapisywane, a nieznane zużycie nieudanego generowania obciąża lokalny licznik
+konserwatywnym estymatem.
+
 Po statusie `complete` wyniki automatyczne agreguje się tymi samymi,
 fail-closed agregatorami, lecz do osobnych katalogów raportowych:
 
