@@ -24,7 +24,9 @@ commitowane, ponieważ zawierają tekst danych. Manifest ma status
 `materialized_unreviewed`; audyty etykiet i koncepcji są `NOT MEASURED`.
 
 Przygotowano również automatycznego anotatora Groq jako zastępstwo dla
-ręcznego wypełniania formularzy. Dwa niezależnie limitowane workery używają
+ręcznego wypełniania formularzy. Docelowy proces jest obecnie aktywny i nie
+jest agregowany ani interpretowany przez niezależną kampanię post-D01. Dwa
+niezależnie limitowane workery używają
 `qwen/qwen3.6-27b` (reasoning `none`) i `openai/gpt-oss-120b` (reasoning
 `low`). Każdy request i response trafia do trwałego JSONL, a resume pomija
 kompletne odpowiedzi. Plan v2 przenosi siedem poprawnych ocen z pilota i

@@ -6,7 +6,14 @@ from typing import Any
 
 import pytest
 
-from doc2query.evaluation import d01_pipeline
+from doc2query.config import load_config
+from doc2query.evaluation import d01_campaign, d01_pipeline
+from doc2query.evaluation.d01_campaign import (
+    D01_RECOVERY_CONTRACT,
+    audit_d01_artifacts,
+    load_common_cohort,
+    validate_baseline_provenance,
+)
 from doc2query.evaluation.d01_pipeline import (
     D01_COMPARISON_CONTRACT,
     D01_GENERATION_CONTRACT,
@@ -43,6 +50,8 @@ def _record(index: int) -> dict[str, Any]:
 def _install_frozen_mocks(monkeypatch: pytest.MonkeyPatch, records: list[dict[str, Any]]) -> None:
     monkeypatch.setattr(d01_pipeline, "load_frozen_records", lambda _path, _subset: records)
     monkeypatch.setattr(d01_pipeline, "evaluation_fingerprint", lambda _path, _subset: "f" * 64)
+    monkeypatch.setattr(d01_campaign, "load_frozen_records", lambda _path, _subset: records)
+    monkeypatch.setattr(d01_campaign, "evaluation_fingerprint", lambda _path, _subset: "f" * 64)
     monkeypatch.setattr(d01_pipeline, "collect_code_provenance", lambda: {"commit": "fixture"})
 
 
@@ -160,6 +169,130 @@ def test_complete_journal_recovers_summary_without_loading_model(
 def test_evaluation_ids_follow_frozen_order() -> None:
     records = [_record(2), _record(0), _record(1)]
     assert evaluation_group_ids(records) == ["q-2::d-2", "q-0::d-0", "q-1::d-1"]
+
+
+def test_common_cohort_preserves_frozen_order_and_original_seed_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    records = [_record(0), _record(1), _record(2)]
+    _install_frozen_mocks(monkeypatch, records)
+    selected_ids = ["q-0::d-0", "q-2::d-2"]
+    cohort = tmp_path / "cohort.json"
+    _write_json(
+        cohort,
+        {
+            "contract": D01_RECOVERY_CONTRACT,
+            "selected_group_ids": selected_ids,
+            "selection_policy": {"policy": "technical_only"},
+            "selection_policy_fingerprint": "s" * 64,
+            "final_tests_used": [],
+        },
+    )
+    selected, indices, _manifest = load_common_cohort(records, cohort)
+    assert evaluation_group_ids(selected) == selected_ids
+    assert indices == [0, 2]
+    output = tmp_path / "baseline.jsonl"
+    calls: list[int] = []
+
+    def backend(_prompt: str, seed: int) -> str:
+        calls.append(seed)
+        return f"query {seed}"
+
+    summary = generate_frozen_dev(
+        Path("configs/experiments/d01_w05_matched_dev_generation_s42.yaml"),
+        frozen_manifest=tmp_path / "manifest.json",
+        subset="dev_intrinsic_rank10",
+        cohort_manifest=cohort,
+        output_path=output,
+        backend=backend,
+    )
+    assert calls == [42, 45, 48, 51, 2042, 2045, 2048, 2051]
+    assert summary["generation_count"] == 8
+    assert summary["identity"]["seed_contract"]["index_basis"] == (
+        "original_frozen_subset_position"
+    )
+
+
+def test_w06_matched_provenance_rejects_bs1_and_accepts_bs8() -> None:
+    adapter = Path("runs/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/adapter")
+    manifest = Path("runs/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/run_manifest.json")
+    with pytest.raises(ValueError, match="not BS8"):
+        validate_baseline_provenance(
+            config_path=Path("configs/experiments/w06_4_5b_50k_8gb_bs1.yaml"),
+            adapter_path=adapter,
+            training_manifest_path=manifest,
+        )
+    result = validate_baseline_provenance(
+        config_path=Path("configs/experiments/d01_w06_matched_dev_generation_s42.yaml"),
+        adapter_path=adapter,
+        training_manifest_path=manifest,
+    )
+    assert result["training_experiment_id"].endswith("BS8-L512")
+    assert result["training_batch_size"] == 8
+
+
+def test_completed_d01_audit_checks_adapter_and_frozen_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    records = [_record(0)]
+    _install_frozen_mocks(monkeypatch, records)
+    adapter = tmp_path / "adapter"
+    adapter.mkdir()
+    (adapter / "adapter_model.safetensors").write_bytes(b"fixture")
+    config_path = Path("configs/experiments/d01_1_5b_style_dev_generation_s42.yaml")
+    output = tmp_path / "generation.jsonl"
+    generate_frozen_dev(
+        config_path,
+        frozen_manifest=tmp_path / "manifest.json",
+        subset="dev_intrinsic_rank10",
+        output_path=output,
+        adapter_path=adapter,
+        backend=lambda _prompt, seed: f"query {seed}",
+    )
+    config = load_config(config_path)
+    sft = tmp_path / "sft.json"
+    _write_json(
+        sft,
+        {
+            "experiment_id": "D01-training-fixture",
+            "adapter_path": str(adapter),
+            "dataset_fingerprint": "train-fixture",
+            "global_step": 1,
+            "model": {
+                "architecture": config.model.architecture,
+                "name_or_path": config.model.name_or_path,
+                "revision": config.model.revision,
+                "trust_remote_code": config.model.trust_remote_code,
+            },
+        },
+    )
+    generations_before = output.read_bytes()
+    report = audit_d01_artifacts(
+        frozen_manifest=tmp_path / "manifest.json",
+        subset="dev_intrinsic_rank10",
+        arms=[
+            {
+                "id": "fixture",
+                "training_experiment_id": "D01-training-fixture",
+                "sft_summary": str(sft),
+                "adapter": str(adapter),
+                "generation_config": str(config_path),
+                "generations": str(output),
+            }
+        ],
+        output_json=tmp_path / "audit.json",
+        output_markdown=tmp_path / "audit.md",
+    )
+    assert report["status"] == "verified"
+    assert report["arms"][0]["complete_group_count"] == 1
+    assert output.read_bytes() == generations_before
+
+
+def test_campaign_runner_has_lock_and_requires_one_explicit_phase() -> None:
+    script = Path("scripts/run_task05_d01_post_campaign.sh").read_text(encoding="utf-8")
+    assert "flock -n 9" in script
+    assert "PHASE=${1:-}" in script
+    assert "generate-matched-baselines|score|compare" in script
 
 
 def _write_json(path: Path, value: Any) -> None:
@@ -318,6 +451,14 @@ def _probe_contracts(
         {
             "status": "measured",
             "contract": D01_SCORING_CONTRACT,
+            "example_count": 4,
+            "source_passage_count": 1,
+            "generation_count": 4,
+            "generation_identity_sha256": "i" * 64,
+            "generation_contract": {
+                "max_new_tokens": 64,
+                "max_attempts_per_query": 3,
+            },
             "primary_judge_name": "sdadas/polish-reranker-roberta-v3",
             "primary_judge_revision": "e6471da541f4e7be33845b6d57248a8d8bde27e8",
             "final_tests_used": [],
@@ -330,6 +471,7 @@ def _probe_contracts(
             "contract": D01_COMPARISON_CONTRACT,
             "budget_difference": {"matched": True},
             "intrinsic_guardrail_decision": "continue",
+            "variant": {"experiment_id": "D01"},
             "final_tests_used": [],
         },
     )

@@ -1,0 +1,72 @@
+schema_version: 1
+contract: task05-d01-post-campaign-v2
+frozen_manifest: data/processed/v1/evaluation/task04-v1/manifest.json
+frozen_subset: dev_intrinsic_rank10
+final_tests_used: []
+audit:
+  arms:
+    - id: D01-1.5B-STYLE-50K-S42
+      training_experiment_id: D01-1.5B-STYLE-50K-S42
+      sft_summary: runs/D01-1.5B-STYLE-50K-S42/sft_summary.json
+      adapter: runs/D01-1.5B-STYLE-50K-S42/adapter
+      generation_config: configs/experiments/d01_1_5b_style_dev_generation_s42.yaml
+      generations: runs/D01-1.5B-STYLE-DEV-GENERATION-S42/generation/controlled.jsonl
+    - id: D01-4.5B-STYLE-50K-S42
+      training_experiment_id: D01-4.5B-STYLE-50K-S42
+      sft_summary: runs/D01-4.5B-STYLE-50K-S42/sft_summary.json
+      adapter: runs/D01-4.5B-STYLE-50K-S42/adapter
+      generation_config: configs/experiments/d01_4_5b_style_dev_generation_s42.yaml
+      generations: runs/D01-4.5B-STYLE-DEV-GENERATION-S42/generation/controlled.jsonl
+  output_json: reports/measurements/task05_d01_postprocess_v2/d01_artifact_audit.json
+  output_markdown: reports/measurements/task05_d01_postprocess_v2/d01_artifact_audit.md
+recovery:
+  output_dir: artifacts/task05/d01_postprocess_v2/common_exact_k_v1
+  target_k: 4
+  arms:
+    - id: D01-1.5B-STYLE-50K-S42
+      training_experiment_id: D01-1.5B-STYLE-50K-S42
+      sft_summary: runs/D01-1.5B-STYLE-50K-S42/sft_summary.json
+      adapter: runs/D01-1.5B-STYLE-50K-S42/adapter
+      generation_config: configs/experiments/d01_1_5b_style_dev_generation_s42.yaml
+      generations: runs/D01-1.5B-STYLE-DEV-GENERATION-S42/generation/controlled.jsonl
+    - id: W05-1.5B-50K-8GB
+      training_experiment_id: W05-1.5B-50K-8GB
+      sft_summary: runs/W05-1.5B-50K-8GB/sft_summary.json
+      adapter: runs/W05-1.5B-50K-8GB/adapter
+      generation_config: configs/experiments/d01_w05_matched_dev_generation_s42.yaml
+      generations: runs/D01-W05-MATCHED-DEV-GENERATION-S42/generation/uncontrolled.full.jsonl
+    - id: D01-4.5B-STYLE-50K-S42
+      training_experiment_id: D01-4.5B-STYLE-50K-S42
+      sft_summary: runs/D01-4.5B-STYLE-50K-S42/sft_summary.json
+      adapter: runs/D01-4.5B-STYLE-50K-S42/adapter
+      generation_config: configs/experiments/d01_4_5b_style_dev_generation_s42.yaml
+      generations: runs/D01-4.5B-STYLE-DEV-GENERATION-S42/generation/controlled.jsonl
+    - id: W06-4.5B-INSTRUCT-50K-8GB-BS8-L512
+      training_experiment_id: W06-4.5B-INSTRUCT-50K-8GB-BS8-L512
+      sft_summary: runs/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/sft_summary.json
+      adapter: runs/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/adapter
+      generation_config: configs/experiments/d01_w06_matched_dev_generation_s42.yaml
+      generations: runs/D01-W06-MATCHED-DEV-GENERATION-S42/generation/uncontrolled.full.jsonl
+baselines:
+  - id: W05-1.5B-50K-8GB
+    generation_config: configs/experiments/d01_w05_matched_dev_generation_s42.yaml
+    adapter: runs/W05-1.5B-50K-8GB/adapter
+    training_manifest: runs/W05-1.5B-50K-8GB/run_manifest.json
+    output: runs/D01-W05-MATCHED-DEV-GENERATION-S42/generation/uncontrolled.full.jsonl
+  - id: W06-4.5B-INSTRUCT-50K-8GB-BS8-L512
+    generation_config: configs/experiments/d01_w06_matched_dev_generation_s42.yaml
+    adapter: runs/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/adapter
+    training_manifest: runs/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/run_manifest.json
+    output: runs/D01-W06-MATCHED-DEV-GENERATION-S42/generation/uncontrolled.full.jsonl
+scoring:
+  primary: configs/reranker/primary_polish_roberta_v3_cuda.yaml
+  shadow: configs/reranker/shadow_bge_v2_m3.yaml
+  corpus_index: artifacts/task04/p03/bm25_train_v1
+  expected_corpus_fingerprint: e5df243227e8e877550c283e2f7c882fa931ee38d849d39e8f2e2a51dc182119
+  output_root: reports/measurements/task05_d01_postprocess_v2/scoring
+comparison:
+  contract: configs/evaluation/comparison_contract_v1.yaml
+  output_root: reports/measurements/task05_d01_postprocess_v2/comparisons
+probe_inputs:
+  recipe: configs/evaluation/probe_v1.yaml
+  output_root: artifacts/task05/d01_postprocess_v2/probe_inputs

@@ -7,6 +7,14 @@ import argparse
 import json
 from pathlib import Path
 
+import yaml
+
+from doc2query.evaluation.d01_campaign import (
+    audit_d01_artifacts,
+    prepare_common_exact_k_cohort,
+    validate_baseline_provenance,
+    validate_corpus_index,
+)
 from doc2query.evaluation.d01_pipeline import (
     assemble_matched_report,
     generate_frozen_dev,
@@ -25,6 +33,22 @@ def _generation(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--max-examples", type=int)
     parser.add_argument("--progress-every", type=int, default=10)
     parser.add_argument("--archive-incompatible", action="store_true")
+    parser.add_argument("--cohort-manifest", type=Path)
+
+
+def _campaign(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--campaign-config",
+        type=Path,
+        default=Path("configs/evaluation/d01_campaign_v2.yaml"),
+    )
+
+
+def _load_campaign(path: Path) -> dict[str, object]:
+    value = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict) or value.get("final_tests_used") != []:
+        raise ValueError("post-D01 campaign config must be a dev-only mapping")
+    return value
 
 
 def _scoring(parser: argparse.ArgumentParser) -> None:
@@ -72,6 +96,9 @@ def _materialization(parser: argparse.ArgumentParser) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
+    _campaign(subparsers.add_parser("audit"))
+    _campaign(subparsers.add_parser("prepare-common-cohort"))
+    _campaign(subparsers.add_parser("preflight"))
     _generation(subparsers.add_parser("generation-only"))
     _scoring(subparsers.add_parser("score"))
     _comparison(subparsers.add_parser("compare"))
@@ -88,7 +115,61 @@ def main() -> None:
             max_examples=args.max_examples,
             archive_incompatible=args.archive_incompatible,
             progress_every=args.progress_every,
+            cohort_manifest=args.cohort_manifest,
         )
+    elif args.command in {"audit", "prepare-common-cohort", "preflight"}:
+        campaign = _load_campaign(args.campaign_config)
+        frozen_manifest = Path(str(campaign["frozen_manifest"]))
+        subset = str(campaign["frozen_subset"])
+        audit_config = campaign["audit"]
+        if not isinstance(audit_config, dict):
+            raise ValueError("campaign audit config must be a mapping")
+        arms = audit_config["arms"]
+        if not isinstance(arms, list):
+            raise ValueError("campaign audit arms must be a list")
+        if args.command == "audit":
+            result = audit_d01_artifacts(
+                frozen_manifest=frozen_manifest,
+                subset=subset,
+                arms=arms,
+                output_json=Path(str(audit_config["output_json"])),
+                output_markdown=Path(str(audit_config["output_markdown"])),
+            )
+        elif args.command == "prepare-common-cohort":
+            recovery = campaign["recovery"]
+            if not isinstance(recovery, dict):
+                raise ValueError("campaign recovery config must be a mapping")
+            recovery_arms = recovery.get("arms")
+            if not isinstance(recovery_arms, list):
+                raise ValueError("campaign recovery arms must be a list")
+            result = prepare_common_exact_k_cohort(
+                frozen_manifest=frozen_manifest,
+                subset=subset,
+                arms=recovery_arms,
+                output_dir=Path(str(recovery["output_dir"])),
+                target_k=int(recovery["target_k"]),
+            )
+        else:
+            baselines = campaign["baselines"]
+            scoring = campaign["scoring"]
+            if not isinstance(baselines, list) or not isinstance(scoring, dict):
+                raise ValueError("campaign baseline/scoring config is malformed")
+            result = {
+                "status": "verified",
+                "baselines": [
+                    validate_baseline_provenance(
+                        config_path=Path(str(item["generation_config"])),
+                        adapter_path=Path(str(item["adapter"])),
+                        training_manifest_path=Path(str(item["training_manifest"])),
+                    )
+                    for item in baselines
+                ],
+                "corpus_index": validate_corpus_index(
+                    Path(str(scoring["corpus_index"])),
+                    expected_fingerprint=str(scoring["expected_corpus_fingerprint"]),
+                ),
+                "final_tests_used": [],
+            }
     elif args.command == "score":
         result = score_d01_artifact(
             args.generations,

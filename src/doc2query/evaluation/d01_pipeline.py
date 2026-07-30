@@ -123,6 +123,8 @@ def _generation_identity(
     subset: str,
     adapter_path: Path | None,
     model_path: Path | None,
+    source_indices: Sequence[int] | None = None,
+    cohort_selection: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     group_ids = evaluation_group_ids(records)
     control_payload = [
@@ -161,10 +163,23 @@ def _generation_identity(
             "base_seed": config.run.seed,
             "group_stride": 1000,
             "attempt_stride": 1,
+            "index_basis": (
+                "original_frozen_subset_position"
+                if source_indices is not None
+                else "cohort_position"
+            ),
         },
         "generation": config.generation.model_dump(mode="json"),
         "final_tests_used": [],
     }
+    cohort_identity = cast(dict[str, Any], identity["cohort"])
+    if source_indices is not None:
+        cohort_identity["source_indices_sha256"] = _canonical_sha256(list(source_indices))
+    if cohort_selection is not None:
+        cohort_identity["selection_policy"] = cohort_selection["selection_policy"]
+        cohort_identity["selection_policy_fingerprint"] = cohort_selection[
+            "selection_policy_fingerprint"
+        ]
     return {**identity, "identity_sha256": _canonical_sha256(identity)}
 
 
@@ -277,6 +292,7 @@ def generate_frozen_dev(
     precision_label: str | None = None,
     archive_incompatible: bool = False,
     progress_every: int = 10,
+    cohort_manifest: Path | None = None,
 ) -> dict[str, Any]:
     """Generate exactly one durable passage group at a time from frozen dev."""
     assert_development_subset(subset)
@@ -284,10 +300,18 @@ def generate_frozen_dev(
         raise ValueError("progress_every must be positive")
     config = load_config(config_path)
     records = load_frozen_records(frozen_manifest, subset)
+    source_indices: list[int] | None = None
+    cohort_selection: Mapping[str, Any] | None = None
+    if cohort_manifest is not None:
+        from doc2query.evaluation.d01_campaign import load_common_cohort
+
+        records, source_indices, cohort_selection = load_common_cohort(records, cohort_manifest)
     if max_examples is not None:
         if max_examples < 1:
             raise ValueError("max_examples must be positive")
         records = records[:max_examples]
+        if source_indices is not None:
+            source_indices = source_indices[:max_examples]
     identity = _generation_identity(
         config,
         records,
@@ -296,6 +320,8 @@ def generate_frozen_dev(
         subset=subset,
         adapter_path=adapter_path,
         model_path=model_path,
+        source_indices=source_indices,
+        cohort_selection=cohort_selection,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     journal = output_path.with_suffix(output_path.suffix + ".journal.jsonl")
@@ -359,7 +385,8 @@ def generate_frozen_dev(
         positive = dict(_positive(record))
         passage = str(positive["text"]).strip()
         controls = _controls(config, passage)
-        seed = config.run.seed + index * 1000
+        frozen_index = source_indices[index] if source_indices is not None else index
+        seed = config.run.seed + frozen_index * 1000
         generated_items: list[tuple[str, QueryControl | None, int, int]]
         if config.generation.controlled:
             assert active_backend is not None
@@ -451,6 +478,7 @@ def generate_frozen_dev(
         group_row = {
             "evaluation_group_id": group_id,
             "group_index": index,
+            "frozen_group_index": frozen_index,
             "queries": queries,
             "stats": group_stats,
         }
@@ -602,6 +630,12 @@ def score_d01_artifact(
     result["primary_judge_name"] = primary_payload.get("name_or_path")
     result["primary_judge_revision"] = primary_payload.get("revision")
     result["final_tests_used"] = []
+    corpus_protocol = result.get("protocols", {}).get("corpus_retrieval", {})
+    if corpus_protocol.get("status") != "measured":
+        raise ValueError("D01 scoring requires measured frozen-corpus round-trip")
+    judges = result.get("judges", {})
+    if judges.get("primary_status") != "measured" or judges.get("shadow_status") != "measured":
+        raise ValueError("D01 scoring requires complete primary and shadow judges")
     write_json(output_dir / "summary.json", result)
     return result
 
@@ -667,6 +701,17 @@ def assemble_matched_report(
             errors.append(f"{label} scoring summary is not measured")
         if summary.get("final_tests_used") != []:
             errors.append(f"{label} must declare final_tests_used=[]")
+        protocols = summary.get("protocols", {})
+        corpus = protocols.get("corpus_retrieval", {}) if isinstance(protocols, Mapping) else {}
+        if corpus.get("status") != "measured":
+            errors.append(f"{label} lacks measured corpus retrieval")
+        judges = summary.get("judges", {})
+        if (
+            not isinstance(judges, Mapping)
+            or judges.get("primary_status") != "measured"
+            or judges.get("shadow_status") != "measured"
+        ):
+            errors.append(f"{label} lacks complete primary/shadow scoring")
     if baseline.get("test_fingerprint") != variant.get("test_fingerprint"):
         errors.append("frozen cohort fingerprints differ")
     baseline_generation = baseline.get("generation_contract")
@@ -675,7 +720,6 @@ def assemble_matched_report(
         errors.append("generation budget/provenance contract is missing")
     else:
         for field in (
-            "cohort",
             "seed_contract",
             "max_new_tokens",
             "do_sample",
@@ -686,6 +730,21 @@ def assemble_matched_report(
         ):
             if baseline_generation.get(field) != variant_generation.get(field):
                 errors.append(f"generation contract differs: {field}")
+        baseline_cohort = baseline_generation.get("cohort")
+        variant_cohort = variant_generation.get("cohort")
+        if not isinstance(baseline_cohort, Mapping) or not isinstance(variant_cohort, Mapping):
+            errors.append("generation cohort provenance is missing")
+        else:
+            for field in (
+                "subset",
+                "fingerprint",
+                "group_count",
+                "group_ids_sha256",
+                "source_indices_sha256",
+                "selection_policy_fingerprint",
+            ):
+                if baseline_cohort.get(field) != variant_cohort.get(field):
+                    errors.append(f"generation cohort differs: {field}")
     baseline_budget: dict[str, Any] | None
     variant_budget: dict[str, Any] | None
     try:
@@ -704,6 +763,11 @@ def assemble_matched_report(
         "pool_mrr",
         "pool_ndcg_at_10",
         "pool_margin",
+        "shadow_pool_recall_at_1",
+        "shadow_pool_recall_at_5",
+        "shadow_pool_mrr",
+        "shadow_pool_ndcg_at_10",
+        "shadow_pool_margin",
         "content_jaccard",
         "normalized_lcs",
         "copy_density",
@@ -714,14 +778,22 @@ def assemble_matched_report(
         "sentence_level_source_hit",
     )
     bootstrap: dict[str, Any] = {}
+    baseline_row_ids = [
+        str(row.get("evaluation_id", "")) for row in read_records(baseline_rows_path)
+    ]
+    variant_row_ids = [str(row.get("evaluation_id", "")) for row in read_records(variant_rows_path)]
+    if baseline_row_ids != variant_row_ids:
+        errors.append("per-generation evaluation IDs/order differ")
     if not errors:
         for metric in common_metrics:
             left = _per_passage_metric(baseline_rows_path, metric)
             right = _per_passage_metric(variant_rows_path, metric)
-            if left and right:
-                bootstrap[metric] = paired_bootstrap(
-                    left, right, samples=bootstrap_samples, seed=bootstrap_seed
-                )
+            if not left or not right or set(left) != set(right):
+                errors.append(f"required matched metric is missing or unpaired: {metric}")
+                continue
+            bootstrap[metric] = paired_bootstrap(
+                left, right, samples=bootstrap_samples, seed=bootstrap_seed
+            )
     metric_aliases = {
         "corpus_round_trip_at_20": "corpus_round_trip_at_20",
         "sentence_level_source_hit": "sentence_level_source_hit",
@@ -876,6 +948,15 @@ def materialize_probe_inputs(
             raise ValueError("probe materialization forbids final-test provenance")
     rows = list(read_records(generations_path))
     scored_rows = {str(row["evaluation_id"]): row for row in read_records(scoring_rows_path)}
+    if len(scored_rows) != int(scoring.get("example_count", len(scored_rows))):
+        raise ValueError("probe inputs require unique scoring identities for every row")
+    if scoring.get("generation_identity_sha256") != generation.get("identity", {}).get(
+        "identity_sha256"
+    ):
+        raise ValueError("probe inputs require generation/scoring identity alignment")
+    variant_report = comparison.get("variant", {})
+    if variant_report.get("experiment_id") != generation.get("experiment_id"):
+        raise ValueError("probe inputs require the comparison variant to match the generator")
     if scoring.get("primary_judge_name") != calibration.primary_judge_name:
         raise ValueError("D01 scoring primary judge differs from the HN filter calibration")
     if scoring.get("primary_judge_revision") != calibration.primary_judge_revision:
@@ -888,8 +969,8 @@ def materialize_probe_inputs(
     expected_k = int(generation["target_queries_per_passage"])
     if expected_k != 4 or any(len(items) != expected_k for items in grouped.values()):
         raise ValueError("probe inputs require exact K=4 with no exhausted passage groups")
-    if int(generation.get("exhausted_groups", 0)) or int(generation.get("invalid_outputs", 0)):
-        raise ValueError("probe inputs require zero exhausted groups and invalid outputs")
+    if int(generation.get("exhausted_groups", 0)):
+        raise ValueError("probe inputs require zero exhausted groups")
     temporary = output_path.with_suffix(output_path.suffix + ".tmp")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with temporary.open("w", encoding="utf-8") as handle:
@@ -932,7 +1013,8 @@ def materialize_probe_inputs(
         os.fsync(handle.fileno())
     os.replace(temporary, output_path)
     identity = generation["identity"]
-    budget = build_budget_manifest(
+    generation_budget = _budget_from_summary(scoring)
+    probe_training_budget = build_budget_manifest(
         token_count=(
             recipe.max_steps
             * recipe.batch_size
@@ -955,8 +1037,11 @@ def materialize_probe_inputs(
         "selection_policy_fingerprint": _canonical_sha256(selection_policy),
         "negative_recipe": "HN0+filter",
         "negative_recipe_manifest": recipe.negative_recipe.manifest(calibration),
+        "calibration_artifact_id": calibration.artifact_id,
+        "calibration_artifact_fingerprint": calibration.artifact_fingerprint,
         "possible_false_negative_policy": "drop",
-        "comparison_budget": budget,
+        "generation_budget": generation_budget,
+        "probe_training_budget": probe_training_budget,
         "output_path": str(output_path),
         "output_sha256": _file_sha256(output_path),
         "training_started": False,

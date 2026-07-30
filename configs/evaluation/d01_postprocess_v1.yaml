@@ -1,8 +1,17 @@
-schema_version: 1
-contract: task05-d01-postprocess-v1
+schema_version: 2
+contract: task05-d01-postprocess-v2
 frozen_manifest: data/processed/v1/evaluation/task04-v1/manifest.json
 frozen_subset: dev_intrinsic_rank10
 final_tests_used: []
+recovery:
+  policy: common_exact_k_cohort
+  target_queries_per_passage: 4
+  selection_basis: technical_completeness_only
+  quality_metrics_forbidden: true
+  preserve_original_artifacts: true
+  manifest: artifacts/task05/d01_postprocess_v2/common_exact_k_v1/common_exact_k_cohort.json
+  retry_ceiling_per_query: 3
+  max_new_tokens: 64
 negative_recipe:
   strategy: HN0+filter
   possible_false_negative_policy: drop
@@ -12,13 +21,14 @@ comparison:
     - variant: D01-1.5B-STYLE-50K-S42
       baseline: W05-1.5B-50K-8GB
     - variant: D01-4.5B-STYLE-50K-S42
-      baseline: W06-4.5B-INSTRUCT-50K-8GB-BS1-L512
+      baseline: W06-4.5B-INSTRUCT-50K-8GB-BS8-L512
   required_equal_fields:
     - frozen_cohort_fingerprint
     - source_passage_count
     - target_queries_per_passage
     - max_new_tokens
     - seed_contract
+    - selection_policy
   style_accuracy:
     status: provisional_not_gating
     threshold: null

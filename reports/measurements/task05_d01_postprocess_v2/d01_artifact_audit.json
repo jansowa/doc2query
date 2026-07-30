@@ -1,0 +1,92 @@
+{
+  "arms": [
+    {
+      "adapter_sha256": "dc2beb9092740d5981850ee59c9c7815b6a612cf77ca353af88fd0b056a98c14",
+      "complete_group_count": 6592,
+      "dataset_fingerprint": "017a26ebcf6c5811d5c84498d44881d943c919680e9eed482a649409dfc06b73",
+      "exhausted_group_count": 6,
+      "exhausted_group_ids": [
+        "119494::1960439",
+        "166857::2663633",
+        "218027::3417335",
+        "219621::3440082",
+        "270690::4170911",
+        "404602::5998551"
+      ],
+      "final_tests_used": [],
+      "frozen_cohort_fingerprint": "235d9b81e04ddc5e74bd2bbe884055dd74f03b6706e6030e88a4f918ac2ffab6",
+      "generation_count": 26386,
+      "generation_identity_sha256": "ff889a139ffcc8a28bc0c27807abd03d410cf6e0e61d468b734285fc00553fec",
+      "id": "D01-1.5B-STYLE-50K-S42",
+      "max_attempts_per_query": 3,
+      "max_new_tokens": 64,
+      "observed_stats": {
+        "attempts": 26473,
+        "duplicate_outputs": 86,
+        "exhausted_groups": 6,
+        "invalid_outputs": 1
+      },
+      "quality_interpretation": "not_performed",
+      "seed_contract": {
+        "attempt_stride": 1,
+        "base_seed": 42,
+        "group_stride": 1000
+      },
+      "sft_experiment_id": "D01-1.5B-STYLE-50K-S42",
+      "sft_global_step": 3125,
+      "source_passage_count": 6598,
+      "status": "verified_technical_artifacts",
+      "target_queries_per_passage": 4
+    },
+    {
+      "adapter_sha256": "71937228ea977d9d6a89613fe6f802fc3711dba9499a8e23c6c1e4e21e77a867",
+      "complete_group_count": 6590,
+      "dataset_fingerprint": "017a26ebcf6c5811d5c84498d44881d943c919680e9eed482a649409dfc06b73",
+      "exhausted_group_count": 8,
+      "exhausted_group_ids": [
+        "227683::3556573",
+        "258876::4003779",
+        "299512::4578367",
+        "318153::4839909",
+        "325232::4939131",
+        "398636::5941241",
+        "56544::999055",
+        "63121::1100252"
+      ],
+      "final_tests_used": [],
+      "frozen_cohort_fingerprint": "235d9b81e04ddc5e74bd2bbe884055dd74f03b6706e6030e88a4f918ac2ffab6",
+      "generation_count": 26384,
+      "generation_identity_sha256": "bf3aef17ceb0414acf26e881b43fba3313ee64550dbde2803de6655ec22ba866",
+      "id": "D01-4.5B-STYLE-50K-S42",
+      "max_attempts_per_query": 3,
+      "max_new_tokens": 64,
+      "observed_stats": {
+        "attempts": 26494,
+        "duplicate_outputs": 110,
+        "exhausted_groups": 8,
+        "invalid_outputs": 0
+      },
+      "quality_interpretation": "not_performed",
+      "seed_contract": {
+        "attempt_stride": 1,
+        "base_seed": 42,
+        "group_stride": 1000
+      },
+      "sft_experiment_id": "D01-4.5B-STYLE-50K-S42",
+      "sft_global_step": 3125,
+      "source_passage_count": 6598,
+      "status": "verified_technical_artifacts",
+      "target_queries_per_passage": 4
+    }
+  ],
+  "contract": "task05-d01-artifact-audit-v2",
+  "final_tests_used": [],
+  "frozen_cohort_fingerprint": "235d9b81e04ddc5e74bd2bbe884055dd74f03b6706e6030e88a4f918ac2ffab6",
+  "frozen_manifest": "data/processed/v1/evaluation/task04-v1/manifest.json",
+  "frozen_subset": "dev_intrinsic_rank10",
+  "quality_results": "not_measured",
+  "schema_version": 1,
+  "scope": "technical_artifact_integrity_only",
+  "source_passage_count": 6598,
+  "status": "verified"
+}

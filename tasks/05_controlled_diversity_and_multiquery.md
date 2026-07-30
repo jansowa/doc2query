@@ -10,15 +10,13 @@ Kod, kontrakty, preset i tanie testy CPU są gotowe. Zaimplementowano rozdzieln�
 taksonomię `form`/`intent` z abstention i `intent_applicable`, kompatybilny
 schemat evidence, focus F0–F3, kontrolowane SFT i inference, retry po
 deduplikacji, ścisły multi-query JSON z jawną drobną naprawą, model-free
-concept coverage oraz selektory top-N/MMR/coverage-aware. Nie uruchamiano
-modelu ani eksperymentów jakościowych. Przygotowano fail-closed nocny runner
+concept coverage oraz selektory top-N/MMR/coverage-aware. Przygotowano fail-closed nocny runner
 D01 dla style/intent-only 1.5B/50k wraz z 3-step smoke i diagnostyczną
-generacją na dev; runner wymaga ukończonego dev-only full HN gate. Samo
-przygotowanie runnera nie stanowi wyniku D01. Full HN gate zakończył się po
-przygotowaniu runnera, więc D01 jest następnym dopuszczonym runem GPU. Kolejka
-24 h obejmuje dopasowane 50k runy 1.5B i 4.5B oraz osobne diagnostyczne panele
-dev; oba treningi poprzedza smoke i oba są wznawialne. Nie stanowi to jeszcze
-porównania kwalifikującego modele bez guardraili i probe.
+generacją na dev. Runner zakończył się kodem 0: oba treningi osiągnęły krok
+3125, a pełne generacje objęły 6598 passage. D01 1.5B zapisał 26386 query i 6
+exhausted groups, a D01 4.5B 26384 query i 8 exhausted groups. Jest to
+wyłącznie wynik techniczny, nie porównanie kwalifikujące modele bez guardraili
+i probe.
 Plan i empiryczny budżet kolejki:
 [`task05_d01_overnight_2026-07-26.md`](../reports/plans/task05_d01_overnight_2026-07-26.md).
 
@@ -27,11 +25,17 @@ Zaimplementowano również kompletny post-D01 pipeline dla dopasowanych runów
 pełną identity, atomowy artefakt, progress/ETA/VRAM, wznawialny primary/shadow
 scoring, kontrolne metryki formy/intencji z abstention, lexical/copy/retrieval,
 disagreement i slice'y, matched-budget bootstrap report oraz fail-closed
-materializację późniejszych probe inputs z przypiętym HN0+filter/drop. Nocny
-runner nie czyta już spłaszczonego `doc2query_dev.parquet` w etapie generacji i
-nie uruchamia scoringu automatycznie. Testy CPU/mocks są gotowe; nie wykonano
-żadnego treningu, generacji modelowej, scoringu ani probe. Plan i komendy:
+materializację późniejszych probe inputs z przypiętym HN0+filter/drop. Dodano
+fail-closed audyt ukończonych artefaktów, właściwe provenance W06 BS8,
+quality-blind wspólną kohortę exact-K wszystkich czterech ramion, pełną
+walidację corpus index oraz fazowy runner z lockiem i trwałym statusem. Nocny
+runner nie czyta spłaszczonego `doc2query_dev.parquet` i nie uruchamia scoringu
+automatycznie. Preflight post-D01 przeszedł. Nie wykonano matched baseline
+generation, primary/shadow/corpus scoringu, comparison, materializacji probe
+inputs ani probe training. Plan i komendy:
 [`task05_d01_post_evaluation_2026-07-26.md`](../reports/plans/task05_d01_post_evaluation_2026-07-26.md).
+Recovery ADR i bieżący runner:
+[`task05_d01_post_campaign_2026-07-30.md`](../reports/plans/task05_d01_post_campaign_2026-07-30.md).
 
 Niezależnie od D01 zaimplementowano i uruchomiono CPU-only pakiet kalibracji
 naturalnych query na pełnym zamrożonym `dev_intrinsic_rank10` (6598 rekordów).
@@ -47,8 +51,9 @@ adjudykacji. Kontrakt dopuszcza jednego właściciela-oceniającego; wtedy kappa
 pozostaje jawnie `NOT MEASURED`. Oba formularze nadal są puste: audyty 500/200 pozostają
 `NOT MEASURED`, nie wyznaczono progu style accuracy. Powstał wznawialny,
 quota-safe anotator Groq dla obu formularzy; jego docelowy run pozostaje do
-uruchomienia przez właściciela, a wyniki będą automatycznym proxy, nie oceną
-człowieka. Plan, hashe i komendy:
+zakończenia w osobnym procesie właściciela, a wyniki będą automatycznym proxy,
+nie oceną człowieka. Post-D01 nie agreguje ani nie interpretuje jego aktywnych
+journali. Plan, hashe i komendy:
 [`task05_natural_audits_2026-07-26.md`](../reports/plans/task05_natural_audits_2026-07-26.md).
 
 Do statusu `DONE` pozostają: eksperymenty D00–D12 na wspólnych kandydatach i

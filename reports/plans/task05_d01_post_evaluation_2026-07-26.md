@@ -2,9 +2,10 @@
 
 ## Stan
 
-Pipeline CPU/GPU został zaimplementowany i przetestowany na mockach CPU. Nie
-uruchomiono treningów D01, generacji Bielikiem, primary/shadow scoringu ani
-probe embeddera. Nie otwarto żadnego finalnego testu. Oficjalnym jedynym
+Pipeline CPU/GPU został zaimplementowany i przetestowany na mockach CPU.
+Treningi D01 i pełne generacje Bielikiem zakończyły się, a ich integralność
+została zweryfikowana 30 lipca. Primary/shadow/corpus scoringu ani probe
+embeddera nie uruchomiono. Nie otwarto żadnego finalnego testu. Oficjalnym jedynym
 wejściem ewaluacyjnym jest `dev_intrinsic_rank10` z zamrożonego manifestu Task
 04; kod odrzuca każdą inną nazwę subsetu.
 
@@ -30,6 +31,11 @@ Retry/deduplikacja jest stanowa i ma per-attempt seed. Dlatego trajectory batch
 size wynosi świadomie 1; większy batch zmieniałby losową trajektorię po crashu.
 Scoring pozostaje batchowany. Runner nocny uruchamia tylko trening i
 `generation-only`; scoring nie został automatycznie dołożony do okna 24 h.
+
+Pierwotne outputy nie mają exact K=4: D01 1.5B ma 6, a D01 4.5B 8 exhausted
+groups. Obowiązującą politykę recovery, właściwy W06 BS8 i fazowy runner opisuje
+[`task05_d01_post_campaign_2026-07-30.md`](task05_d01_post_campaign_2026-07-30.md).
+Poniższe komendy historyczne nie są już zalecanym wejściem operatorskim.
 
 ## Komendy po ukończeniu adapterów
 
@@ -66,7 +72,7 @@ $PYTHON scripts/run_d01_postprocess.py generation-only \
 $PYTHON scripts/run_d01_postprocess.py generation-only \
   --config configs/experiments/d01_w06_matched_dev_generation_s42.yaml \
   --frozen-manifest "$FROZEN" --subset dev_intrinsic_rank10 \
-  --adapter runs/W06-4.5B-INSTRUCT-50K-8GB-BS1-L512/adapter \
+  --adapter runs/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/adapter \
   --output runs/D01-W06-MATCHED-DEV-GENERATION-S42/generation/uncontrolled.jsonl
 ```
 
@@ -117,10 +123,10 @@ $PYTHON scripts/run_d01_postprocess.py materialize-probe-inputs \
 
 ## Pozostałe bramki
 
-1. Ukończyć dwa treningi D01 i potwierdzić adapter fingerprints.
-2. Wygenerować cztery artefakty na tej samej pełnej frozen-dev kohorcie.
-3. Ukończyć primary i shadow scoring oraz oba matched intrinsic reporty.
-4. Zamrozić identyczny budżet tokenów/par/pasaży/K i dopiero zmaterializować
+1. Wygenerować pełne matched W05 i rzeczywiste W06 BS8.
+2. Zamrozić wspólną, technicznie wybraną kohortę exact K=4 czterech ramion.
+3. Ukończyć primary, shadow i corpus scoring oraz oba matched intrinsic reporty.
+4. Potwierdzić identyczny budżet tokenów/par/pasaży/K i dopiero zmaterializować
    probe inputs.
 5. W osobnej sesji uruchomić porównywalne probe embeddery i bootstrap CI.
 6. Nie promować modelu na podstawie samego rerankera; do czasu probe decyzja

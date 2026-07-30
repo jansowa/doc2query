@@ -10,6 +10,14 @@ sprawdzonych recept QLoRA, zmieniając prompt treningowy na kontrolowany.
 Nie jest to pełne rozstrzygnięcie D01: po treningu nadal są wymagane intrinsic
 guardraile, porównywalny probe embeddera, bootstrap oraz audyt człowieka.
 
+## Wynik techniczny runu
+
+Runner zakończył się kodem 0. Oba treningi osiągnęły global step 3125, a pełne
+generacje objęły 6598 frozen-dev passage. D01 1.5B zapisał 26386 query i 6
+exhausted groups; D01 4.5B zapisał 26384 query i 8 exhausted groups. Nie jest
+to wynik jakościowy. Dalszy recovery i matched pipeline opisuje
+[`task05_d01_post_campaign_2026-07-30.md`](task05_d01_post_campaign_2026-07-30.md).
+
 ## Uzasadnienie budżetu
 
 W05 1.5B na 50k przykładów, max length 512 i LoRA r=8 trwał
