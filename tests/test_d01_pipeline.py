@@ -291,7 +291,7 @@ def test_w06_matched_provenance_rejects_bs1_and_accepts_bs8() -> None:
     assert result["training_batch_size"] == 8
 
 
-def test_completed_d01_audit_checks_adapter_and_frozen_rows(
+def test_d01_audit_accepts_legacy_model_and_explicit_slot_gaps(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     records = [_record(0)]
@@ -301,6 +301,10 @@ def test_completed_d01_audit_checks_adapter_and_frozen_rows(
     (adapter / "adapter_model.safetensors").write_bytes(b"fixture")
     config_path = Path("configs/experiments/d01_1_5b_style_dev_generation_s42.yaml")
     output = tmp_path / "generation.jsonl"
+
+    def backend(_prompts: list[str], seeds: list[int]) -> list[str]:
+        return ["query 42" if seed in {45, 46, 47} else f"query {seed}" for seed in seeds]
+
     generate_frozen_dev_batched(
         config_path,
         frozen_manifest=tmp_path / "manifest.json",
@@ -308,7 +312,7 @@ def test_completed_d01_audit_checks_adapter_and_frozen_rows(
         output_path=output,
         generation_batch_size=2,
         adapter_path=adapter,
-        backend=lambda _prompts, seeds: [f"query {seed}" for seed in seeds],
+        backend=backend,
     )
     config = load_config(config_path)
     sft = tmp_path / "sft.json"
@@ -320,7 +324,6 @@ def test_completed_d01_audit_checks_adapter_and_frozen_rows(
             "dataset_fingerprint": "train-fixture",
             "global_step": 1,
             "model": {
-                "architecture": config.model.architecture,
                 "name_or_path": config.model.name_or_path,
                 "revision": config.model.revision,
                 "trust_remote_code": config.model.trust_remote_code,
@@ -345,8 +348,31 @@ def test_completed_d01_audit_checks_adapter_and_frozen_rows(
         output_markdown=tmp_path / "audit.md",
     )
     assert report["status"] == "verified"
-    assert report["arms"][0]["complete_group_count"] == 1
+    assert report["arms"][0]["complete_group_count"] == 0
+    assert report["arms"][0]["exhausted_group_count"] == 1
+    assert report["arms"][0]["sft_model_provenance"] == "legacy_without_architecture"
+    assert [row["candidate_slot_index"] for row in read_records(output)] == [0, 2, 3]
     assert output.read_bytes() == generations_before
+    legacy_sft = json.loads(sft.read_text(encoding="utf-8"))
+    legacy_sft["model"]["revision"] = "wrong-revision"
+    _write_json(sft, legacy_sft)
+    with pytest.raises(ValueError, match="model provenance mismatch"):
+        audit_d01_artifacts(
+            frozen_manifest=tmp_path / "manifest.json",
+            subset="dev_intrinsic_rank10",
+            arms=[
+                {
+                    "id": "fixture",
+                    "training_experiment_id": "D01-training-fixture",
+                    "sft_summary": str(sft),
+                    "adapter": str(adapter),
+                    "generation_config": str(config_path),
+                    "generations": str(output),
+                }
+            ],
+            output_json=tmp_path / "rejected-audit.json",
+            output_markdown=tmp_path / "rejected-audit.md",
+        )
 
 
 def test_campaign_runner_has_lock_and_requires_one_explicit_phase() -> None:

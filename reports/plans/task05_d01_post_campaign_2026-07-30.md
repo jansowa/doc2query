@@ -65,7 +65,10 @@ Statusy: `reports/measurements/task05_d01_postprocess_v2/status.tsv` oraz
 `artifacts/task05/d01_postprocess_v2/common_exact_k_v1/`.
 
 Pierwszą ścieżkę batch-1 zatrzymano po 220 passage; nie jest ona kompletnym
-matched baseline ani wynikiem jakościowym. Nie uruchomiono pełnej generacji v2,
-scoringu, comparison, probe input materialization ani probe training. Nie
-odczytano finalnych testów. Audyt Groq pozostaje niezależny i nie jest tu
-agregowany ani interpretowany.
+matched baseline ani wynikiem jakościowym. Pełne generacje v2 ukończyły po
+6598 passage. Quality-blind recovery zmaterializowało 5321 wspólnych grup i
+21284 query na każde ramię; selection policy fingerprint to
+`f1f4102e1cc408c6fa1b00455b471d48006b0b4af3b161950946fa87c486a839`.
+Nie uruchomiono scoringu, comparison, probe input materialization ani probe
+training. Nie odczytano finalnych testów. Audyt Groq pozostaje niezależny i
+nie jest tu agregowany ani interpretowany.

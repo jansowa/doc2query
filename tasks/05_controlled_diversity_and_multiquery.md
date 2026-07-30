@@ -30,14 +30,19 @@ fail-closed audyt ukończonych artefaktów, właściwe provenance W06 BS8,
 quality-blind wspólną kohortę exact-K wszystkich czterech ramion, pełną
 walidację corpus index oraz fazowy runner z lockiem i trwałym statusem. Nocny
 runner nie czyta spłaszczonego `doc2query_dev.parquet` i nie uruchamia scoringu
-automatycznie. Preflight post-D01 przeszedł. Nie wykonano matched baseline
-generation: pierwotną ścieżkę batch-1 przerwano po 220 passage i zachowano jej
-journal bez zmian. Zaimplementowano osobną, crash-safe `batched-v2`: niezależne
+automatycznie. Preflight post-D01 przeszedł. Pierwotną ścieżkę batch-1
+przerwano po 220 passage i zachowano jej journal bez zmian. Zaimplementowano
+osobną, crash-safe `batched-v2`: niezależne
 strumienie RNG promptów, stały batch w identity, atomowy journal porcji i
 odrębne nazwy artefaktów. Microbenchmark wybrał batch 16 (1.5B: 1.775
 passage/s, 1.54 GB; 4.5B: 0.856 passage/s, 3.47 GB); nie jest to pomiar jakości
-ani dowód bitowej równoważności różnych batchy. Nie wykonano pełnej generacji
-v2, primary/shadow/corpus scoringu, comparison, materializacji probe
+ani dowód bitowej równoważności różnych batchy. Pełne matched baseline v2
+ukończyły po 6598 passage. Recovery akceptuje historyczne summary W05/W06 bez
+pola `architecture`, ale nadal fail-closed sprawdza model ID, revision i
+`trust_remote_code` oraz jawnie oznacza legacy provenance. Quality-blind
+recovery ukończyło się z `rc=0`: wspólna kohorta zachowuje 5321
+z 6598 grup, a każde z czterech ramion ma 21284 query. Nie wykonano
+primary/shadow/corpus scoringu, comparison, materializacji probe
 inputs ani probe training. Plan i komendy:
 [`task05_d01_post_evaluation_2026-07-26.md`](../reports/plans/task05_d01_post_evaluation_2026-07-26.md).
 Recovery ADR i bieżący runner:

@@ -67,6 +67,24 @@ def _arm_paths(raw: Mapping[str, Any]) -> dict[str, Path]:
     }
 
 
+def _validate_sft_model_provenance(sft: Mapping[str, Any], config: Any) -> str:
+    """Validate current and legacy SFT model payloads without inventing fields."""
+    observed = sft.get("model")
+    if not isinstance(observed, Mapping):
+        raise ValueError("SFT summary lacks model provenance")
+    expected = {
+        "name_or_path": config.model.name_or_path,
+        "revision": config.model.revision,
+        "trust_remote_code": config.model.trust_remote_code,
+    }
+    if any(observed.get(field) != value for field, value in expected.items()):
+        raise ValueError("SFT/generation model provenance mismatch")
+    architecture = observed.get("architecture")
+    if architecture is not None and architecture != config.model.architecture:
+        raise ValueError("SFT/generation model architecture mismatch")
+    return "explicit_architecture" if architecture is not None else "legacy_without_architecture"
+
+
 def _audit_arm(
     raw: Mapping[str, Any],
     *,
@@ -113,13 +131,10 @@ def _audit_arm(
         raise ValueError(f"{arm_id}: SFT experiment mismatch")
     if sft.get("adapter_path") != str(paths["adapter"]):
         raise ValueError(f"{arm_id}: SFT adapter path mismatch")
-    if sft.get("model") != {
-        "architecture": config.model.architecture,
-        "name_or_path": config.model.name_or_path,
-        "revision": config.model.revision,
-        "trust_remote_code": config.model.trust_remote_code,
-    }:
-        raise ValueError(f"{arm_id}: SFT/generation model provenance mismatch")
+    try:
+        sft_model_provenance = _validate_sft_model_provenance(sft, config)
+    except ValueError as exc:
+        raise ValueError(f"{arm_id}: {exc}") from exc
     adapter_sha = _artifact_fingerprint(paths["adapter"])
     if identity.get("adapter", {}).get("artifact_sha256") != adapter_sha:
         raise ValueError(f"{arm_id}: adapter fingerprint mismatch")
@@ -172,27 +187,39 @@ def _audit_arm(
                 raise ValueError(f"{arm_id}: accepted output is empty/duplicate in {group_id}")
             seen.add(key)
             control_payload = row.get("control")
-            while next_control < len(controls):
-                expected_control = controls[next_control]
+            explicit_slot = row.get("candidate_slot_index")
+            if explicit_slot is not None:
+                slot = int(explicit_slot)
+                if slot < next_control or slot >= len(controls):
+                    raise ValueError(f"{arm_id}: candidate slot order mismatch in {group_id}")
+                expected_control = controls[slot]
                 expected_payload = (
                     expected_control.model_dump(mode="json")
                     if expected_control is not None
                     else None
                 )
-                if control_payload == expected_payload:
-                    break
-                next_control += 1
-            if next_control == len(controls):
-                raise ValueError(f"{arm_id}: control order mismatch in {group_id}")
+                if control_payload != expected_payload:
+                    raise ValueError(f"{arm_id}: control/slot mismatch in {group_id}")
+            else:
+                slot = next_control
+                while slot < len(controls):
+                    expected_control = controls[slot]
+                    expected_payload = (
+                        expected_control.model_dump(mode="json")
+                        if expected_control is not None
+                        else None
+                    )
+                    if control_payload == expected_payload:
+                        break
+                    slot += 1
+                if slot == len(controls):
+                    raise ValueError(f"{arm_id}: control order mismatch in {group_id}")
             attempt = int(row.get("attempt", 0))
             ceiling = config.generation.max_attempts_per_query
-            seed_slot = int(row.get("candidate_slot_index", next_control))
-            if seed_slot != next_control:
-                raise ValueError(f"{arm_id}: candidate slot mismatch in {group_id}")
-            expected_seed = config.run.seed + index * 1000 + seed_slot * ceiling + attempt - 1
+            expected_seed = config.run.seed + index * 1000 + slot * ceiling + attempt - 1
             if attempt not in range(1, ceiling + 1) or int(row.get("seed", -1)) != expected_seed:
                 raise ValueError(f"{arm_id}: seed/attempt contract mismatch in {group_id}")
-            next_control += 1
+            next_control = slot + 1
         is_complete = len(queries) == config.generation.target_query_count and not bool(
             stats.get("exhausted")
         )
@@ -211,6 +238,7 @@ def _audit_arm(
             "status": "verified_technical_artifacts",
             "sft_experiment_id": sft["experiment_id"],
             "sft_global_step": sft.get("global_step"),
+            "sft_model_provenance": sft_model_provenance,
             "dataset_fingerprint": sft.get("dataset_fingerprint"),
             "adapter_sha256": adapter_sha,
             "generation_identity_sha256": identity["identity_sha256"],
