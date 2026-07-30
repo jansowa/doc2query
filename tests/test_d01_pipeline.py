@@ -22,6 +22,7 @@ from doc2query.evaluation.d01_pipeline import (
     assert_development_subset,
     evaluation_group_ids,
     generate_frozen_dev,
+    generate_frozen_dev_batched,
     materialize_probe_inputs,
 )
 from doc2query.evaluation.intrinsic import evaluate_intrinsic_records
@@ -95,6 +96,65 @@ def test_crash_resume_generation_does_not_regenerate_durable_group(
     assert summary["resumed_group_count"] == 1
     assert resumed_calls == [1042, 1045, 1048, 1051]
     assert len(list(read_records(output))) == 8
+
+
+def test_batched_generation_resumes_only_after_atomic_passage_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    records = [_record(0), _record(1), _record(2)]
+    _install_frozen_mocks(monkeypatch, records)
+    calls = 0
+
+    def interrupted(_prompts: list[str], seeds: list[int]) -> list[str]:
+        nonlocal calls
+        calls += 1
+        if calls == 5:
+            raise RuntimeError("fixture crash")
+        return [f"zapytanie {seed}" for seed in seeds]
+
+    output = tmp_path / "generation.batched.jsonl"
+    with pytest.raises(RuntimeError, match="fixture crash"):
+        generate_frozen_dev_batched(
+            Path("configs/experiments/d01_1_5b_style_dev_generation_s42.yaml"),
+            frozen_manifest=tmp_path / "manifest.json",
+            subset="dev_intrinsic_rank10",
+            output_path=output,
+            generation_batch_size=2,
+            backend=interrupted,
+        )
+    journal = output.with_suffix(".jsonl.journal.jsonl")
+    journal_rows = list(read_records(journal))
+    assert len(journal_rows) == 1
+    assert [group["evaluation_group_id"] for group in journal_rows[0]["groups"]] == [
+        "q-0::d-0",
+        "q-1::d-1",
+    ]
+    resumed_seeds: list[list[int]] = []
+
+    def resumed(_prompts: list[str], seeds: list[int]) -> list[str]:
+        resumed_seeds.append(seeds)
+        return [f"zapytanie {seed}" for seed in seeds]
+
+    summary = generate_frozen_dev_batched(
+        Path("configs/experiments/d01_1_5b_style_dev_generation_s42.yaml"),
+        frozen_manifest=tmp_path / "manifest.json",
+        subset="dev_intrinsic_rank10",
+        output_path=output,
+        generation_batch_size=2,
+        backend=resumed,
+    )
+    assert summary["resumed_group_count"] == 2
+    assert resumed_seeds == [[2042], [2045], [2048], [2051]]
+    assert len(list(read_records(output))) == 12
+    with pytest.raises(ValueError, match="identity mismatch"):
+        generate_frozen_dev_batched(
+            Path("configs/experiments/d01_1_5b_style_dev_generation_s42.yaml"),
+            frozen_manifest=tmp_path / "manifest.json",
+            subset="dev_intrinsic_rank10",
+            output_path=output,
+            generation_batch_size=4,
+            backend=resumed,
+        )
 
 
 def test_generation_rejects_changed_identity_and_can_archive(
@@ -241,13 +301,14 @@ def test_completed_d01_audit_checks_adapter_and_frozen_rows(
     (adapter / "adapter_model.safetensors").write_bytes(b"fixture")
     config_path = Path("configs/experiments/d01_1_5b_style_dev_generation_s42.yaml")
     output = tmp_path / "generation.jsonl"
-    generate_frozen_dev(
+    generate_frozen_dev_batched(
         config_path,
         frozen_manifest=tmp_path / "manifest.json",
         subset="dev_intrinsic_rank10",
         output_path=output,
+        generation_batch_size=2,
         adapter_path=adapter,
-        backend=lambda _prompt, seed: f"query {seed}",
+        backend=lambda _prompts, seeds: [f"query {seed}" for seed in seeds],
     )
     config = load_config(config_path)
     sft = tmp_path / "sft.json"
@@ -293,6 +354,9 @@ def test_campaign_runner_has_lock_and_requires_one_explicit_phase() -> None:
     assert "flock -n 9" in script
     assert "PHASE=${1:-}" in script
     assert "generate-matched-baselines|score|compare" in script
+    assert "generation-batched" in script
+    assert "uncontrolled.full.jsonl" not in script
+    assert "--generation-batch-size 16" in script
 
 
 def _write_json(path: Path, value: Any) -> None:

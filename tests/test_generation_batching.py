@@ -11,7 +11,11 @@ import torch
 from doc2query.config import load_config
 from doc2query.evaluation import generator as evaluation_generator
 from doc2query.evaluation.generator import generate_evaluation_queries
-from doc2query.generation.batching import generate_text_batch, pad_token_sequences
+from doc2query.generation.batching import (
+    IndependentSeedSamplingProcessor,
+    generate_text_batch,
+    pad_token_sequences,
+)
 from doc2query.utils.records import read_records
 
 
@@ -44,9 +48,7 @@ class _Model(torch.nn.Module):
             for candidate in range(candidates):
                 token = torch.tensor([65 + row * candidates + candidate], dtype=torch.long)
                 outputs.append(
-                    token
-                    if self.config.is_encoder_decoder
-                    else torch.cat((inputs[row], token))
+                    token if self.config.is_encoder_decoder else torch.cat((inputs[row], token))
                 )
         return torch.stack(outputs)
 
@@ -87,6 +89,27 @@ def test_generation_is_prompt_major_for_causal_and_encoder_decoder() -> None:
         assert result == ["A", "B", "C", "D"]
         assert model.last_input_ids is not None
         assert model.last_input_ids.tolist() == expected_padding
+
+
+def test_independent_sampling_streams_are_invariant_for_fixed_logits() -> None:
+    scores = [
+        torch.tensor([[0.1, 0.3, 1.2, -0.2], [1.1, 0.2, 0.4, -0.5]]),
+        torch.tensor([[0.4, 0.2, 0.8, -0.1], [0.2, 1.3, 0.1, -0.2]]),
+        torch.tensor([[0.7, 0.6, 0.5, 0.4], [0.1, 0.2, 1.4, 0.3]]),
+    ]
+    batched = IndependentSeedSamplingProcessor([17, 91], temperature=0.8, top_p=0.9)
+    singles = [
+        IndependentSeedSamplingProcessor([seed], temperature=0.8, top_p=0.9) for seed in (17, 91)
+    ]
+    batched_tokens = []
+    single_tokens = [[], []]
+    for step_scores in scores:
+        input_ids = torch.ones((2, 1), dtype=torch.long)
+        batched_tokens.append(batched(input_ids, step_scores).argmax(dim=-1).tolist())
+        for row in range(2):
+            forced = singles[row](input_ids[row : row + 1], step_scores[row : row + 1])
+            single_tokens[row].append(int(forced.argmax(dim=-1).item()))
+    assert [[row[index] for row in batched_tokens] for index in range(2)] == single_tokens
 
 
 def _record(identifier: str) -> dict[str, Any]:
@@ -149,10 +172,7 @@ def test_evaluation_generation_batches_and_resumes_exact_prefix(
     ]
     partial = output.with_suffix(output.suffix + ".partial")
     partial.write_text(
-        "".join(
-            f"{json.dumps(row, ensure_ascii=False, sort_keys=True)}\n"
-            for row in expected[:4]
-        ),
+        "".join(f"{json.dumps(row, ensure_ascii=False, sort_keys=True)}\n" for row in expected[:4]),
         encoding="utf-8",
     )
     with partial.open("ab") as handle:

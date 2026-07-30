@@ -34,7 +34,7 @@ recovery:
       sft_summary: runs/W05-1.5B-50K-8GB/sft_summary.json
       adapter: runs/W05-1.5B-50K-8GB/adapter
       generation_config: configs/experiments/d01_w05_matched_dev_generation_s42.yaml
-      generations: runs/D01-W05-MATCHED-DEV-GENERATION-S42/generation/uncontrolled.full.jsonl
+      generations: runs/D01-W05-MATCHED-DEV-GENERATION-S42/generation/uncontrolled.batched_v2.jsonl
     - id: D01-4.5B-STYLE-50K-S42
       training_experiment_id: D01-4.5B-STYLE-50K-S42
       sft_summary: runs/D01-4.5B-STYLE-50K-S42/sft_summary.json
@@ -46,18 +46,20 @@ recovery:
       sft_summary: runs/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/sft_summary.json
       adapter: runs/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/adapter
       generation_config: configs/experiments/d01_w06_matched_dev_generation_s42.yaml
-      generations: runs/D01-W06-MATCHED-DEV-GENERATION-S42/generation/uncontrolled.full.jsonl
+      generations: runs/D01-W06-MATCHED-DEV-GENERATION-S42/generation/uncontrolled.batched_v2.jsonl
 baselines:
   - id: W05-1.5B-50K-8GB
     generation_config: configs/experiments/d01_w05_matched_dev_generation_s42.yaml
     adapter: runs/W05-1.5B-50K-8GB/adapter
     training_manifest: runs/W05-1.5B-50K-8GB/run_manifest.json
-    output: runs/D01-W05-MATCHED-DEV-GENERATION-S42/generation/uncontrolled.full.jsonl
+    output: runs/D01-W05-MATCHED-DEV-GENERATION-S42/generation/uncontrolled.batched_v2.jsonl
+    generation_batch_size: 16
   - id: W06-4.5B-INSTRUCT-50K-8GB-BS8-L512
     generation_config: configs/experiments/d01_w06_matched_dev_generation_s42.yaml
     adapter: runs/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/adapter
     training_manifest: runs/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/run_manifest.json
-    output: runs/D01-W06-MATCHED-DEV-GENERATION-S42/generation/uncontrolled.full.jsonl
+    output: runs/D01-W06-MATCHED-DEV-GENERATION-S42/generation/uncontrolled.batched_v2.jsonl
+    generation_batch_size: 16
 scoring:
   primary: configs/reranker/primary_polish_roberta_v3_cuda.yaml
   shadow: configs/reranker/shadow_bge_v2_m3.yaml

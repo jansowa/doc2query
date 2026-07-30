@@ -22,18 +22,20 @@ from doc2query.evaluation.datasets import evaluation_fingerprint, load_frozen_re
 from doc2query.evaluation.embedder_probe import ProbeRecipe
 from doc2query.evaluation.generator import score_generation_artifact
 from doc2query.evaluation.statistical_contract import StatisticalContract, build_budget_manifest
-from doc2query.generation.batching import generate_text_batch
+from doc2query.generation.batching import generate_text_batch, generate_text_batch_seeded
 from doc2query.generation.controlled import generate_query_set
 from doc2query.generation.deduplicate import query_key
 from doc2query.generation.runner import _control_matrix
 from doc2query.models.load_generator import load_generator, load_tokenizer
-from doc2query.models.templates import normalize_completion, render_prompt
+from doc2query.models.templates import normalize_completion, render_controlled_prompt, render_prompt
 from doc2query.schemas import AppConfig, QueryControl
 from doc2query.utils.records import read_durable_jsonl_prefix, read_records, write_json
 from doc2query.utils.reproducibility import set_seed
 from doc2query.utils.tracking import collect_code_provenance
 
 D01_GENERATION_CONTRACT = "task05-d01-frozen-dev-generation-v1"
+D01_BATCHED_GENERATION_CONTRACT = "task05-d01-frozen-dev-generation-batched-v2"
+D01_GENERATION_CONTRACTS = frozenset({D01_GENERATION_CONTRACT, D01_BATCHED_GENERATION_CONTRACT})
 D01_SCORING_CONTRACT = "task05-d01-intrinsic-scoring-v1"
 D01_COMPARISON_CONTRACT = "task05-d01-matched-comparison-v1"
 D01_PROBE_INPUT_CONTRACT = "task05-d01-probe-input-v1"
@@ -277,6 +279,402 @@ def _model_backend(
         )[0]
 
     return backend, precision.label
+
+
+def _model_batched_backend(
+    config: AppConfig, *, adapter_path: Path | None, model_path: Path | None
+) -> tuple[Callable[[Sequence[str], Sequence[int]], list[str]], str]:
+    tokenizer = load_tokenizer(config)
+    model, precision = load_generator(
+        config,
+        for_training=False,
+        model_path=str(model_path) if model_path is not None else None,
+    )
+    if adapter_path is not None:
+        try:
+            from peft import PeftModel
+        except ImportError as exc:  # pragma: no cover
+            raise RuntimeError("install PEFT to load a D01 adapter") from exc
+        loader: Any = getattr(PeftModel, "from_" + "pretrained")
+        model = loader(model, adapter_path, is_trainable=False)
+    model.eval()
+
+    def backend(prompts: Sequence[str], seeds: Sequence[int]) -> list[str]:
+        if len(prompts) != len(seeds):
+            raise ValueError("batched D01 backend requires one seed per prompt")
+        prompt_ids = []
+        for prompt in prompts:
+            ids = list(tokenizer.encode(prompt, add_special_tokens=False))
+            if len(ids) > config.training.max_length:
+                prefix = min(config.training.min_prompt_tokens, config.training.max_length)
+                suffix = config.training.max_length - prefix
+                ids = ids[:prefix] + (ids[-suffix:] if suffix else [])
+            prompt_ids.append(ids)
+        return generate_text_batch_seeded(
+            model,
+            tokenizer,
+            prompt_ids,
+            seeds=seeds,
+            temperature=config.generation.temperature,
+            top_p=config.generation.top_p,
+            max_new_tokens=config.generation.max_new_tokens,
+        )
+
+    return backend, precision.label
+
+
+def _batched_groups(journal: Path) -> list[dict[str, Any]]:
+    batches = read_durable_jsonl_prefix(journal)
+    groups: list[dict[str, Any]] = []
+    for expected_start, batch in enumerate(batches):
+        batch_groups = batch.get("groups")
+        if not isinstance(batch_groups, list) or not batch_groups:
+            raise ValueError("batched D01 journal contains an empty or malformed batch")
+        if int(batch.get("batch_ordinal", -1)) != expected_start:
+            raise ValueError("batched D01 journal batch ordinals are not contiguous")
+        if int(batch.get("group_start", -1)) != len(groups):
+            raise ValueError("batched D01 journal group ranges are not contiguous")
+        groups.extend(batch_groups)
+        if int(batch.get("group_stop", -1)) != len(groups):
+            raise ValueError("batched D01 journal group_stop is inconsistent")
+    return groups
+
+
+def _atomic_flatten_batched(journal: Path, output_path: Path) -> int:
+    groups = _batched_groups(journal)
+    temporary = output_path.with_suffix(output_path.suffix + ".tmp")
+    count = 0
+    with temporary.open("w", encoding="utf-8") as handle:
+        for group in groups:
+            for query in group["queries"]:
+                handle.write(json.dumps(query, ensure_ascii=False, sort_keys=True) + "\n")
+                count += 1
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, output_path)
+    return count
+
+
+def generate_frozen_dev_batched(
+    config_path: Path,
+    *,
+    frozen_manifest: Path,
+    subset: str,
+    output_path: Path,
+    generation_batch_size: int,
+    adapter_path: Path | None = None,
+    model_path: Path | None = None,
+    max_examples: int | None = None,
+    backend: Callable[[Sequence[str], Sequence[int]], list[str]] | None = None,
+    precision_label: str | None = None,
+    archive_incompatible: bool = False,
+    progress_every: int = 10,
+    cohort_manifest: Path | None = None,
+) -> dict[str, Any]:
+    """Generate frozen dev in atomic passage batches with per-row RNG streams."""
+    assert_development_subset(subset)
+    if generation_batch_size < 1 or progress_every < 1:
+        raise ValueError("generation_batch_size and progress_every must be positive")
+    config = load_config(config_path)
+    if not config.generation.do_sample:
+        raise ValueError("batched-v2 currently requires sampled generation")
+    records = load_frozen_records(frozen_manifest, subset)
+    source_indices: list[int] | None = None
+    cohort_selection: Mapping[str, Any] | None = None
+    if cohort_manifest is not None:
+        from doc2query.evaluation.d01_campaign import load_common_cohort
+
+        records, source_indices, cohort_selection = load_common_cohort(records, cohort_manifest)
+    if max_examples is not None:
+        if max_examples < 1:
+            raise ValueError("max_examples must be positive")
+        records = records[:max_examples]
+        if source_indices is not None:
+            source_indices = source_indices[:max_examples]
+    identity = _generation_identity(
+        config,
+        records,
+        config_path=config_path,
+        frozen_manifest=frozen_manifest,
+        subset=subset,
+        adapter_path=adapter_path,
+        model_path=model_path,
+        source_indices=source_indices,
+        cohort_selection=cohort_selection,
+    )
+    identity.pop("identity_sha256")
+    identity["contract"] = D01_BATCHED_GENERATION_CONTRACT
+    identity["execution_trajectory"] = {
+        "version": "seed-stable-batched-v2",
+        "max_prompt_batch_size": generation_batch_size,
+        "journal_unit": "atomic-passage-batch",
+        "sampler": "independent-generator-temperature-top-p-v1",
+        "schedule": "control-major-retry-before-next-control",
+    }
+    identity["identity_sha256"] = _canonical_sha256(identity)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    journal = output_path.with_suffix(output_path.suffix + ".journal.jsonl")
+    identity_path = output_path.with_suffix(output_path.suffix + ".identity.json")
+    summary_path = output_path.with_suffix(output_path.suffix + ".summary.json")
+    existing_identity = (
+        json.loads(identity_path.read_text(encoding="utf-8")) if identity_path.exists() else None
+    )
+    if existing_identity is not None and existing_identity != identity:
+        archived = (
+            _archive_partial_state(output_path, existing_identity, identity)
+            if archive_incompatible
+            else None
+        )
+        message = "D01 batched generation resume identity mismatch"
+        if archived is not None:
+            message += f"; incompatible state archived at {archived}"
+        raise ValueError(message)
+    if existing_identity is None and journal.exists() and journal.stat().st_size:
+        archived = (
+            _archive_partial_state(output_path, {"identity": "missing"}, identity)
+            if archive_incompatible
+            else None
+        )
+        message = "D01 batched generation journal exists without identity"
+        if archived is not None:
+            message += f"; orphan state archived at {archived}"
+        raise ValueError(message)
+    if existing_identity is None:
+        temporary = identity_path.with_suffix(identity_path.suffix + ".tmp")
+        write_json(temporary, identity)
+        os.replace(temporary, identity_path)
+    groups = _batched_groups(journal)
+    expected_ids = evaluation_group_ids(records)
+    if [str(row.get("evaluation_group_id")) for row in groups] != expected_ids[: len(groups)]:
+        raise ValueError("D01 batched journal is not the exact frozen cohort prefix")
+    if len(groups) > len(records):
+        raise ValueError("D01 batched journal is longer than its frozen cohort")
+    if output_path.exists():
+        if len(groups) != len(records):
+            raise ValueError("atomic D01 output exists before its journal is complete")
+        if summary_path.is_file():
+            result = json.loads(summary_path.read_text(encoding="utf-8"))
+            if not isinstance(result, dict):
+                raise ValueError("D01 generation summary must be a mapping")
+            return result
+    if backend is None and len(groups) < len(records):
+        backend, loaded_precision = _model_batched_backend(
+            config, adapter_path=adapter_path, model_path=model_path
+        )
+        precision_label = loaded_precision
+    started = time.perf_counter()
+    resumed = len(groups)
+    attempts = sum(int(row["stats"]["attempts"]) for row in groups)
+    duplicates = sum(int(row["stats"]["duplicate_outputs"]) for row in groups)
+    invalid = sum(int(row["stats"]["invalid_outputs"]) for row in groups)
+    exhausted = sum(int(bool(row["stats"]["exhausted"])) for row in groups)
+    generated = sum(len(row["queries"]) for row in groups)
+    batch_ordinal = len(read_durable_jsonl_prefix(journal))
+    ceiling = config.generation.max_attempts_per_query
+    for start in range(resumed, len(records), generation_batch_size):
+        stop = min(start + generation_batch_size, len(records))
+        states: list[dict[str, Any]] = []
+        for index in range(start, stop):
+            record = records[index]
+            positive = dict(_positive(record))
+            passage = str(positive["text"]).strip()
+            states.append(
+                {
+                    "index": index,
+                    "record": record,
+                    "positive": positive,
+                    "passage": passage,
+                    "controls": _controls(config, passage),
+                    "accepted": [],
+                    "seen": set(),
+                    "attempts": 0,
+                    "duplicates": 0,
+                    "invalid": 0,
+                }
+            )
+        for control_index in range(config.generation.target_query_count):
+            pending = list(range(len(states)))
+            for attempt in range(1, ceiling + 1):
+                if not pending:
+                    break
+                prompts: list[str] = []
+                seeds: list[int] = []
+                for state_index in pending:
+                    state = states[state_index]
+                    control = state["controls"][control_index]
+                    prompts.append(
+                        render_controlled_prompt(state["passage"], control)
+                        if control is not None
+                        else render_prompt(state["passage"])
+                    )
+                    seeds.append(
+                        config.run.seed
+                        + (
+                            source_indices[int(state["index"])]
+                            if source_indices is not None
+                            else int(state["index"])
+                        )
+                        * 1000
+                        + control_index * ceiling
+                        + attempt
+                        - 1
+                    )
+                    state["attempts"] += 1
+                assert backend is not None
+                outputs = backend(prompts, seeds)
+                if len(outputs) != len(pending):
+                    raise RuntimeError("batched D01 backend returned the wrong row count")
+                still_pending = []
+                for state_index, raw, item_seed in zip(pending, outputs, seeds, strict=True):
+                    state = states[state_index]
+                    try:
+                        text = normalize_completion(raw)
+                    except ValueError:
+                        state["invalid"] += 1
+                        still_pending.append(state_index)
+                        continue
+                    key = query_key(text)
+                    if key in state["seen"]:
+                        state["duplicates"] += 1
+                        still_pending.append(state_index)
+                        continue
+                    state["seen"].add(key)
+                    state["accepted"].append(
+                        (control_index, text, state["controls"][control_index], item_seed, attempt)
+                    )
+                pending = still_pending
+        batch_groups = []
+        for state in states:
+            index = int(state["index"])
+            record = state["record"]
+            positive = state["positive"]
+            group_id = expected_ids[index]
+            queries = []
+            for candidate_index, item in enumerate(state["accepted"]):
+                slot, text, control, item_seed, attempt = item
+                control_payload = control.model_dump(mode="json") if control is not None else None
+                queries.append(
+                    {
+                        "evaluation_id": f"{group_id}::candidate::{candidate_index}",
+                        "evaluation_group_id": group_id,
+                        "experiment_id": config.run.experiment_id,
+                        "example_id": str(record["example_id"]),
+                        "doc_id": str(positive["doc_id"]),
+                        "positive": positive,
+                        "positives": record["positives"],
+                        "hard_negatives": record["hard_negatives"],
+                        "positive_count": len(record["positives"]),
+                        "reference": str(record["query"]),
+                        "metadata": record.get("metadata", {}),
+                        "generated": text,
+                        "mode": "controlled" if control is not None else "matched_uncontrolled",
+                        "candidate_index": candidate_index,
+                        "candidate_slot_index": slot,
+                        "control": control_payload,
+                        "requested_form": control_payload.get("form") if control_payload else None,
+                        "requested_intent": control_payload.get("intent")
+                        if control_payload
+                        else None,
+                        "intent_applicable": control_payload.get("intent_applicable")
+                        if control_payload
+                        else None,
+                        "seed": item_seed,
+                        "attempt": attempt,
+                        "generation_identity_sha256": identity["identity_sha256"],
+                        "frozen_subset": subset,
+                        "frozen_cohort_fingerprint": identity["cohort"]["fingerprint"],
+                        "final_tests_used": [],
+                    }
+                )
+            stats = {
+                "attempts": state["attempts"],
+                "duplicate_outputs": state["duplicates"],
+                "invalid_outputs": state["invalid"],
+                "exhausted": len(queries) != config.generation.target_query_count,
+            }
+            batch_groups.append(
+                {
+                    "evaluation_group_id": group_id,
+                    "group_index": index,
+                    "frozen_group_index": (
+                        source_indices[index] if source_indices is not None else index
+                    ),
+                    "queries": queries,
+                    "stats": stats,
+                }
+            )
+            attempts += int(stats["attempts"])
+            duplicates += int(stats["duplicate_outputs"])
+            invalid += int(stats["invalid_outputs"])
+            exhausted += int(bool(stats["exhausted"]))
+            generated += len(queries)
+        _append_durable(
+            journal,
+            {
+                "batch_ordinal": batch_ordinal,
+                "group_start": start,
+                "group_stop": stop,
+                "groups": batch_groups,
+            },
+        )
+        batch_ordinal += 1
+        groups.extend(batch_groups)
+        completed = stop
+        if completed == len(records) or completed % progress_every == 0:
+            elapsed = time.perf_counter() - started
+            rate = (completed - resumed) / elapsed if elapsed else 0.0
+            eta = (len(records) - completed) / rate if rate else float("inf")
+            print(
+                f"[D01 batched generation] {completed}/{len(records)} passages "
+                f"queries={generated} attempts={attempts} invalid={invalid} "
+                f"duplicates={duplicates} exhausted={exhausted} rate={rate:.3f}/s "
+                f"eta={eta / 60:.1f} min",
+                file=sys.stderr,
+                flush=True,
+            )
+    output_count = (
+        sum(len(row["queries"]) for row in groups)
+        if output_path.exists()
+        else _atomic_flatten_batched(journal, output_path)
+    )
+    elapsed = time.perf_counter() - started
+    summary = {
+        "schema_version": 1,
+        "status": "measured",
+        "contract": D01_BATCHED_GENERATION_CONTRACT,
+        "experiment_id": config.run.experiment_id,
+        "identity": identity,
+        "source_passage_count": len(records),
+        "target_queries_per_passage": config.generation.target_query_count,
+        "generation_count": output_count,
+        "attempts": attempts,
+        "invalid_outputs": invalid,
+        "duplicate_outputs": duplicates,
+        "exhausted_groups": exhausted,
+        "effective_candidate_count_mean": output_count / len(records),
+        "resumed_group_count": resumed,
+        "trajectory_batch_size": generation_batch_size,
+        "trajectory_batching_reason": (
+            "independent per-row RNG, fixed batch identity, and atomic passage batches"
+        ),
+        "elapsed_seconds": elapsed,
+        "passages_per_second": (len(records) - resumed) / elapsed if elapsed else None,
+        "precision": precision_label or "injected-backend",
+        "peak_vram_allocated_bytes": torch.cuda.max_memory_allocated()
+        if torch.cuda.is_available()
+        else None,
+        "peak_vram_reserved_bytes": torch.cuda.max_memory_reserved()
+        if torch.cuda.is_available()
+        else None,
+        "journal_path": str(journal),
+        "output_path": str(output_path),
+        "final_tests_used": [],
+        "code": collect_code_provenance(),
+    }
+    temporary_summary = summary_path.with_suffix(summary_path.suffix + ".tmp")
+    write_json(temporary_summary, summary)
+    os.replace(temporary_summary, summary_path)
+    return summary
 
 
 def generate_frozen_dev(
@@ -562,7 +960,7 @@ def score_d01_artifact(
 ) -> dict[str, Any]:
     """Score a self-contained D01 artifact through the shared resumable Harness."""
     generation_summary = json.loads(generation_summary_path.read_text(encoding="utf-8"))
-    if generation_summary.get("contract") != D01_GENERATION_CONTRACT:
+    if generation_summary.get("contract") not in D01_GENERATION_CONTRACTS:
         raise ValueError("D01 scoring requires a compatible generation summary")
     if generation_summary.get("final_tests_used") != []:
         raise ValueError("D01 generation provenance must declare final_tests_used=[]")
@@ -603,6 +1001,8 @@ def score_d01_artifact(
     result["contract"] = D01_SCORING_CONTRACT
     result["generation_identity_sha256"] = identity["identity_sha256"]
     result["generation_contract"] = {
+        "artifact_contract": generation_summary["contract"],
+        "execution_trajectory": identity.get("execution_trajectory"),
         "cohort": identity["cohort"],
         "seed_contract": identity["seed_contract"],
         "max_new_tokens": identity["generation"]["max_new_tokens"],
@@ -929,7 +1329,7 @@ def materialize_probe_inputs(
         raise ValueError("D01 probe inputs require a pinned dev-only calibration")
     if (
         generation.get("status") != "measured"
-        or generation.get("contract") != D01_GENERATION_CONTRACT
+        or generation.get("contract") not in D01_GENERATION_CONTRACTS
     ):
         raise ValueError("probe materialization requires a measured D01 generation report")
     if scoring.get("status") != "measured" or scoring.get("contract") != D01_SCORING_CONTRACT:

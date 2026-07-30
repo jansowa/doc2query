@@ -15,7 +15,9 @@ from doc2query.config import load_config
 from doc2query.evaluation.corpus import sha256_file
 from doc2query.evaluation.d01_pipeline import (
     D01_GENERATION_CONTRACT,
+    D01_GENERATION_CONTRACTS,
     _artifact_fingerprint,
+    _batched_groups,
     _canonical_sha256,
     _controls,
     _file_sha256,
@@ -83,7 +85,10 @@ def _audit_arm(
     identity = summary.get("identity")
     if not isinstance(identity, dict) or identity != identity_file:
         raise ValueError(f"{arm_id}: generation identity/summary mismatch")
-    if summary.get("contract") != D01_GENERATION_CONTRACT or summary.get("status") != "measured":
+    if (
+        summary.get("contract") not in D01_GENERATION_CONTRACTS
+        or summary.get("status") != "measured"
+    ):
         raise ValueError(f"{arm_id}: generation summary is not measured D01")
     if summary.get("final_tests_used") != [] or identity.get("final_tests_used") != []:
         raise ValueError(f"{arm_id}: final-test provenance is forbidden")
@@ -119,7 +124,11 @@ def _audit_arm(
     if identity.get("adapter", {}).get("artifact_sha256") != adapter_sha:
         raise ValueError(f"{arm_id}: adapter fingerprint mismatch")
 
-    groups = read_durable_jsonl_prefix(paths["journal"])
+    groups = (
+        _batched_groups(paths["journal"])
+        if summary.get("contract") != D01_GENERATION_CONTRACT
+        else read_durable_jsonl_prefix(paths["journal"])
+    )
     final_rows = list(read_records(paths["generations"]))
     if len(groups) != len(records):
         raise ValueError(f"{arm_id}: journal does not cover the full frozen cohort")
@@ -177,7 +186,10 @@ def _audit_arm(
                 raise ValueError(f"{arm_id}: control order mismatch in {group_id}")
             attempt = int(row.get("attempt", 0))
             ceiling = config.generation.max_attempts_per_query
-            expected_seed = config.run.seed + index * 1000 + next_control * ceiling + attempt - 1
+            seed_slot = int(row.get("candidate_slot_index", next_control))
+            if seed_slot != next_control:
+                raise ValueError(f"{arm_id}: candidate slot mismatch in {group_id}")
+            expected_seed = config.run.seed + index * 1000 + seed_slot * ceiling + attempt - 1
             if attempt not in range(1, ceiling + 1) or int(row.get("seed", -1)) != expected_seed:
                 raise ValueError(f"{arm_id}: seed/attempt contract mismatch in {group_id}")
             next_control += 1

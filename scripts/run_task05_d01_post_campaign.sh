@@ -112,19 +112,21 @@ case "$PHASE" in
       set -euo pipefail
       python=$1
       "$python" scripts/run_d01_postprocess.py preflight --campaign-config configs/evaluation/d01_campaign_v2.yaml
-      "$python" scripts/run_d01_postprocess.py generation-only \
+      "$python" scripts/run_d01_postprocess.py generation-batched \
         --config configs/experiments/d01_w05_matched_dev_generation_s42.yaml \
         --frozen-manifest data/processed/v1/evaluation/task04-v1/manifest.json \
         --subset dev_intrinsic_rank10 \
         --adapter runs/W05-1.5B-50K-8GB/adapter \
-        --output runs/D01-W05-MATCHED-DEV-GENERATION-S42/generation/uncontrolled.full.jsonl \
+        --output runs/D01-W05-MATCHED-DEV-GENERATION-S42/generation/uncontrolled.batched_v2.jsonl \
+        --generation-batch-size 16 \
         --archive-incompatible
-      "$python" scripts/run_d01_postprocess.py generation-only \
+      "$python" scripts/run_d01_postprocess.py generation-batched \
         --config configs/experiments/d01_w06_matched_dev_generation_s42.yaml \
         --frozen-manifest data/processed/v1/evaluation/task04-v1/manifest.json \
         --subset dev_intrinsic_rank10 \
         --adapter runs/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/adapter \
-        --output runs/D01-W06-MATCHED-DEV-GENERATION-S42/generation/uncontrolled.full.jsonl \
+        --output runs/D01-W06-MATCHED-DEV-GENERATION-S42/generation/uncontrolled.batched_v2.jsonl \
+        --generation-batch-size 16 \
         --archive-incompatible
     ' _ "$PYTHON"
     ;;

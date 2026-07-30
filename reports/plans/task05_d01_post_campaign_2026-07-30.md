@@ -37,6 +37,20 @@ bash scripts/run_task05_d01_post_campaign.sh compare
 bash scripts/run_task05_d01_post_campaign.sh materialize-probe-inputs
 ```
 
+Baseline generation używa teraz `generation-batched` z przypiętym batchem 16,
+osobnymi strumieniami RNG per prompt i atomowym journalem całych porcji pasaży.
+Batch jest częścią identity: wznowienie wymaga tej samej wartości i powtarza
+najwyżej ostatnią niezatwierdzoną porcję. Nie deklarujemy bitowej równoważności
+różnych batchy, ponieważ padding może minimalnie zmieniać logity. Przerwany
+batch-1 journal (220 passage) pozostaje nietknięty pod nazwą
+`uncontrolled.full.jsonl.journal.jsonl`; v2 zapisuje osobny
+`uncontrolled.batched_v2.jsonl`.
+
+Microbenchmark GPU z 2026-07-30 wybrał batch 16 dla obu modeli. 1.5B osiągnął
+1.775 passage/s przy 1.54 GB peak allocated, a 4.5B 0.856 passage/s przy
+3.47 GB. Szczegóły i ograniczenia pomiaru:
+[`task05_d01_batched_generation_benchmark_2026-07-30.md`](../measurements/task05_d01_batched_generation_benchmark_2026-07-30.md).
+
 `prepare-common-cohort` wolno uruchomić dopiero po obu pełnych baseline
 generation. Finalnie filtruje osobne kopie wszystkich czterech ramion do
 wspólnego exact K=4; nie modyfikuje źródeł. `score` wymaga primary, shadow i
@@ -50,6 +64,8 @@ Statusy: `reports/measurements/task05_d01_postprocess_v2/status.tsv` oraz
 `status.json`. Finalna kohorta i odzyskane artefakty trafią do
 `artifacts/task05/d01_postprocess_v2/common_exact_k_v1/`.
 
-Nie uruchomiono matched baseline generation, scoringu, comparison, probe input
-materialization ani probe training. Nie odczytano finalnych testów. Audyt Groq
-pozostaje niezależny i nie jest tu agregowany ani interpretowany.
+Pierwszą ścieżkę batch-1 zatrzymano po 220 passage; nie jest ona kompletnym
+matched baseline ani wynikiem jakościowym. Nie uruchomiono pełnej generacji v2,
+scoringu, comparison, probe input materialization ani probe training. Nie
+odczytano finalnych testów. Audyt Groq pozostaje niezależny i nie jest tu
+agregowany ani interpretowany.

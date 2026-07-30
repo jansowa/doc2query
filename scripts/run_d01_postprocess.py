@@ -18,6 +18,7 @@ from doc2query.evaluation.d01_campaign import (
 from doc2query.evaluation.d01_pipeline import (
     assemble_matched_report,
     generate_frozen_dev,
+    generate_frozen_dev_batched,
     materialize_probe_inputs,
     score_d01_artifact,
 )
@@ -100,12 +101,23 @@ def main() -> None:
     _campaign(subparsers.add_parser("prepare-common-cohort"))
     _campaign(subparsers.add_parser("preflight"))
     _generation(subparsers.add_parser("generation-only"))
+    batched = subparsers.add_parser("generation-batched")
+    _generation(batched)
+    batched.add_argument("--generation-batch-size", type=int, required=True)
     _scoring(subparsers.add_parser("score"))
     _comparison(subparsers.add_parser("compare"))
     _materialization(subparsers.add_parser("materialize-probe-inputs"))
     args = parser.parse_args()
-    if args.command == "generation-only":
-        result = generate_frozen_dev(
+    if args.command in {"generation-only", "generation-batched"}:
+        generator = (
+            generate_frozen_dev_batched
+            if args.command == "generation-batched"
+            else generate_frozen_dev
+        )
+        kwargs = {}
+        if args.command == "generation-batched":
+            kwargs["generation_batch_size"] = args.generation_batch_size
+        result = generator(
             args.config,
             frozen_manifest=args.frozen_manifest,
             subset=args.subset,
@@ -116,6 +128,7 @@ def main() -> None:
             archive_incompatible=args.archive_incompatible,
             progress_every=args.progress_every,
             cohort_manifest=args.cohort_manifest,
+            **kwargs,
         )
     elif args.command in {"audit", "prepare-common-cohort", "preflight"}:
         campaign = _load_campaign(args.campaign_config)
