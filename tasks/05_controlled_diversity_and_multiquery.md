@@ -48,6 +48,12 @@ inputs ani probe training. Plan i komendy:
 Recovery ADR i bieżący runner:
 [`task05_d01_post_campaign_2026-07-30.md`](../reports/plans/task05_d01_post_campaign_2026-07-30.md).
 
+Pierwsza próba scoringu zatrzymała się fail-closed przed pierwszym wierszem,
+ponieważ runner wskazywał train-only `bm25_train_v1`, w którym zgodnie z
+kontraktem brakowało pozytywów dev. Pin poprawiono na istniejący dev-inclusive
+`data/processed/v1/evaluation/corpus-bm25-v1`; ma on wszystkie 6250 wymaganych
+doc ID wspólnej kohorty. Nie zinterpretowano żadnych metryk jakościowych.
+
 Niezależnie od D01 zaimplementowano i uruchomiono CPU-only pakiet kalibracji
 naturalnych query na pełnym zamrożonym `dev_intrinsic_rank10` (6598 rekordów).
 Prospektywny kontrakt przypina kohortę, seed, reguły `form`/`intent`, jawne

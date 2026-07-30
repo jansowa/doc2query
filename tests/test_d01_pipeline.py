@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 from doc2query.config import load_config
 from doc2query.evaluation import d01_campaign, d01_pipeline
@@ -383,6 +384,20 @@ def test_campaign_runner_has_lock_and_requires_one_explicit_phase() -> None:
     assert "generation-batched" in script
     assert "uncontrolled.full.jsonl" not in script
     assert "--generation-batch-size 16" in script
+    assert "corpus=data/processed/v1/evaluation/corpus-bm25-v1" in script
+    assert "corpus=artifacts/task04/p03/bm25_train_v1" not in script
+    campaign = yaml.safe_load(
+        Path("configs/evaluation/d01_campaign_v2.yaml").read_text(encoding="utf-8")
+    )
+    assert campaign["scoring"] == {
+        "primary": "configs/reranker/primary_polish_roberta_v3_cuda.yaml",
+        "shadow": "configs/reranker/shadow_bge_v2_m3.yaml",
+        "corpus_index": "data/processed/v1/evaluation/corpus-bm25-v1",
+        "expected_corpus_fingerprint": (
+            "159af07f3b987fe492f9ff89f494521587a4d023fcb4fc62b69d7295d2a57258"
+        ),
+        "output_root": "reports/measurements/task05_d01_postprocess_v2/scoring",
+    }
 
 
 def _write_json(path: Path, value: Any) -> None:

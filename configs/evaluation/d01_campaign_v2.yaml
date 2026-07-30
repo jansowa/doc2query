@@ -63,8 +63,8 @@ baselines:
 scoring:
   primary: configs/reranker/primary_polish_roberta_v3_cuda.yaml
   shadow: configs/reranker/shadow_bge_v2_m3.yaml
-  corpus_index: artifacts/task04/p03/bm25_train_v1
-  expected_corpus_fingerprint: e5df243227e8e877550c283e2f7c882fa931ee38d849d39e8f2e2a51dc182119
+  corpus_index: data/processed/v1/evaluation/corpus-bm25-v1
+  expected_corpus_fingerprint: 159af07f3b987fe492f9ff89f494521587a4d023fcb4fc62b69d7295d2a57258
   output_root: reports/measurements/task05_d01_postprocess_v2/scoring
 comparison:
   contract: configs/evaluation/comparison_contract_v1.yaml

@@ -19,9 +19,11 @@ exhausted groups. Jest to wyłącznie wynik techniczny.
 
 Preflight potwierdził W05 oraz rzeczywisty W06
 `W06-4.5B-INSTRUCT-50K-8GB-BS8-L512`; fikcyjny adapter BS1 nie jest używany.
-Zweryfikował też pełne SHA indeksu BM25 i dokumentów: corpus fingerprint
-`e5df243227e8e877550c283e2f7c882fa931ee38d849d39e8f2e2a51dc182119`,
-2211463 dokumenty, protokół `corpus_retrieval`.
+Scoring używa dev-inclusive frozen BM25 z
+`data/processed/v1/evaluation/corpus-bm25-v1`: corpus fingerprint
+`159af07f3b987fe492f9ff89f494521587a4d023fcb4fc62b69d7295d2a57258`,
+2404263 dokumenty, protokół `corpus_retrieval`. Train-only P-03 BM25 nie jest
+zgodnym korpusem round-trip, ponieważ celowo nie zawiera pozytywów dev.
 
 ## Fazy
 

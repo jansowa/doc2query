@@ -138,7 +138,7 @@ case "$PHASE" in
       "$python" scripts/run_d01_postprocess.py preflight --campaign-config configs/evaluation/d01_campaign_v2.yaml
       primary=configs/reranker/primary_polish_roberta_v3_cuda.yaml
       shadow=configs/reranker/shadow_bge_v2_m3.yaml
-      corpus=artifacts/task04/p03/bm25_train_v1
+      corpus=data/processed/v1/evaluation/corpus-bm25-v1
       score_one() {
         local generations=$1 summary=$2 output=$3
         "$python" scripts/run_d01_postprocess.py score \
