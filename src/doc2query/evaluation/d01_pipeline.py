@@ -18,6 +18,7 @@ import yaml
 
 from doc2query.config import load_config
 from doc2query.evaluation.bootstrap import paired_bootstrap
+from doc2query.evaluation.d01_quality import evaluate_copy_semantic_quality
 from doc2query.evaluation.datasets import evaluation_fingerprint, load_frozen_records
 from doc2query.evaluation.embedder_probe import ProbeRecipe
 from doc2query.evaluation.generator import score_generation_artifact
@@ -37,7 +38,7 @@ D01_GENERATION_CONTRACT = "task05-d01-frozen-dev-generation-v1"
 D01_BATCHED_GENERATION_CONTRACT = "task05-d01-frozen-dev-generation-batched-v2"
 D01_GENERATION_CONTRACTS = frozenset({D01_GENERATION_CONTRACT, D01_BATCHED_GENERATION_CONTRACT})
 D01_SCORING_CONTRACT = "task05-d01-intrinsic-scoring-v1"
-D01_COMPARISON_CONTRACT = "task05-d01-matched-comparison-v1"
+D01_COMPARISON_CONTRACT = "task05-d01-matched-comparison-v2"
 D01_PROBE_INPUT_CONTRACT = "task05-d01-probe-input-v1"
 ALLOWED_DEVELOPMENT_SUBSETS = frozenset({"dev_intrinsic_rank10"})
 
@@ -1087,10 +1088,12 @@ def assemble_matched_report(
     variant_summary_path: Path,
     variant_rows_path: Path,
     comparison_contract_path: Path,
+    quality_contract_path: Path,
     output_json: Path,
     output_markdown: Path,
     bootstrap_samples: int = 10_000,
     bootstrap_seed: int = 20_260_721,
+    semantic_device: str = "cuda",
 ) -> dict[str, Any]:
     """Build a matched dev report; never promote an arm without extrinsic evidence."""
     baseline = json.loads(baseline_summary_path.read_text(encoding="utf-8"))
@@ -1218,12 +1221,28 @@ def assemble_matched_report(
                 "margin": float(rule["margin"]),
                 "bootstrap": measured,
             }
+    quality_report: dict[str, Any] | None = None
+    if not errors:
+        quality_report = evaluate_copy_semantic_quality(
+            baseline_rows_path=baseline_rows_path,
+            variant_rows_path=variant_rows_path,
+            baseline_label=str(baseline.get("experiment_id", "baseline")),
+            variant_label=str(variant.get("experiment_id", "variant")),
+            contract_path=quality_contract_path,
+            output_json=output_json,
+            bootstrap_samples=bootstrap_samples,
+            bootstrap_seed=bootstrap_seed,
+            semantic_device=semantic_device,
+        )
     guardrail_statuses = {str(value["status"]) for value in guardrails.values()}
     intrinsic_guardrail_decision = (
         "stop"
         if "failed" in guardrail_statuses
+        or (quality_report is not None and quality_report.get("decision") == "stop")
         else "continue"
         if guardrail_statuses == {"passed"}
+        and quality_report is not None
+        and quality_report.get("decision") == "continue"
         else "not_measured"
     )
     # Intrinsic D01 can establish guardrails, not the main probe-embedder outcome.
@@ -1264,6 +1283,7 @@ def assemble_matched_report(
         },
         "paired_passage_bootstrap": bootstrap,
         "intrinsic_guardrails": guardrails,
+        "copy_semantic_quality": quality_report,
         "intrinsic_guardrail_decision": intrinsic_guardrail_decision,
         "style_accuracy_comparison_policy": (
             "variant_only; uncontrolled baseline has no requested-style target"
@@ -1278,6 +1298,8 @@ def assemble_matched_report(
         f"- Status: `{report['status']}`",
         f"- Decision: `{decision}`",
         f"- Intrinsic guardrail decision: `{intrinsic_guardrail_decision}`",
+        "- Copy/semantic decision: "
+        f"`{quality_report.get('decision') if quality_report else 'not_measured'}`",
         f"- Budgets matched: `{str(budgets_matched).lower()}`",
         "- Automatic promotion: `false`",
         "- Final tests used: `[]`",
@@ -1295,6 +1317,26 @@ def assemble_matched_report(
         lines.append(
             f"| {metric} | {item['difference']:.6f} | "
             f"[{item['ci95_low']:.6f}, {item['ci95_high']:.6f}] | {item['query_count']} |"
+        )
+    if quality_report is not None:
+        anti_copy = quality_report["anti_copy"]
+        semantic = quality_report["semantic_diversity"]
+        lines.extend(
+            [
+                "",
+                "## Natural-calibrated anti-copy gate",
+                "",
+                f"- Natural high-risk rate: `{anti_copy['natural_reference_rate']:.6f}`",
+                f"- Baseline high-risk rate: `{anti_copy['baseline_rate']:.6f}`",
+                f"- Variant high-risk rate: `{anti_copy['variant_rate']:.6f}`",
+                "",
+                "## Clean-cohort semantic diversity",
+                "",
+                f"- Common clean groups: `{semantic['common_clean_group_count']}`",
+                f"- Common clean-group rate: `{semantic['common_clean_group_rate']:.6f}`",
+                "- Encoder: `OPI-PIB/PolDense-150M` with symmetric `[sts]: ` prefix",
+                "- Human anti-copy audit: `pending_human_review`",
+            ]
         )
     output_markdown.parent.mkdir(parents=True, exist_ok=True)
     output_markdown.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -1343,6 +1385,17 @@ def materialize_probe_inputs(
         raise ValueError("probe materialization requires a matched comparison budget")
     if comparison.get("intrinsic_guardrail_decision") != "continue":
         raise ValueError("probe materialization requires all P-04 intrinsic guardrails to pass")
+    quality = comparison.get("copy_semantic_quality")
+    quality_contract = quality.get("contract") if isinstance(quality, Mapping) else None
+    if (
+        not isinstance(quality, Mapping)
+        or quality.get("status") != "measured"
+        or quality.get("decision") != "continue"
+        or not isinstance(quality_contract, Mapping)
+        or quality_contract.get("contract") != "task05-d01-copy-semantic-quality-v1"
+        or quality.get("final_tests_used") != []
+    ):
+        raise ValueError("probe materialization requires the copy/semantic quality gate")
     for payload in (generation, scoring, comparison):
         if payload.get("final_tests_used") != []:
             raise ValueError("probe materialization forbids final-test provenance")

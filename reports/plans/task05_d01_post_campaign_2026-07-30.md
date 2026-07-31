@@ -25,6 +25,16 @@ Scoring używa dev-inclusive frozen BM25 z
 2404263 dokumenty, protokół `corpus_retrieval`. Train-only P-03 BM25 nie jest
 zgodnym korpusem round-trip, ponieważ celowo nie zawiera pozytywów dev.
 
+Przed pierwszą fazą `compare` obowiązuje dodatkowy fail-closed kontrakt
+[`d01_copy_semantic_quality_v1.yaml`](../../configs/evaluation/d01_copy_semantic_quality_v1.yaml).
+Nie wymaga on powtórzenia generacji ani scoringu. Kalibruje copy-risk na
+naturalnych referencjach wspólnej frozen-dev kohorty i uruchamia
+`OPI-PIB/PolDense-150M` na wspólnym anti-copy-clean przecięciu grup. Dla
+symetrycznego query-query używany jest `[sts]: `, natomiast `[query]: ` jest
+zarezerwowany dla retrieval query-passage. `compare` atomowo cachuje
+embeddingi i materializuje osobny ślepy audyt; nieudana bramka blokuje
+`materialize-probe-inputs`.
+
 ## Fazy
 
 Każde wywołanie wykonuje dokładnie jedną fazę i ma osobny lock, log oraz

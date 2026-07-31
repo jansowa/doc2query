@@ -68,6 +68,7 @@ scoring:
   output_root: reports/measurements/task05_d01_postprocess_v2/scoring
 comparison:
   contract: configs/evaluation/comparison_contract_v1.yaml
+  quality_contract: configs/evaluation/d01_copy_semantic_quality_v1.yaml
   output_root: reports/measurements/task05_d01_postprocess_v2/comparisons
 probe_inputs:
   recipe: configs/evaluation/probe_v1.yaml

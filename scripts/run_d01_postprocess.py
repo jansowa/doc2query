@@ -22,6 +22,7 @@ from doc2query.evaluation.d01_pipeline import (
     materialize_probe_inputs,
     score_d01_artifact,
 )
+from doc2query.evaluation.d01_quality import D01QualityContract
 
 
 def _generation(parser: argparse.ArgumentParser) -> None:
@@ -73,6 +74,8 @@ def _comparison(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--variant-summary", type=Path, required=True)
     parser.add_argument("--variant-rows", type=Path, required=True)
     parser.add_argument("--comparison-contract", type=Path, required=True)
+    parser.add_argument("--quality-contract", type=Path, required=True)
+    parser.add_argument("--semantic-device", choices=("cpu", "cuda"), default="cuda")
     parser.add_argument("--output-json", type=Path, required=True)
     parser.add_argument("--output-markdown", type=Path, required=True)
     parser.add_argument("--bootstrap-samples", type=int, default=10_000)
@@ -165,7 +168,12 @@ def main() -> None:
         else:
             baselines = campaign["baselines"]
             scoring = campaign["scoring"]
-            if not isinstance(baselines, list) or not isinstance(scoring, dict):
+            comparison = campaign["comparison"]
+            if (
+                not isinstance(baselines, list)
+                or not isinstance(scoring, dict)
+                or not isinstance(comparison, dict)
+            ):
                 raise ValueError("campaign baseline/scoring config is malformed")
             result = {
                 "status": "verified",
@@ -181,6 +189,9 @@ def main() -> None:
                     Path(str(scoring["corpus_index"])),
                     expected_fingerprint=str(scoring["expected_corpus_fingerprint"]),
                 ),
+                "copy_semantic_quality": D01QualityContract.load(
+                    Path(str(comparison["quality_contract"]))
+                ).reference(),
                 "final_tests_used": [],
             }
     elif args.command == "score":
@@ -205,10 +216,12 @@ def main() -> None:
             variant_summary_path=args.variant_summary,
             variant_rows_path=args.variant_rows,
             comparison_contract_path=args.comparison_contract,
+            quality_contract_path=args.quality_contract,
             output_json=args.output_json,
             output_markdown=args.output_markdown,
             bootstrap_samples=args.bootstrap_samples,
             bootstrap_seed=args.bootstrap_seed,
+            semantic_device=args.semantic_device,
         )
     else:
         result = materialize_probe_inputs(

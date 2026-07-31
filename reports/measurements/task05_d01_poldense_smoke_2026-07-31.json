@@ -1,0 +1,31 @@
+{
+  "contract": "task05-d01-poldense-smoke-v1",
+  "date": "2026-07-31",
+  "status": "measured",
+  "purpose": "backend and prefix smoke only; not an arm comparison or quality result",
+  "model": {
+    "name_or_path": "OPI-PIB/PolDense-150M",
+    "revision": "b94ea7f951cc480369a85fa9021694eef80c3a00",
+    "license": "gemma",
+    "trust_remote_code": false
+  },
+  "execution": {
+    "device": "cpu",
+    "dtype": "float32",
+    "attention_implementation": "sdpa",
+    "sentence_transformers": "5.6.0",
+    "transformers": "5.13.1",
+    "torch": "2.6.0+cu124",
+    "prefix": "[sts]: ",
+    "batch_size": 3
+  },
+  "result": {
+    "shape": [3, 768],
+    "finite": true,
+    "norms": [1.0, 1.0, 1.0],
+    "paraphrase_cosine": 0.9983699321746826,
+    "unrelated_cosine": 0.7197593450546265,
+    "paraphrase_above_unrelated": true
+  },
+  "final_tests_used": []
+}

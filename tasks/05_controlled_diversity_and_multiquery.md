@@ -60,6 +60,27 @@ wierszy, lecz końcowa bramka zatrzymała pipeline z powodu pominiętego pola
 wyniki sędziów były kompletne i nie wymagają ponownego liczenia. Scoring całej
 pary nadal nie jest ukończony i nie zinterpretowano metryk jakościowych.
 
+Przed pierwszym matched `compare` rozszerzono bramkę po wykryciu luki
+metodologicznej: same lexical diversity i retrieval mogły premiować cztery
+różne kopie fragmentów pasażu. Prospektywny kontrakt
+`d01_copy_semantic_quality_v1` kalibruje ryzyko kopiowania wyłącznie na
+naturalnych referencjach dokładnie tej samej frozen-dev kohorty, wymaga
+absolutnej zgodności z naturalnym ogonem i względnej non-inferiority wobec
+baseline'u, a semantic diversity liczy tylko na wspólnych grupach, w których
+żadne z ośmiu query obu ramion nie ma flagi copy-risk. Przypięto
+`OPI-PIB/PolDense-150M` revision
+`b94ea7f951cc480369a85fa9021694eef80c3a00`, `trust_remote_code=false`.
+Symetryczne query-query używa zgodnie z kartą modelu prefiksu `[sts]: `;
+`[query]: ` jest przypięty dla asymetrycznego query-passage. Embeddingi są
+normalizowane, identity-bound i atomowo cachowane. Bramka raportuje też
+pairwise cosine, klastry semantyczne, passage-lemma-removed Jaccard oraz
+materializuje ślepy audyt 100 high-retrieval/copy-risk przypadków. Nieudana
+bramka blokuje probe inputs. CPU smoke prawdziwego modelu potwierdził output
+`3x768`, skończone wektory o normie 1 oraz wyższe podobieństwo parafraz niż
+niezwiązanego pytania; nie jest to wynik kampanii ani porównanie ramion.
+Pomiar smoke:
+[`task05_d01_poldense_smoke_2026-07-31.json`](../reports/measurements/task05_d01_poldense_smoke_2026-07-31.json).
+
 Niezależnie od D01 zaimplementowano i uruchomiono CPU-only pakiet kalibracji
 naturalnych query na pełnym zamrożonym `dev_intrinsic_rank10` (6598 rekordów).
 Prospektywny kontrakt przypina kohortę, seed, reguły `form`/`intent`, jawne
@@ -77,7 +98,8 @@ proxy 500/500 etykiet oraz 200/200 audytów koncepcji; agregacje mają status
 `complete`, ale nie zastępują oceny człowieka. Plan, wyniki, hashe i komendy:
 [`task05_natural_audits_2026-07-26.md`](../reports/plans/task05_natural_audits_2026-07-26.md).
 
-Do statusu `DONE` pozostają: eksperymenty D00–D12 na wspólnych kandydatach i
+Do statusu `DONE` pozostają: dokończenie scoringu i rzeczywiste uruchomienie
+nowej bramki copy/semantic, eksperymenty D00–D12 na wspólnych kandydatach i
 budżetach, ewentualne rzeczywiste ręczne oceny zmaterializowanych audytów
 500 etykiet i 200 ekstrakcji koncepcji, human check oraz porównawcze probe
 embeddera z CI. Opisowa kalibracja naturalnych query jest zmaterializowana,

@@ -386,6 +386,8 @@ def test_campaign_runner_has_lock_and_requires_one_explicit_phase() -> None:
     assert "--generation-batch-size 16" in script
     assert "corpus=data/processed/v1/evaluation/corpus-bm25-v1" in script
     assert "corpus=artifacts/task04/p03/bm25_train_v1" not in script
+    assert '--quality-contract "$quality"' in script
+    assert "--semantic-device cuda" in script
     campaign = yaml.safe_load(
         Path("configs/evaluation/d01_campaign_v2.yaml").read_text(encoding="utf-8")
     )
@@ -398,6 +400,9 @@ def test_campaign_runner_has_lock_and_requires_one_explicit_phase() -> None:
         ),
         "output_root": "reports/measurements/task05_d01_postprocess_v2/scoring",
     }
+    assert campaign["comparison"]["quality_contract"] == (
+        "configs/evaluation/d01_copy_semantic_quality_v1.yaml"
+    )
 
 
 def _write_json(path: Path, value: Any) -> None:
@@ -457,6 +462,7 @@ def test_matched_comparison_fails_closed_on_budget_difference(tmp_path: Path) ->
         variant_summary_path=variant_summary,
         variant_rows_path=variant_rows,
         comparison_contract_path=Path("configs/evaluation/comparison_contract_v1.yaml"),
+        quality_contract_path=Path("configs/evaluation/d01_copy_semantic_quality_v1.yaml"),
         output_json=tmp_path / "report.json",
         output_markdown=tmp_path / "report.md",
         bootstrap_samples=10,
@@ -576,6 +582,14 @@ def _probe_contracts(
             "contract": D01_COMPARISON_CONTRACT,
             "budget_difference": {"matched": True},
             "intrinsic_guardrail_decision": "continue",
+            "copy_semantic_quality": {
+                "status": "measured",
+                "decision": "continue",
+                "contract": {
+                    "contract": "task05-d01-copy-semantic-quality-v1",
+                },
+                "final_tests_used": [],
+            },
             "variant": {"experiment_id": "D01"},
             "final_tests_used": [],
         },
@@ -588,6 +602,21 @@ def test_probe_materialization_requires_gate_and_exact_k4(tmp_path: Path) -> Non
     rows_path = tmp_path / "rows.jsonl"
     rows_path.write_text("", encoding="utf-8")
     with pytest.raises(ValueError, match="complete matched"):
+        materialize_probe_inputs(
+            generations_path=rows_path,
+            generation_summary_path=generation,
+            scoring_summary_path=scoring,
+            scoring_rows_path=rows_path,
+            comparison_report_path=comparison,
+            probe_recipe_path=Path("configs/evaluation/probe_v1.yaml"),
+            output_path=tmp_path / "probe.jsonl",
+        )
+
+    generation, scoring, comparison = _probe_contracts(tmp_path)
+    comparison_payload = json.loads(comparison.read_text(encoding="utf-8"))
+    comparison_payload.pop("copy_semantic_quality")
+    _write_json(comparison, comparison_payload)
+    with pytest.raises(ValueError, match="copy/semantic quality gate"):
         materialize_probe_inputs(
             generations_path=rows_path,
             generation_summary_path=generation,

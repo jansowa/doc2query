@@ -1,0 +1,47 @@
+schema_version: 1
+contract: task05-d01-copy-semantic-quality-v1
+frozen_subset: dev_intrinsic_rank10
+adr:
+  id: ADR-task05-D01-copy-semantic-quality
+  version: 1.0.0
+  path: reports/decisions/task05_d01_copy_semantic_quality_v1.md
+  sha256: 2c914aff77057c91468456c88d471148db1dcf3eb1a057ab025782eb8b18658f
+
+natural_calibration:
+  source: matched_natural_references
+  forbidden_inputs: [D01_results, synthetic_queries, final_tests]
+  upper_tail_metrics: [copy_density, normalized_lcs, longest_copied_ngram]
+  upper_quantile: 0.95
+  length_ratio_upper_quantile: 0.99
+
+anti_copy:
+  minimum_query_words: 4
+  max_natural_tail_excess: 0.05
+  variant_vs_baseline_margin: 0.02
+  paired_bootstrap_direction: variant_minus_baseline
+
+semantic_diversity:
+  model:
+    name_or_path: OPI-PIB/PolDense-150M
+    revision: b94ea7f951cc480369a85fa9021694eef80c3a00
+    license: gemma
+    trust_remote_code: false
+    dtype: float32
+    attention_implementation: sdpa
+  similarity_task: symmetric_query_query
+  similarity_prefix: "[sts]: "
+  retrieval_query_prefix: "[query]: "
+  normalize_embeddings: true
+  batch_size: 128
+  cluster_cosine_threshold: 0.85
+  minimum_common_clean_group_rate: 0.80
+  cluster_count_noninferiority_margin: 0.10
+  max_pairwise_cosine_margin: 0.02
+
+blind_audit:
+  sample_size: 100
+  seed: 20260731
+  selection: balanced_arms_high_retrieval_then_copy_risk
+  automatic_labels_prohibited: true
+
+final_tests_used: []
