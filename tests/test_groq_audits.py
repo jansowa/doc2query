@@ -378,3 +378,48 @@ def test_complete_bare_array_is_accepted_only_with_exact_ids() -> None:
     ratings = json.loads(response["choices"][0]["message"]["content"])["ratings"]
     event = {"body": response | {"choices": [{"message": {"content": json.dumps(ratings)}}]}}
     assert groq_audits._validated_ratings(request, event)[0]["audit_id"] == "L-1"
+
+
+def test_singleton_enum_lists_are_normalized_without_changing_values() -> None:
+    rating = {
+        "audit_id": "L-1",
+        "gold_form": ["full_question"],
+        "gold_intent": ["definition"],
+        "intent_adequate": ["yes"],
+        "ambiguous": ["no"],
+        "encoding_error": ["no"],
+        "comment": "",
+    }
+    normalized = groq_audits._validate_rating("label", rating)
+    assert normalized["gold_form"] == "full_question"
+    assert normalized["gold_intent"] == "definition"
+    assert normalized["intent_adequate"] == "yes"
+
+
+def test_complete_bare_object_recovers_exact_first_item_only() -> None:
+    request = groq_audits.PlannedRequest(
+        request_id="request-prefix-object",
+        model_id="openai/gpt-oss-120b",
+        reviewer_id="reviewer",
+        audit_type="label",
+        item_ids=("L-1", "L-2"),
+        api_request={},
+        estimated_tokens=100,
+    )
+    content = {
+        "audit_id": "L-1",
+        "gold_form": "keyword_query",
+        "gold_intent": "fact_lookup",
+        "intent_adequate": "yes",
+        "ambiguous": "no",
+        "encoding_error": "no",
+        "comment": "",
+    }
+    response = {
+        "body": {
+            "choices": [{"finish_reason": "length", "message": {"content": json.dumps(content)}}]
+        }
+    }
+    assert [
+        row["audit_id"] for row in groq_audits._validated_truncated_prefix(request, response)
+    ] == ["L-1"]

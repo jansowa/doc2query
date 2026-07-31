@@ -65,16 +65,14 @@ są crash-safe i identity-bound, a agregatory liczą confusion/PRF, coverage,
 accuracy po abstention, slice'y domenowe, reliability bins i Cohen/Fleiss
 kappa oraz odmawiają statusu `complete` przy brakach lub nierozstrzygniętej
 adjudykacji. Kontrakt dopuszcza jednego właściciela-oceniającego; wtedy kappa
-pozostaje jawnie `NOT MEASURED`. Oba formularze nadal są puste: audyty 500/200 pozostają
-`NOT MEASURED`, nie wyznaczono progu style accuracy. Powstał wznawialny,
-quota-safe anotator Groq dla obu formularzy; jego docelowy run pozostaje do
-zakończenia w osobnym procesie właściciela, a wyniki będą automatycznym proxy,
-nie oceną człowieka. Post-D01 nie agreguje ani nie interpretuje jego aktywnych
-journali. Plan, hashe i komendy:
+pozostaje jawnie `NOT MEASURED`. Ręczne formularze nadal są puste i nie
+wyznaczono progu style accuracy. Quota-safe anotator Groq ukończył automatyczne
+proxy 500/500 etykiet oraz 200/200 audytów koncepcji; agregacje mają status
+`complete`, ale nie zastępują oceny człowieka. Plan, wyniki, hashe i komendy:
 [`task05_natural_audits_2026-07-26.md`](../reports/plans/task05_natural_audits_2026-07-26.md).
 
 Do statusu `DONE` pozostają: eksperymenty D00–D12 na wspólnych kandydatach i
-budżetach, rzeczywiste ręczne oceny i adjudykacja zmaterializowanych audytów
+budżetach, ewentualne rzeczywiste ręczne oceny zmaterializowanych audytów
 500 etykiet i 200 ekstrakcji koncepcji, human check oraz porównawcze probe
 embeddera z CI. Opisowa kalibracja naturalnych query jest zmaterializowana,
 ale nie zastępuje ręcznego pomiaru accuracy.

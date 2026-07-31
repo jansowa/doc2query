@@ -24,14 +24,25 @@ commitowane, ponieważ zawierają tekst danych. Manifest ma status
 `materialized_unreviewed`; audyty etykiet i koncepcji są `NOT MEASURED`.
 
 Przygotowano również automatycznego anotatora Groq jako zastępstwo dla
-ręcznego wypełniania formularzy. Docelowy proces jest obecnie aktywny i nie
-jest agregowany ani interpretowany przez niezależną kampanię post-D01. Dwa
+ręcznego wypełniania formularzy. Proces ukończono i zagregowano niezależnie od
+kampanii post-D01. Dwa
 niezależnie limitowane workery używają
 `qwen/qwen3.6-27b` (reasoning `none`) i `openai/gpt-oss-120b` (reasoning
 `low`). Każdy request i response trafia do trwałego JSONL, a resume pomija
-kompletne odpowiedzi. Plan v2 przenosi siedem poprawnych ocen z pilota i
-obejmuje 693 pozostałe rekordy w 224 paczkach. LLM-y są automatycznym proxy,
-nie ludzkimi oceniającymi; zgodność człowieka pozostanie `NOT MEASURED`.
+kompletne odpowiedzi. Plan v2 przeniósł siedem poprawnych ocen z pilota i
+objął 693 pozostałe rekordy w 224 paczkach. Z częściowych odpowiedzi odzyskano
+deterministycznie kompletne rekordy, a repair v3 wysłał wyłącznie 17
+brakujących koncepcji jako pojedyncze requesty. Finał ma status `complete`:
+500/500 etykiet i 200/200 audytów koncepcji. LLM-y są automatycznym proxy, nie
+ludzkimi oceniającymi; zgodność człowieka pozostaje `NOT MEASURED`.
+
+Agregacja LLM-proxy wykazała dla reguł formy coverage `0.720` i accuracy na
+pokrytych rekordach `0.7861`, a dla intencji coverage `0.746` i accuracy
+`0.7212`. Surowe accuracy na wszystkich 500 rekordach wyniosło odpowiednio
+`0.570` i `0.538`. Audyt koncepcji policzył 2605 wskazań poprawnych, 1057
+spurious, 55 brakujących i 14 duplikatów; 152/200 rekordów uznano za useful
+for coverage, a 65/200 za over-fragmented. Są to oceny modeli, nie ground truth
+człowieka ani bramka jakości finalnej.
 
 ## Wynik opisowej kalibracji (nie accuracy)
 
@@ -88,13 +99,13 @@ Plan Groq bez użycia limitu API:
 .venv/bin/python scripts/run_task05_groq_audits.py --plan-only
 ```
 
-Docelowe uruchomienie wykonuje właściciel projektu. Bieżący ledger ma jeden
-request GPT-OSS przerwany po zapisie `request_started`, dlatego pierwsze
-wznowienie wymaga jawnej zgody na jego potencjalne, jednorazowe powtórzenie:
+Historyczny run v2 i jego repair v3 są ukończone. Odtworzenie samego repair
+planu wykorzystuje jawne ścieżki:
 
 ```bash
 .venv/bin/python scripts/run_task05_groq_audits.py \
-  --allow-ambiguous-resend
+  --config configs/evaluation/task05_groq_llm_audit_v3_repair.json \
+  --output-dir artifacts/task05/groq_llm_audit_v3_repair
 ```
 
 Kolejne zwykłe wznowienia nie wymagają flagi, o ile poprzedni proces zakończył
@@ -117,15 +128,15 @@ fail-closed agregatorami, lecz do osobnych katalogów raportowych:
 ```bash
 .venv/bin/python scripts/task05_natural_audits.py aggregate-labels \
   --machine-key artifacts/task05/natural_audits_v1/label_audit_machine_key.jsonl \
-  --ratings artifacts/task05/groq_llm_audit_v2/label_llm_ratings.csv \
+  --ratings artifacts/task05/groq_llm_audit_v3_repair/label_llm_ratings.csv \
   --adjudication artifacts/task05/natural_audits_v1/label_adjudication.csv \
-  --output-dir reports/measurements/task05_groq_label_audit_v2
+  --output-dir reports/measurements/task05_groq_label_audit_v3
 
 .venv/bin/python scripts/task05_natural_audits.py aggregate-concepts \
   --machine-proposals artifacts/task05/natural_audits_v1/concept_audit_machine_proposals.jsonl \
-  --ratings artifacts/task05/groq_llm_audit_v2/concept_llm_ratings.csv \
+  --ratings artifacts/task05/groq_llm_audit_v3_repair/concept_llm_ratings.csv \
   --adjudication artifacts/task05/natural_audits_v1/concept_adjudication.csv \
-  --output-dir reports/measurements/task05_groq_concept_audit_v2
+  --output-dir reports/measurements/task05_groq_concept_audit_v3
 ```
 
 Raporty te muszą pozostać oznaczone jako LLM-proxy; nie są pomiarem człowieka

@@ -1,0 +1,60 @@
+{
+  "schema_version": 3,
+  "contract": "task05-groq-llm-audit-v1",
+  "source_materialization_manifest": "artifacts/task05/natural_audits_v1/materialization_manifest.json",
+  "label_blind_csv": "artifacts/task05/natural_audits_v1/label_audit_blind.csv",
+  "concept_blind_csv": "artifacts/task05/natural_audits_v1/concept_audit_blind.csv",
+  "carry_forward_ratings": {
+    "label_csv": "artifacts/task05/groq_llm_audit_v2/label_llm_ratings.csv",
+    "concept_csv": "artifacts/task05/groq_llm_audit_v2/concept_llm_ratings.csv"
+  },
+  "seed": 20260726,
+  "prompt_version": "task05-groq-polish-audit-v3-single-concept-repair",
+  "terse_output": true,
+  "include_completion_budget_in_estimate": true,
+  "models": [
+    {
+      "model_id": "qwen/qwen3.6-27b",
+      "reviewer_id": "groq-qwen3.6-27b-v3-repair",
+      "reasoning_effort": "none",
+      "completion_token_overhead": 0
+    },
+    {
+      "model_id": "openai/gpt-oss-120b",
+      "reviewer_id": "groq-gpt-oss-120b-low-v3-repair",
+      "reasoning_effort": "low",
+      "completion_token_overhead": 400
+    }
+  ],
+  "batch_sizes": {"label": 1, "concept": 1},
+  "max_completion_tokens_per_item": {"label": 180, "concept": 600},
+  "limits_per_model": {
+    "minimum_seconds_between_requests": 2.1,
+    "requests_per_minute": 30,
+    "requests_per_day": 1000,
+    "tokens_per_minute": 8000,
+    "tokens_per_day": 200000,
+    "safety_requests_per_day": 950,
+    "safety_tokens_per_minute": 7600,
+    "safety_tokens_per_day": 185000
+  },
+  "prior_daily_usage": {
+    "qwen/qwen3.6-27b": {"date": "2026-07-31", "requests": 0, "tokens": 0},
+    "openai/gpt-oss-120b": {"date": "2026-07-31", "requests": 3, "tokens": 4853}
+  },
+  "retry": {
+    "max_rate_limit_retries": 8,
+    "default_retry_after_seconds": 10.0,
+    "maximum_retry_after_seconds": 65.0
+  },
+  "token_estimator": {"characters_per_token": 3.2, "fixed_request_tokens": 24},
+  "api": {
+    "url": "https://api.groq.com/openai/v1/chat/completions",
+    "timeout_seconds": 120,
+    "temperature": 0.0,
+    "response_format": "json_object",
+    "include_reasoning": false
+  },
+  "final_tests_used": [],
+  "d01_results_used": []
+}

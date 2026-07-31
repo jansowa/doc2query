@@ -469,21 +469,32 @@ def _validate_rating(audit_type: str, rating: Mapping[str, Any]) -> dict[str, An
     if not audit_id:
         raise ValueError("rating has no audit_id")
     if audit_type == "label":
-        if rating.get("gold_form") not in FORM_VALUES:
+        normalized = dict(rating)
+        for field in (
+            "gold_form",
+            "gold_intent",
+            "intent_adequate",
+            "ambiguous",
+            "encoding_error",
+        ):
+            value = normalized.get(field)
+            if isinstance(value, list) and len(value) == 1:
+                normalized[field] = value[0]
+        if normalized.get("gold_form") not in FORM_VALUES:
             raise ValueError(f"{audit_id}: invalid gold_form")
-        if rating.get("gold_intent") not in INTENT_VALUES:
+        if normalized.get("gold_intent") not in INTENT_VALUES:
             raise ValueError(f"{audit_id}: invalid gold_intent")
         for field in ("intent_adequate", "ambiguous", "encoding_error"):
-            if rating.get(field) not in YES_NO_UNCERTAIN:
+            if normalized.get(field) not in YES_NO_UNCERTAIN:
                 raise ValueError(f"{audit_id}: invalid {field}")
         return {
             "audit_id": audit_id,
-            "gold_form": rating["gold_form"],
-            "gold_intent": rating["gold_intent"],
-            "intent_adequate": rating["intent_adequate"],
-            "ambiguous": rating["ambiguous"],
-            "encoding_error": rating["encoding_error"],
-            "comment": str(rating.get("comment", ""))[:500],
+            "gold_form": normalized["gold_form"],
+            "gold_intent": normalized["gold_intent"],
+            "intent_adequate": normalized["intent_adequate"],
+            "ambiguous": normalized["ambiguous"],
+            "encoding_error": normalized["encoding_error"],
+            "comment": str(normalized.get("comment", ""))[:500],
         }
     for field in (
         "numbers_units_correct",
@@ -534,17 +545,40 @@ def _validated_ratings(
 def _validated_truncated_prefix(
     request: PlannedRequest, response: Mapping[str, Any]
 ) -> list[dict[str, Any]]:
-    """Recover only complete, valid leading rows from a length-truncated JSON array."""
+    """Recover only complete, valid leading rows from a malformed batch wrapper."""
     body = cast(Mapping[str, Any], response["body"])
-    choices = cast(Sequence[Mapping[str, Any]], body.get("choices", []))
-    if not choices or choices[0].get("finish_reason") != "length":
-        return []
     content = _response_content(body).strip()
+    raw_rows: list[Mapping[str, Any]] = []
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError:
+        parsed = None
+    if isinstance(parsed, list):
+        raw_rows = [row for row in parsed if isinstance(row, Mapping)]
+    elif isinstance(parsed, Mapping):
+        ratings = parsed.get("ratings")
+        if isinstance(ratings, list):
+            raw_rows = [row for row in ratings if isinstance(row, Mapping)]
+        elif parsed.get("audit_id"):
+            raw_rows = [parsed]
+    if raw_rows:
+        recovered: list[dict[str, Any]] = []
+        for raw in raw_rows:
+            try:
+                rating = _validate_rating(request.audit_type, raw)
+            except ValueError:
+                break
+            if len(recovered) >= len(request.item_ids):
+                break
+            if rating["audit_id"] != request.item_ids[len(recovered)]:
+                break
+            recovered.append(rating)
+        return recovered
     if not content.startswith("["):
         return []
     decoder = json.JSONDecoder()
     position = 1
-    recovered: list[dict[str, Any]] = []
+    decoded_prefix: list[dict[str, Any]] = []
     while position < len(content):
         while position < len(content) and content[position] in " \t\r\n,":
             position += 1
@@ -557,11 +591,13 @@ def _validated_truncated_prefix(
             rating = _validate_rating(request.audit_type, raw)
         except (json.JSONDecodeError, ValueError):
             break
-        expected = request.item_ids[len(recovered)]
+        if len(decoded_prefix) >= len(request.item_ids):
+            break
+        expected = request.item_ids[len(decoded_prefix)]
         if rating["audit_id"] != expected:
             break
-        recovered.append(rating)
-    return recovered
+        decoded_prefix.append(rating)
+    return decoded_prefix
 
 
 def _ledger_usage(events: Sequence[Mapping[str, Any]], today: str) -> tuple[int, int]:
