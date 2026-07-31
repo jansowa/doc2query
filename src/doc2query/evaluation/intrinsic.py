@@ -772,6 +772,7 @@ def evaluate_intrinsic_records(
         },
         "judges": {
             "primary": primary.name,
+            "primary_status": "measured",
             "shadow": shadow.name if shadow else None,
             "shadow_status": "measured" if shadow else "not_measured",
             "primary_source_score": distribution(

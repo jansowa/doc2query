@@ -629,6 +629,7 @@ def test_intrinsic_smoke_writes_null_for_unmeasured(tmp_path: Path) -> None:
         experiment_id="fixture",
     )
     assert summary["generation_count"] == 1
+    assert summary["judges"]["primary_status"] == "measured"
     assert summary["judges"]["shadow_status"] == "not_measured"
     assert summary["focus"]["control_accuracy"] is None
     assert summary["diversity"]["semantic_cluster_count"] is None

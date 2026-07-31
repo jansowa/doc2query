@@ -54,6 +54,12 @@ kontraktem brakowało pozytywów dev. Pin poprawiono na istniejący dev-inclusiv
 `data/processed/v1/evaluation/corpus-bm25-v1`; ma on wszystkie 6250 wymaganych
 doc ID wspólnej kohorty. Nie zinterpretowano żadnych metryk jakościowych.
 
+Po korekcie indeksu pierwsze ramię scoringu zapisało trwale komplet 21284
+wierszy, lecz końcowa bramka zatrzymała pipeline z powodu pominiętego pola
+`primary_status` w agregatorze podsumowania. Pole i test regresyjny dodano;
+wyniki sędziów były kompletne i nie wymagają ponownego liczenia. Scoring całej
+pary nadal nie jest ukończony i nie zinterpretowano metryk jakościowych.
+
 Niezależnie od D01 zaimplementowano i uruchomiono CPU-only pakiet kalibracji
 naturalnych query na pełnym zamrożonym `dev_intrinsic_rank10` (6598 rekordów).
 Prospektywny kontrakt przypina kohortę, seed, reguły `form`/`intent`, jawne
