@@ -62,8 +62,8 @@ arms:
   baseline:
     id: W05-1.5B-50K-8GB
     generation_experiment_id: D01B-PROSPECTIVE-W05-1.5B-S42
-    generation_config: configs/experiments/d01_w05_matched_dev_generation_s42.yaml
-    generation_config_sha256: 9bcf7c0662c7e7cb8fcc91d172e9ee0430e4e762621e0e8195cea816ed1697b0
+    generation_config: configs/experiments/d01b_prospective_w05_1_5b_s42.yaml
+    generation_config_sha256: e613bc34940b74b55b9243a2e55ba4317eda4ea5fd2e2b8cd10111a5e1de199c
     adapter: runs/W05-1.5B-50K-8GB/adapter
     adapter_sha256: 01ad29339bc16167078534fd313a811a885b2c937d5b23d03f4949624318803b
     training_manifest: runs/W05-1.5B-50K-8GB/run_manifest.json
@@ -71,8 +71,8 @@ arms:
   controlled:
     id: D01-1.5B-STYLE-50K-S42
     generation_experiment_id: D01B-PROSPECTIVE-D01-1.5B-S42
-    generation_config: configs/experiments/d01_1_5b_style_dev_generation_s42.yaml
-    generation_config_sha256: d3615a52e4821af6d3208839ce1afea7d98d26444c278e590e40a76887f0cd75
+    generation_config: configs/experiments/d01b_prospective_d01_1_5b_s42.yaml
+    generation_config_sha256: 4ccb545f9500af66684334257839c6c5bfcf9f68e440209797b25a4faa6eaee7
     adapter: runs/D01-1.5B-STYLE-50K-S42/adapter
     adapter_sha256: dc2beb9092740d5981850ee59c9c7815b6a612cf77ca353af88fd0b056a98c14
     training_manifest: runs/D01-1.5B-STYLE-50K-S42/run_manifest.json
