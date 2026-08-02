@@ -38,7 +38,7 @@ uruchomiono.
 | [02](02_reranker_and_reward_proxies.md) | Zamrożone rerankery i proxy nagrody | `IMPLEMENTED` | Integracja, reward proxies i testy są gotowe; primary zmierzył pełny frozen dev, a query-macro próg Youdena `possible_false_negative` jest przypięty bez użycia testu. Bramka HN domierzyła primary/shadow na 775 wspólnych dev query z 10 negatywami; nadal pozostał pełny benchmark obu sędziów na całym dev/test i wymaganych slice'ach. |
 | [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | S07 jest kompletną, nieporównywalną budżetowo diagnostyką bez promocji. P-06 mass rescoring jest `SUPERSEDED`. Właściciel świadomie anulował ręczne P06-T i zaakceptował resztkowe ryzyko tłumaczeń na podstawie wcześniejszego udanego treningu embeddera; frozen train i próg `>=23.50` pozostają bez zmian. Nie kończyć lokalnego scoringu ani trenować drop/weighted. |
 | [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IMPLEMENTED` | P-01–P-05 i pełny S07 Harness/probe są gotowe. Pełna dev-only bramka HN0–HN3 ukończyła 775 wspólnych legalnych query i utrzymała HN0+filter/drop z powodu braku zgodnej primary/shadow podstawy do promocji nowego minera; nie otwarto testów finalnych. Artefakt S07 pozostaje `comparison_eligible=false`; pozostały porównywalne probe i testy finalistów. |
-| [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `IMPLEMENTED` | D01 1.5B/4.5B treningi i pełne frozen-dev generacje są technicznie ukończone oraz zaudytowane, bez interpretacji jakości. Matched W05/W06 batched-v2 ukończyły 6598 passage; quality-blind exact-K recovery zmaterializowało 5321 wspólnych grup / 21284 query na ramię. Scoring używa dev-inclusive BM25; pierwsze ramię ma 21284/21284 trwałych wierszy. Przed `compare` dodano fail-closed natural-calibrated anti-copy i clean-cohort semantic gate z przypiętym PolDense-150M (`[sts]: ` dla query-query), cache embeddingów oraz ślepym audytem 100 przypadków; prawdziwy CPU smoke modelu przeszedł, ale bramka ramion nie została jeszcze uruchomiona. Groq LLM-proxy ukończył 500/500 etykiet i 200/200 audytów koncepcji; agreement człowieka pozostaje `NOT MEASURED`. Następne są dokończenie scoringu pary, copy/semantic `compare` i probe-input gate; probe training/CI, human check i pozostałe D00–D12 nie są zmierzone. |
+| [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `IMPLEMENTED` | D01 1.5B/4.5B, matched W05/W06, common exact-K, pełny primary/shadow/corpus scoring i copy/semantic `compare` są ukończone na 5321 grupach. Oba pełne kontrolowane ramiona dostały `stop`: zwiększają różnorodność, ale przekraczają grounding/answerability guardraile. Retrospektywny D01b safe-anchor best-of-eight wybrał ok. 42% query kontrolowanych, zbliżył trudność do naturalnych query i poprawił zarezerwowany shadow Recall@1 o 3.58/3.00 pp, lecz pozostaje `promotion_eligible=false`, bo powstał po obejrzeniu dev. Następna jest niewidziana, non-final kohorta walidacyjna zamrożonego selektora; dopiero jej przejście może dopuścić porównywalne probe. Groq proxy ukończył 500/500 etykiet i 200/200 audytów; agreement człowieka pozostaje `NOT MEASURED`, a D00–D12 poza D01 nie są zmierzone. |
 | [06](06_candidate_scoring_and_preference_data.md) | Scoring kandydatów i dane preferencyjne | `TODO` | Wymaga stabilnego checkpointu SFT, ukończonego Harness v1.1 oraz Task 02 i 05. |
 | [07](07_dpo_training.md) | DPO i continued-SFT control | `TODO` | Wymaga danych preferencyjnych z Task 06. |
 | [08](08_grpo_multiobjective_rl.md) | Wielokryterialny GRPO/RL | `OPTIONAL / BLOCKED` | Uruchamiać wyłącznie po spełnieniu bramki i zapisaniu decyzji `reports/decisions/enable_grpo.md`. |
@@ -79,20 +79,23 @@ backlogiem. Zakres P-xx został przeniesiony do wskazanych plików zadań.
    według shadow, a HN3 miało konstrukcyjnie perfect primary przy przeciwnym
    kierunku shadow i `9.81%` disagreement. Utrzymano HN0+filter/drop; testów
    finalnych nie otwarto.
-4. **Task 05:** treningi i pełne generacje D01 style/intent-only 1.5B/50k oraz
-   4.5B/50k są ukończone technicznie. Następny długi etap to matched baseline
-   generation W05 i rzeczywistego W06 BS8 przez osobną ścieżkę batched-v2
-   (batch 16; stary batch-1 journal 220 passage pozostaje archiwalnym
-   niedokończonym pomiarem); potem quality-blind common exact-K,
-   primary/shadow/corpus scoring, paired bootstrap i probe-input gate. Pozostałe
-   D00–D12 nadal wymagają własnych pomiarów i bramek.
+4. **Task 05:** D01 style/intent-only 1.5B/50k i 4.5B/50k wraz z matched
+   W05/W06, common exact-K, primary/shadow/corpus scoringiem oraz copy/semantic
+   `compare` są ukończone. Pełne ramiona kontrolowane zatrzymały guardraile.
+   Retrospektywny D01b safe-anchor wskazał wykonalną hybrydę i niezależną
+   poprawę shadow Recall@1, ale nie może autoryzować probe na tym samym dev.
+   Następny etap to zamrożenie i uruchomienie selektora bez retuningu na
+   niewidzianej kohorcie rozwojowej spoza finalnych testów; dopiero jej przejście
+   dopuszcza equal-budget probe. Pozostałe D00–D12 nadal wymagają własnych
+   pomiarów i bramek.
 5. **Po Task 05:** P-08 w Task 06 i Task 07.
 6. **Kampania:** Task 09 dopiero po wcześniejszych etapach; Task 10 dopiero po
    finalnym ADR.
 7. **Opcjonalne:** Task 08, P-09 i Task 11 wyłącznie po własnych bramkach.
 
-Najbliższy punkt wejścia to jedna jawna faza
-`bash scripts/run_task05_d01_post_campaign.sh generate-matched-baselines`.
+Najbliższy punkt wejścia to przygotowanie prospektywnej, niewidzianej kohorty
+walidacyjnej D01b; nie uruchamiać `materialize-probe-inputs` na retrospektywnym
+raporcie ani ponownie liczyć ukończonych faz post-D01.
 Nie uruchamiać pełnego
 `scripts/score_train_margins.py`, nie ustalać lokalnego progu i nie trenować
 ordinary/drop/weighted bez nowego prospektywnego ADR opartego na ręcznie

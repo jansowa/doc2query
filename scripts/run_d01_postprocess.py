@@ -23,6 +23,7 @@ from doc2query.evaluation.d01_pipeline import (
     score_d01_artifact,
 )
 from doc2query.evaluation.d01_quality import D01QualityContract
+from doc2query.evaluation.d01_usefulness import analyze_usefulness_and_select
 
 
 def _generation(parser: argparse.ArgumentParser) -> None:
@@ -97,6 +98,21 @@ def _materialization(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--selection-policy", default="all_matched_k4")
 
 
+def _usefulness(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--contract",
+        type=Path,
+        default=Path("configs/evaluation/d01b_usefulness_hybrid_v1.yaml"),
+    )
+    parser.add_argument("--baseline-rows", type=Path, required=True)
+    parser.add_argument("--controlled-rows", type=Path, required=True)
+    parser.add_argument("--semantic-device", choices=("cpu", "cuda"), default="cuda")
+    parser.add_argument("--semantic-cache-dir", type=Path, required=True)
+    parser.add_argument("--output-json", type=Path, required=True)
+    parser.add_argument("--output-markdown", type=Path, required=True)
+    parser.add_argument("--output-selected", type=Path, required=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -109,6 +125,7 @@ def main() -> None:
     batched.add_argument("--generation-batch-size", type=int, required=True)
     _scoring(subparsers.add_parser("score"))
     _comparison(subparsers.add_parser("compare"))
+    _usefulness(subparsers.add_parser("analyze-usefulness"))
     _materialization(subparsers.add_parser("materialize-probe-inputs"))
     args = parser.parse_args()
     if args.command in {"generation-only", "generation-batched"}:
@@ -221,6 +238,17 @@ def main() -> None:
             output_markdown=args.output_markdown,
             bootstrap_samples=args.bootstrap_samples,
             bootstrap_seed=args.bootstrap_seed,
+            semantic_device=args.semantic_device,
+        )
+    elif args.command == "analyze-usefulness":
+        result = analyze_usefulness_and_select(
+            contract_path=args.contract,
+            baseline_rows_path=args.baseline_rows,
+            controlled_rows_path=args.controlled_rows,
+            output_json=args.output_json,
+            output_markdown=args.output_markdown,
+            output_selected=args.output_selected,
+            semantic_cache_dir=args.semantic_cache_dir,
             semantic_device=args.semantic_device,
         )
     else:

@@ -1,0 +1,63 @@
+schema_version: 1
+contract: task05-d01b-usefulness-hybrid-v1
+status: retrospective_development_diagnostic_only
+frozen_subset: dev_intrinsic_rank10
+final_tests_used: []
+
+adr:
+  path: reports/decisions/task05_d01b_usefulness_hybrid_v1.md
+  sha256: df457ee4e71ff8949fe760e2e9b2f0f2c588de8cd7d04dc4445e3bbfbd6926db
+
+natural_primary_scores:
+  path: artifacts/task02/pfn_dev_v1/primary_scores.jsonl
+  sha256: 7a1f9f5949a26d3c09780ba30689fb259c1d20cd401a1e8860b8292461eef115
+  judge: sdadas/polish-reranker-roberta-v3
+  revision: e6471da541f4e7be33845b6d57248a8d8bde27e8
+  schema: possible_false_negative_dev_scores_v1
+  same_positive_and_intersecting_negatives: true
+
+copy_semantic_contract:
+  path: configs/evaluation/d01_copy_semantic_quality_v1.yaml
+  sha256: f9360daa1c42a1a85e919fef3a01d7cb63770bc3be67e8ba202b8ea33ea54776
+
+selection:
+  candidate_count: 8
+  selected_count: 4
+  anchor: all_four_uncontrolled_queries
+  enumerate_all_subsets: true
+  feasibility_not_below_anchor:
+    - pool_recall_at_1
+    - corpus_round_trip_at_20
+    - sentence_level_source_hit
+    - format_valid
+  copy_risk_count_not_above_anchor: true
+  objective_weights:
+    natural_margin_alignment: 0.35
+    semantic_diversity: 0.30
+    lexical_diversity: 0.10
+    corpus_specificity: 0.15
+    low_copy_density: 0.10
+  natural_margin_scale: cohort_iqr_with_floor_1e-6
+  deterministic_tie_break: lexicographic_candidate_identity
+
+copy_risk:
+  minimum_query_words: 4
+  copy_density: 0.6
+  normalized_lcs: 0.8
+  longest_copied_ngram: 3.0
+  query_to_passage_length_ratio: 0.3838827838827845
+
+semantic_model:
+  name_or_path: OPI-PIB/PolDense-150M
+  revision: b94ea7f951cc480369a85fa9021694eef80c3a00
+  trust_remote_code: false
+  similarity_prefix: "[sts]: "
+  batch_size: 128
+
+evaluation:
+  shadow_reserved_from_selection: true
+  bootstrap_samples: 10000
+  bootstrap_seed: 20260721
+  promotion_eligible: false
+  probe_materialization_authorized: false
+  future_unseen_validation_required: true

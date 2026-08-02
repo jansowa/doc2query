@@ -6,9 +6,9 @@ cd "$ROOT"
 
 PHASE=${1:-}
 case "$PHASE" in
-  preflight|prepare-common-cohort|generate-matched-baselines|score|compare|materialize-probe-inputs) ;;
+  preflight|prepare-common-cohort|generate-matched-baselines|score|compare|analyze-usefulness|materialize-probe-inputs) ;;
   *)
-    echo "usage: $0 {preflight|prepare-common-cohort|generate-matched-baselines|score|compare|materialize-probe-inputs}" >&2
+    echo "usage: $0 {preflight|prepare-common-cohort|generate-matched-baselines|score|compare|analyze-usefulness|materialize-probe-inputs}" >&2
     exit 2
     ;;
 esac
@@ -161,6 +161,26 @@ case "$PHASE" in
       quality=configs/evaluation/d01_copy_semantic_quality_v1.yaml
       "$python" scripts/run_d01_postprocess.py compare --baseline-summary "$root/scoring/W05-1.5B-50K-8GB/summary.json" --baseline-rows "$root/scoring/W05-1.5B-50K-8GB/per_generation.jsonl" --variant-summary "$root/scoring/D01-1.5B-STYLE-50K-S42/summary.json" --variant-rows "$root/scoring/D01-1.5B-STYLE-50K-S42/per_generation.jsonl" --comparison-contract configs/evaluation/comparison_contract_v1.yaml --quality-contract "$quality" --semantic-device cuda --output-json "$root/comparisons/d01_1_5b_vs_w05.json" --output-markdown "$root/comparisons/d01_1_5b_vs_w05.md"
       "$python" scripts/run_d01_postprocess.py compare --baseline-summary "$root/scoring/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/summary.json" --baseline-rows "$root/scoring/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/per_generation.jsonl" --variant-summary "$root/scoring/D01-4.5B-STYLE-50K-S42/summary.json" --variant-rows "$root/scoring/D01-4.5B-STYLE-50K-S42/per_generation.jsonl" --comparison-contract configs/evaluation/comparison_contract_v1.yaml --quality-contract "$quality" --semantic-device cuda --output-json "$root/comparisons/d01_4_5b_vs_w06_bs8.json" --output-markdown "$root/comparisons/d01_4_5b_vs_w06_bs8.md"
+    ' _ "$PYTHON"
+    ;;
+  analyze-usefulness)
+    run_phase bash -c '
+      set -euo pipefail
+      python=$1; root=reports/measurements/task05_d01_postprocess_v2
+      score=$root/scoring; output=$root/usefulness
+      common=(--contract configs/evaluation/d01b_usefulness_hybrid_v1.yaml --semantic-device cuda --semantic-cache-dir "$output/semantic_cache")
+      "$python" scripts/run_d01_postprocess.py analyze-usefulness "${common[@]}" \
+        --baseline-rows "$score/W05-1.5B-50K-8GB/per_generation.jsonl" \
+        --controlled-rows "$score/D01-1.5B-STYLE-50K-S42/per_generation.jsonl" \
+        --output-json "$output/d01b_1_5b.json" \
+        --output-markdown "$output/d01b_1_5b.md" \
+        --output-selected "$output/d01b_1_5b.selected.jsonl"
+      "$python" scripts/run_d01_postprocess.py analyze-usefulness "${common[@]}" \
+        --baseline-rows "$score/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/per_generation.jsonl" \
+        --controlled-rows "$score/D01-4.5B-STYLE-50K-S42/per_generation.jsonl" \
+        --output-json "$output/d01b_4_5b.json" \
+        --output-markdown "$output/d01b_4_5b.md" \
+        --output-selected "$output/d01b_4_5b.selected.jsonl"
     ' _ "$PYTHON"
     ;;
   materialize-probe-inputs)

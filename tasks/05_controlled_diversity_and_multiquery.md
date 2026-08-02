@@ -41,9 +41,9 @@ ukończyły po 6598 passage. Recovery akceptuje historyczne summary W05/W06 bez
 pola `architecture`, ale nadal fail-closed sprawdza model ID, revision i
 `trust_remote_code` oraz jawnie oznacza legacy provenance. Quality-blind
 recovery ukończyło się z `rc=0`: wspólna kohorta zachowuje 5321
-z 6598 grup, a każde z czterech ramion ma 21284 query. Nie wykonano
-primary/shadow/corpus scoringu, comparison, materializacji probe
-inputs ani probe training. Plan i komendy:
+z 6598 grup, a każde z czterech ramion ma 21284 query. Na tym etapie nie były
+jeszcze wykonane primary/shadow/corpus scoring, comparison, materializacja
+probe inputs ani probe training. Plan i komendy:
 [`task05_d01_post_evaluation_2026-07-26.md`](../reports/plans/task05_d01_post_evaluation_2026-07-26.md).
 Recovery ADR i bieżący runner:
 [`task05_d01_post_campaign_2026-07-30.md`](../reports/plans/task05_d01_post_campaign_2026-07-30.md).
@@ -58,7 +58,7 @@ Po korekcie indeksu pierwsze ramię scoringu zapisało trwale komplet 21284
 wierszy, lecz końcowa bramka zatrzymała pipeline z powodu pominiętego pola
 `primary_status` w agregatorze podsumowania. Pole i test regresyjny dodano;
 wyniki sędziów były kompletne i nie wymagają ponownego liczenia. Scoring całej
-pary nadal nie jest ukończony i nie zinterpretowano metryk jakościowych.
+pary nie był wtedy ukończony i nie zinterpretowano metryk jakościowych.
 
 Przed pierwszym matched `compare` rozszerzono bramkę po wykryciu luki
 metodologicznej: same lexical diversity i retrieval mogły premiować cztery
@@ -98,12 +98,34 @@ proxy 500/500 etykiet oraz 200/200 audytów koncepcji; agregacje mają status
 `complete`, ale nie zastępują oceny człowieka. Plan, wyniki, hashe i komendy:
 [`task05_natural_audits_2026-07-26.md`](../reports/plans/task05_natural_audits_2026-07-26.md).
 
-Do statusu `DONE` pozostają: dokończenie scoringu i rzeczywiste uruchomienie
-nowej bramki copy/semantic, eksperymenty D00–D12 na wspólnych kandydatach i
-budżetach, ewentualne rzeczywiste ręczne oceny zmaterializowanych audytów
-500 etykiet i 200 ekstrakcji koncepcji, human check oraz porównawcze probe
-embeddera z CI. Opisowa kalibracja naturalnych query jest zmaterializowana,
-ale nie zastępuje ręcznego pomiaru accuracy.
+Do statusu `DONE` pozostają: niewidziana walidacja D01b, eksperymenty D00–D12
+poza D01 na wspólnych kandydatach i budżetach, ewentualne rzeczywiste ręczne
+oceny zmaterializowanych audytów 500 etykiet i 200 ekstrakcji koncepcji, human
+check oraz porównawcze probe embeddera z CI. Opisowa kalibracja naturalnych
+query jest zmaterializowana, ale nie zastępuje ręcznego pomiaru accuracy.
+
+Aktualizacja 2026-08-02: pełny scoring i oba matched `compare` zakończyły się
+`rc=0`. Kontrolowane ramiona 1.5B i 4.5B zwiększyły różnorodność i przeszły
+anti-copy, lecz dostały `stop` z powodu istotnego spadku corpus round-trip@20
+oraz sentence-level source hit. Nie zmaterializowano probe inputs.
+
+Po zgłoszeniu hipotezy, że wysoki retrieval baseline'u może oznaczać zbyt łatwe
+query, dodano retrospektywną diagnostykę D01b. Wykorzystuje ona zamrożone
+naturalne marginesy Task 02 dla tego samego query/pozytywu/negatywów oraz
+safe-anchor best-of-eight: cztery query baseline są kotwicą, a stały cel z PolDense
+wybiera hybrydę tylko spośród kombinacji niepogarszających grupowych primary,
+corpus, answerability, formatu i copy-risk. Shadow jest wyłączony z selekcji.
+Na istniejącym dev hybryda wybrała 42.66%/42.25% query kontrolowanych i
+poprawiła zarezerwowany shadow Recall@1 o 3.58/3.00 pp, jednocześnie zwiększając
+różnorodność i zbliżając margin do naturalnych query. Ponieważ kontrakt powstał
+po obejrzeniu D01 dev, raport pozostaje `promotion_eligible=false` i
+`probe_materialization_authorized=false`. Wyniki:
+[`task05_d01b_usefulness_2026-08-02.md`](../reports/measurements/task05_d01b_usefulness_2026-08-02.md).
+
+Następna bramka to niezmieniony selektor na niewidzianej kohorcie rozwojowej,
+wykluczającej 50k użyte do SFT i wszystkie finalne testy. Dopiero przejście
+ordinary intrinsic oraz reserved-shadow non-inferiority może dopuścić
+equal-budget probe hybrydy przeciw baseline'owi.
 
 ## Cel
 
