@@ -4,7 +4,18 @@
 
 ## Status
 
-`IMPLEMENTED`
+`IN PROGRESS`
+
+Aktualizacja 2026-08-02 (prospektywna prerejestracja): metadata-only audyt
+`dev_intrinsic` poza wykorzystanym `dev_intrinsic_rank10` znalazł 9591 z 9674
+rekordów z co najmniej 5 hard negative'ami. Przed generacją zamrożono
+deterministyczną kohortę 2000 rekordów (SHA-256, seed 20260802), selector z
+commitu `2164822`, oba adaptery 1.5B, decoding, primary/shadow/PolDense/corpus,
+paired bootstrap i wszystkie guardraile. Przecięcie z wcześniejszą kohortą
+wynosi zero, a `final_tests_used=[]`. ADR:
+[`task05_d01b_prospective_validation_1_5b_v1.md`](../reports/decisions/task05_d01b_prospective_validation_1_5b_v1.md).
+Trwa implementacja crash-safe runnera; nie wygenerowano ani nie obejrzano
+prospektywnych query. Probe, 4.5B i finalne testy pozostają niedozwolone.
 
 Kod, kontrakty, preset i tanie testy CPU są gotowe. Zaimplementowano rozdzielną
 taksonomię `form`/`intent` z abstention i `intent_applicable`, kompatybilny

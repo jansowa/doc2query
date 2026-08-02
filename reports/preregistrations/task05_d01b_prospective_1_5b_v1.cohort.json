@@ -1,0 +1,41 @@
+{
+  "cohort_identity": {
+    "eligible_count": 9591,
+    "exclude_id_list_sha256": "ac50d74bfc38dfaf17e5b281afddb241a9e97e71c09024c7851e53e901e49972",
+    "exclude_subset": "dev_intrinsic_rank10",
+    "final_tests_used": [],
+    "minimum_hard_negatives": 5,
+    "selected_count": 2000,
+    "selected_id_list_sha256": "b540e24cf04dbc3638921173f116e80d7a7714523a597eb5cc1dea408ebfbc57",
+    "selected_metadata_records_sha256": "dda667173922ecaa79ed074a757a492cc3cbbfd36d2168e470077e5a1b0cf5da",
+    "selected_source_records_sha256": "3beac7deaffa9d4a839b40a0b705fa043dadb58f704c7de3bfb7fd5a6021ccf7",
+    "selection_hash": "sha256(20260802:<example_id>)",
+    "selection_seed": 20260802,
+    "source_id_list_sha256": "7adef2425fa96e52e48dd41184ea3835a3041c8d9e9cade2f4240d62b0ee98f7",
+    "source_records_path": "data/processed/v1/dev.parquet",
+    "source_records_sha256": "12b86da10c73707a58a8793111afcca0424981d738667a04c228014780a02a1d",
+    "source_subset": "dev_intrinsic"
+  },
+  "contract": "task05-d01b-prospective-cohort-v1",
+  "eligibility_audit": {
+    "available_count": 9674,
+    "hard_negative_distribution": {
+      "2": 3,
+      "3": 11,
+      "4": 69,
+      "5": 168,
+      "6": 464,
+      "7": 1174,
+      "8": 2761,
+      "9": 5024
+    },
+    "intersection_with_excluded_subset": 0,
+    "natural_primary_positive_match_count": 9591,
+    "natural_primary_score_sha256": "7a1f9f5949a26d3c09780ba30689fb259c1d20cd401a1e8860b8292461eef115",
+    "quality_fields_used": [],
+    "records_or_generations_inspected_manually": false
+  },
+  "final_tests_used": [],
+  "schema_version": 1,
+  "status": "preregistered_before_generation"
+}
