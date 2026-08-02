@@ -4,7 +4,7 @@
 
 ## Status
 
-`IN PROGRESS`
+`IMPLEMENTED`
 
 Aktualizacja 2026-08-02 (prospektywna prerejestracja): metadata-only audyt
 `dev_intrinsic` poza wykorzystanym `dev_intrinsic_rank10` znalazł 9591 z 9674
@@ -14,8 +14,13 @@ commitu `2164822`, oba adaptery 1.5B, decoding, primary/shadow/PolDense/corpus,
 paired bootstrap i wszystkie guardraile. Przecięcie z wcześniejszą kohortą
 wynosi zero, a `final_tests_used=[]`. ADR:
 [`task05_d01b_prospective_validation_1_5b_v1.md`](../reports/decisions/task05_d01b_prospective_validation_1_5b_v1.md).
-Trwa implementacja crash-safe runnera; nie wygenerowano ani nie obejrzano
-prospektywnych query. Probe, 4.5B i finalne testy pozostają niedozwolone.
+Crash-safe runner jest gotowy; jego fazy `preflight` i `prepare-cohort`
+przeszły na rzeczywistych pinach i powtórne przygotowanie rozpoznało identyczny
+manifest. Runner ma lock, atomowy status, osobne logi, identity-bound journale,
+fail-closed exact-K i możliwość wznowienia faz `generate`, `score` oraz
+`select-compare`. Nie wygenerowano ani nie obejrzano prospektywnych query.
+Pozostał drogi run 1.5B i wszystkie prerejestrowane bramki; probe, 4.5B i
+finalne testy pozostają niedozwolone.
 
 Kod, kontrakty, preset i tanie testy CPU są gotowe. Zaimplementowano rozdzielną
 taksonomię `form`/`intent` z abstention i `intent_applicable`, kompatybilny

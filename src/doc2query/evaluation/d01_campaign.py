@@ -30,6 +30,7 @@ from doc2query.utils.records import read_durable_jsonl_prefix, read_records, wri
 
 D01_AUDIT_CONTRACT = "task05-d01-artifact-audit-v2"
 D01_RECOVERY_CONTRACT = "task05-d01-common-exact-k-v1"
+D01B_PROSPECTIVE_COHORT_CONTRACT = "task05-d01b-prospective-cohort-materialized-v1"
 
 
 def _atomic_jsonl(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
@@ -497,8 +498,32 @@ def load_common_cohort(
     records: Sequence[dict[str, Any]], cohort_manifest: Path
 ) -> tuple[list[dict[str, Any]], list[int], dict[str, Any]]:
     manifest = _require_mapping(cohort_manifest)
-    if manifest.get("contract") != D01_RECOVERY_CONTRACT or manifest.get("final_tests_used") != []:
+    contract = manifest.get("contract")
+    if (
+        contract not in {D01_RECOVERY_CONTRACT, D01B_PROSPECTIVE_COHORT_CONTRACT}
+        or manifest.get("final_tests_used") != []
+    ):
         raise ValueError("invalid common exact-K cohort manifest")
+    if contract == D01B_PROSPECTIVE_COHORT_CONTRACT:
+        minimum = int(manifest.get("selection_policy", {}).get("minimum_hard_negatives", 0))
+        if minimum < 1:
+            raise ValueError("prospective cohort omits its hard-negative minimum")
+        by_example = {str(record["example_id"]): index for index, record in enumerate(records)}
+        selected_examples = manifest.get("selected_example_ids")
+        if not isinstance(selected_examples, list) or not selected_examples:
+            raise ValueError("prospective cohort has no selected example IDs")
+        if len(by_example) != len(records) or any(
+            str(example_id) not in by_example for example_id in selected_examples
+        ):
+            raise ValueError("prospective cohort contains duplicate or unknown example IDs")
+        source_indices = [by_example[str(example_id)] for example_id in selected_examples]
+        selected = [records[index] for index in source_indices]
+        selected_ids = manifest.get("selected_group_ids")
+        if evaluation_group_ids(selected, minimum_hard_negatives=minimum) != [
+            str(value) for value in selected_ids or []
+        ]:
+            raise ValueError("prospective cohort group identities drifted")
+        return selected, source_indices, manifest
     expected = evaluation_group_ids(records)
     positions = {group_id: index for index, group_id in enumerate(expected)}
     selected_ids = manifest.get("selected_group_ids")

@@ -40,7 +40,7 @@ D01_GENERATION_CONTRACTS = frozenset({D01_GENERATION_CONTRACT, D01_BATCHED_GENER
 D01_SCORING_CONTRACT = "task05-d01-intrinsic-scoring-v1"
 D01_COMPARISON_CONTRACT = "task05-d01-matched-comparison-v2"
 D01_PROBE_INPUT_CONTRACT = "task05-d01-probe-input-v1"
-ALLOWED_DEVELOPMENT_SUBSETS = frozenset({"dev_intrinsic_rank10"})
+ALLOWED_DEVELOPMENT_SUBSETS = frozenset({"dev_intrinsic", "dev_intrinsic_rank10"})
 
 
 def _canonical_sha256(value: Any) -> str:
@@ -81,25 +81,33 @@ def assert_development_subset(subset: str) -> None:
     """Prevent this post-training pipeline from opening any final-test subset."""
     if subset not in ALLOWED_DEVELOPMENT_SUBSETS:
         raise ValueError(
-            "D01 post-training evaluation is restricted to frozen dev_intrinsic_rank10; "
+            "D01 post-training evaluation is restricted to frozen development subsets; "
             f"got {subset!r}"
         )
 
 
-def _positive(record: Mapping[str, Any]) -> Mapping[str, Any]:
+def _positive(record: Mapping[str, Any], *, minimum_hard_negatives: int = 10) -> Mapping[str, Any]:
     positives = record.get("positives")
     negatives = record.get("hard_negatives")
     if not isinstance(positives, list) or not positives:
         raise ValueError("frozen D01 record requires at least one positive")
-    if not isinstance(negatives, list) or len(negatives) < 10:
-        raise ValueError("frozen D01 record requires at least 10 hard negatives")
+    if not isinstance(negatives, list) or len(negatives) < minimum_hard_negatives:
+        raise ValueError(
+            f"frozen D01 record requires at least {minimum_hard_negatives} hard negatives"
+        )
     ordered = sorted(positives, key=lambda item: str(item["doc_id"]))
     return cast(Mapping[str, Any], ordered[0])
 
 
-def evaluation_group_ids(records: Sequence[Mapping[str, Any]]) -> list[str]:
+def evaluation_group_ids(
+    records: Sequence[Mapping[str, Any]], *, minimum_hard_negatives: int = 10
+) -> list[str]:
     """Return the immutable passage-level order used by journals and bootstraps."""
-    ids = [f"{record['example_id']}::{_positive(record)['doc_id']}" for record in records]
+    ids = [
+        f"{record['example_id']}::"
+        f"{_positive(record, minimum_hard_negatives=minimum_hard_negatives)['doc_id']}"
+        for record in records
+    ]
     if len(ids) != len(set(ids)):
         raise ValueError("frozen D01 cohort has duplicate example/positive identities")
     return ids
@@ -128,12 +136,16 @@ def _generation_identity(
     model_path: Path | None,
     source_indices: Sequence[int] | None = None,
     cohort_selection: Mapping[str, Any] | None = None,
+    minimum_hard_negatives: int = 10,
 ) -> dict[str, Any]:
-    group_ids = evaluation_group_ids(records)
+    group_ids = evaluation_group_ids(records, minimum_hard_negatives=minimum_hard_negatives)
     control_payload = [
         [
             item.model_dump(mode="json") if item is not None else None
-            for item in _controls(config, str(_positive(row)["text"]))
+            for item in _controls(
+                config,
+                str(_positive(row, minimum_hard_negatives=minimum_hard_negatives)["text"]),
+            )
         ]
         for row in records
     ]
@@ -173,6 +185,7 @@ def _generation_identity(
             ),
         },
         "generation": config.generation.model_dump(mode="json"),
+        "minimum_hard_negatives": minimum_hard_negatives,
         "final_tests_used": [],
     }
     cohort_identity = cast(dict[str, Any], identity["cohort"])
@@ -386,6 +399,13 @@ def generate_frozen_dev_batched(
         from doc2query.evaluation.d01_campaign import load_common_cohort
 
         records, source_indices, cohort_selection = load_common_cohort(records, cohort_manifest)
+    minimum_hard_negatives = int(
+        cast(Mapping[str, Any], cohort_selection.get("selection_policy", {})).get(
+            "minimum_hard_negatives", 10
+        )
+        if cohort_selection is not None
+        else 10
+    )
     if max_examples is not None:
         if max_examples < 1:
             raise ValueError("max_examples must be positive")
@@ -402,6 +422,7 @@ def generate_frozen_dev_batched(
         model_path=model_path,
         source_indices=source_indices,
         cohort_selection=cohort_selection,
+        minimum_hard_negatives=minimum_hard_negatives,
     )
     identity.pop("identity_sha256")
     identity["contract"] = D01_BATCHED_GENERATION_CONTRACT
@@ -445,7 +466,7 @@ def generate_frozen_dev_batched(
         write_json(temporary, identity)
         os.replace(temporary, identity_path)
     groups = _batched_groups(journal)
-    expected_ids = evaluation_group_ids(records)
+    expected_ids = evaluation_group_ids(records, minimum_hard_negatives=minimum_hard_negatives)
     if [str(row.get("evaluation_group_id")) for row in groups] != expected_ids[: len(groups)]:
         raise ValueError("D01 batched journal is not the exact frozen cohort prefix")
     if len(groups) > len(records):
@@ -477,7 +498,7 @@ def generate_frozen_dev_batched(
         states: list[dict[str, Any]] = []
         for index in range(start, stop):
             record = records[index]
-            positive = dict(_positive(record))
+            positive = dict(_positive(record, minimum_hard_negatives=minimum_hard_negatives))
             passage = str(positive["text"]).strip()
             states.append(
                 {
@@ -705,6 +726,13 @@ def generate_frozen_dev(
         from doc2query.evaluation.d01_campaign import load_common_cohort
 
         records, source_indices, cohort_selection = load_common_cohort(records, cohort_manifest)
+    minimum_hard_negatives = int(
+        cast(Mapping[str, Any], cohort_selection.get("selection_policy", {})).get(
+            "minimum_hard_negatives", 10
+        )
+        if cohort_selection is not None
+        else 10
+    )
     if max_examples is not None:
         if max_examples < 1:
             raise ValueError("max_examples must be positive")
@@ -721,6 +749,7 @@ def generate_frozen_dev(
         model_path=model_path,
         source_indices=source_indices,
         cohort_selection=cohort_selection,
+        minimum_hard_negatives=minimum_hard_negatives,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     journal = output_path.with_suffix(output_path.suffix + ".journal.jsonl")
@@ -750,7 +779,7 @@ def generate_frozen_dev(
         write_json(temporary, identity)
         os.replace(temporary, identity_path)
     groups = read_durable_jsonl_prefix(journal)
-    expected_ids = evaluation_group_ids(records)
+    expected_ids = evaluation_group_ids(records, minimum_hard_negatives=minimum_hard_negatives)
     actual_ids = [str(row.get("evaluation_group_id")) for row in groups]
     if actual_ids != expected_ids[: len(actual_ids)]:
         raise ValueError("D01 generation journal is not the exact frozen cohort prefix")
@@ -781,7 +810,7 @@ def generate_frozen_dev(
     generated = sum(len(row["queries"]) for row in groups)
     for index in range(resumed, len(records)):
         record = records[index]
-        positive = dict(_positive(record))
+        positive = dict(_positive(record, minimum_hard_negatives=minimum_hard_negatives))
         passage = str(positive["text"]).strip()
         controls = _controls(config, passage)
         frozen_index = source_indices[index] if source_indices is not None else index
