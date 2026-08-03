@@ -10,6 +10,10 @@ from doc2query.evaluation import d01_pipeline
 from doc2query.evaluation.d01_campaign import D01B_PROSPECTIVE_COHORT_CONTRACT
 from doc2query.evaluation.d01_pipeline import generate_frozen_dev_batched
 from doc2query.evaluation.d01_prospective import (
+    PREREGISTERED_COHORT_CONTRACTS,
+    PROSPECTIVE_CONTRACTS,
+    _id_list_sha256,
+    _selection_rows,
     assert_exact_k_summary,
     assert_scoring_summary,
     evaluate_prospective_gates,
@@ -34,6 +38,40 @@ def _record(index: int, negatives: int = 5) -> dict[str, Any]:
         ],
         "metadata": {"domain": "fixture"},
     }
+
+
+def test_v2_contract_and_prior_cohort_exclusion_are_explicit_and_deterministic() -> None:
+    assert "task05-d01b-prospective-1.5b-v2" in PROSPECTIVE_CONTRACTS
+    assert "task05-d01b-prospective-cohort-v2" in PREREGISTERED_COHORT_CONTRACTS
+    records = [_record(index, negatives=4 if index == 5 else 5) for index in range(8)]
+    prior = _selection_rows(
+        records,
+        excluded={"q-0"},
+        minimum_hard_negatives=5,
+        seed=20260802,
+    )[:2]
+    prior_ids = {item[1] for item in prior}
+    selected = _selection_rows(
+        records,
+        excluded={"q-0", *prior_ids},
+        minimum_hard_negatives=5,
+        seed=20260803,
+    )
+    selected_ids = [item[1] for item in selected]
+
+    assert not prior_ids.intersection(selected_ids)
+    assert "q-0" not in selected_ids
+    assert "q-5" not in selected_ids
+    assert selected_ids == [
+        item[1]
+        for item in _selection_rows(
+            list(reversed(records)),
+            excluded={"q-0", *prior_ids},
+            minimum_hard_negatives=5,
+            seed=20260803,
+        )
+    ]
+    assert _id_list_sha256(selected_ids) != _id_list_sha256(list(reversed(selected_ids)))
 
 
 def test_prospective_cohort_allows_five_negatives_without_weakening_default(

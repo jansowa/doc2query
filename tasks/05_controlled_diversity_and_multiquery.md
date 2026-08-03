@@ -4,7 +4,7 @@
 
 ## Status
 
-`IN PROGRESS`
+`IMPLEMENTED`
 
 Aktualizacja 2026-08-03 (prospektywna prerejestracja v2): właściciel projektu
 zaakceptował techniczny limit 16 prób na slot. Metadata-only audyt wykluczył
@@ -17,7 +17,14 @@ obowiązują cztery różne poprawne query albo fail-closed. Przecięcie z rank-
 prospective v1 wynosi zero, natural-primary ID match wynosi 2000/2000, a
 `final_tests_used=[]`. ADR:
 [`task05_d01b_prospective_validation_1_5b_v2.md`](../reports/decisions/task05_d01b_prospective_validation_1_5b_v2.md).
-Runner v2 i jego tanie testy są następnym krokiem; generacji v2 nie uruchomiono.
+Fingerprinty jednorazowego audytu zostały skorygowane przed generacją po
+wykryciu różnicy między dosłownym `\\n` i kanonicznym separatorem nowej linii;
+kohorta i jej kolejność nie zmieniły się. Runner v2 ma osobny lock, status,
+logi i artefakty, a wspólne API zachowuje kompatybilność v1. Rzeczywiste CPU
+`preflight` oraz dwukrotne `prepare-cohort` przeszły z `rc=0`; 252 testy,
+Ruff i ukierunkowany mypy są czyste. Generacji v2 nie uruchomiono. Następny
+krok to osobno autoryzowany run `generate`, następnie tylko po exact K `score`
+i `select-compare`.
 
 Aktualizacja 2026-08-02 (prospektywna prerejestracja): metadata-only audyt
 `dev_intrinsic` poza wykorzystanym `dev_intrinsic_rank10` znalazł 9591 z 9674

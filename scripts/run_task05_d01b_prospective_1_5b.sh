@@ -14,10 +14,13 @@ case "$PHASE" in
 esac
 
 PYTHON=${DOC2QUERY_PYTHON:-$ROOT/.venv-gpu/bin/python}
-CONTRACT=configs/evaluation/d01b_prospective_1_5b_v1.yaml
-ARTIFACT_ROOT=artifacts/task05/d01b_prospective_1_5b_v1
-MEASUREMENT_ROOT=reports/measurements/task05_d01b_prospective_1_5b_v1
-LOG_ROOT=logs/task05_d01b_prospective_1_5b_v1
+CONTRACT=${D01B_PROSPECTIVE_CONTRACT:-configs/evaluation/d01b_prospective_1_5b_v1.yaml}
+ARTIFACT_ROOT=${D01B_PROSPECTIVE_ARTIFACT_ROOT:-artifacts/task05/d01b_prospective_1_5b_v1}
+MEASUREMENT_ROOT=${D01B_PROSPECTIVE_MEASUREMENT_ROOT:-reports/measurements/task05/d01b_prospective_1_5b_v1}
+LOG_ROOT=${D01B_PROSPECTIVE_LOG_ROOT:-logs/task05/d01b_prospective_1_5b_v1}
+BASE_CONFIG=${D01B_PROSPECTIVE_BASE_CONFIG:-configs/experiments/d01b_prospective_w05_1_5b_s42.yaml}
+CONTROLLED_CONFIG=${D01B_PROSPECTIVE_CONTROLLED_CONFIG:-configs/experiments/d01b_prospective_d01_1_5b_s42.yaml}
+RUNNER_CONTRACT=${D01B_PROSPECTIVE_RUNNER_CONTRACT:-task05-d01b-prospective-runner-v1}
 COHORT=$ARTIFACT_ROOT/cohort.materialized.json
 BASE_GENERATIONS=$ARTIFACT_ROOT/generation/baseline.jsonl
 CONTROLLED_GENERATIONS=$ARTIFACT_ROOT/generation/controlled.jsonl
@@ -41,16 +44,18 @@ STARTED=$(date --iso-8601=seconds)
 
 write_status() {
   local finished=$1 rc=$2
-  "$PYTHON" - "$STATUS" "$PHASE" "$STARTED" "$finished" "$rc" "$LOG" <<'PY'
+  "$PYTHON" - "$STATUS" "$PHASE" "$STARTED" "$finished" "$rc" "$LOG" "$RUNNER_CONTRACT" <<'PY'
 import json
 import os
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
-payload = {"schema_version": 1, "contract": "task05-d01b-prospective-runner-v1", "phases": {}, "final_tests_used": []}
+payload = {"schema_version": 1, "contract": sys.argv[7], "phases": {}, "final_tests_used": []}
 if path.is_file():
     payload = json.loads(path.read_text(encoding="utf-8"))
+if payload.get("contract") != sys.argv[7] or payload.get("final_tests_used") != []:
+    raise ValueError("prospective runner status identity drifted")
 payload["phases"][sys.argv[2]] = {
     "started_at": sys.argv[3],
     "finished_at": sys.argv[4],
@@ -111,24 +116,24 @@ case "$PHASE" in
     assert_gpu_idle
     run_phase bash -c '
       set -euo pipefail
-      python=$1; contract=$2; cohort=$3; base=$4; controlled=$5
+      python=$1; contract=$2; cohort=$3; base=$4; controlled=$5; base_config=$6; controlled_config=$7
       "$python" scripts/run_d01b_prospective.py preflight --contract "$contract"
       "$python" scripts/run_d01b_prospective.py validate-cohort --contract "$contract" --cohort-manifest "$cohort"
       "$python" scripts/run_d01_postprocess.py generation-batched \
-        --config configs/experiments/d01b_prospective_w05_1_5b_s42.yaml \
+        --config "$base_config" \
         --frozen-manifest data/processed/v1/evaluation/task04-v1/manifest.json \
         --subset dev_intrinsic --cohort-manifest "$cohort" \
         --adapter runs/W05-1.5B-50K-8GB/adapter --output "$base" \
         --generation-batch-size 16
       "$python" scripts/run_d01_postprocess.py generation-batched \
-        --config configs/experiments/d01b_prospective_d01_1_5b_s42.yaml \
+        --config "$controlled_config" \
         --frozen-manifest data/processed/v1/evaluation/task04-v1/manifest.json \
         --subset dev_intrinsic --cohort-manifest "$cohort" \
         --adapter runs/D01-1.5B-STYLE-50K-S42/adapter --output "$controlled" \
         --generation-batch-size 16
       "$python" scripts/run_d01b_prospective.py validate-exact-k --contract "$contract" --summary "$base.summary.json"
       "$python" scripts/run_d01b_prospective.py validate-exact-k --contract "$contract" --summary "$controlled.summary.json"
-    ' _ "$PYTHON" "$CONTRACT" "$COHORT" "$BASE_GENERATIONS" "$CONTROLLED_GENERATIONS"
+    ' _ "$PYTHON" "$CONTRACT" "$COHORT" "$BASE_GENERATIONS" "$CONTROLLED_GENERATIONS" "$BASE_CONFIG" "$CONTROLLED_CONFIG"
     ;;
   score)
     assert_gpu_idle

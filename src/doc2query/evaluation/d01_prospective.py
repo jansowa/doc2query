@@ -30,8 +30,18 @@ from doc2query.evaluation.datasets import load_frozen_records
 from doc2query.evaluation.retrieval import percentile
 from doc2query.utils.records import read_records, write_json
 
-PROSPECTIVE_CONTRACT = "task05-d01b-prospective-1.5b-v1"
-PREREGISTERED_COHORT_CONTRACT = "task05-d01b-prospective-cohort-v1"
+PROSPECTIVE_CONTRACTS = frozenset(
+    {
+        "task05-d01b-prospective-1.5b-v1",
+        "task05-d01b-prospective-1.5b-v2",
+    }
+)
+PREREGISTERED_COHORT_CONTRACTS = frozenset(
+    {
+        "task05-d01b-prospective-cohort-v1",
+        "task05-d01b-prospective-cohort-v2",
+    }
+)
 
 
 def _file_sha256(path: Path) -> str:
@@ -84,7 +94,7 @@ def load_prospective_contract(path: Path) -> tuple[dict[str, Any], Path, str]:
     payload = _load_mapping(path)
     if (
         payload.get("schema_version") != 1
-        or payload.get("contract") != PROSPECTIVE_CONTRACT
+        or payload.get("contract") not in PROSPECTIVE_CONTRACTS
         or payload.get("status") != "preregistered_before_generation"
         or payload.get("final_tests_used") != []
     ):
@@ -107,9 +117,14 @@ def load_prospective_contract(path: Path) -> tuple[dict[str, Any], Path, str]:
         raise ValueError("prospective selector commit drifted")
     cohort = cast(Mapping[str, Any], payload["cohort"])
     preregistered = root / str(cohort["manifest"])
+    expected_manifest_sha = cohort.get("manifest_sha256")
+    if expected_manifest_sha is not None and _file_sha256(preregistered) != str(
+        expected_manifest_sha
+    ):
+        raise ValueError("prospective cohort preregistration fingerprint mismatch")
     prereg_payload = json.loads(preregistered.read_text(encoding="utf-8"))
     if (
-        prereg_payload.get("contract") != PREREGISTERED_COHORT_CONTRACT
+        prereg_payload.get("contract") not in PREREGISTERED_COHORT_CONTRACTS
         or prereg_payload.get("final_tests_used") != []
     ):
         raise ValueError("invalid preregistered cohort manifest")
@@ -126,6 +141,7 @@ def preflight_prospective(path: Path) -> dict[str, Any]:
     natural = cast(Mapping[str, Any], payload["natural_primary_scores"])
     _assert_file_pin(root, natural, label="natural primary scores")
     arms = cast(Mapping[str, Any], payload["arms"])
+    decoding = cast(Mapping[str, Any], arms["decoding"])
     observed_arms: dict[str, Any] = {}
     for role in ("baseline", "controlled"):
         arm = cast(Mapping[str, Any], arms[role])
@@ -135,6 +151,17 @@ def preflight_prospective(path: Path) -> dict[str, Any]:
         config = load_config(config_path)
         if config.run.experiment_id != arm["generation_experiment_id"]:
             raise ValueError(f"{role} prospective experiment identity drifted")
+        expected_decoding = {
+            "seed": config.run.seed,
+            "do_sample": config.generation.do_sample,
+            "temperature": config.generation.temperature,
+            "top_p": config.generation.top_p,
+            "max_new_tokens": config.generation.max_new_tokens,
+            "max_attempts_per_query": config.generation.max_attempts_per_query,
+            "queries_per_arm_per_passage": config.generation.target_query_count,
+        }
+        if any(decoding.get(field) != value for field, value in expected_decoding.items()):
+            raise ValueError(f"{role} prospective decoding contract drifted")
         adapter = root / str(arm["adapter"])
         if _artifact_fingerprint(adapter) != str(arm["adapter_sha256"]):
             raise ValueError(f"{role} adapter drifted")
@@ -159,7 +186,7 @@ def preflight_prospective(path: Path) -> dict[str, Any]:
         raise ValueError("prospective corpus index drifted")
     return {
         "schema_version": 1,
-        "contract": PROSPECTIVE_CONTRACT,
+        "contract": payload["contract"],
         "status": "verified",
         "contract_sha256": contract_sha,
         "selector_commit": "2164822",
@@ -167,6 +194,32 @@ def preflight_prospective(path: Path) -> dict[str, Any]:
         "cohort_selected_count": int(cohort["selected_count"]),
         "final_tests_used": [],
     }
+
+
+def _selection_rows(
+    records: Sequence[dict[str, Any]],
+    *,
+    excluded: set[str],
+    minimum_hard_negatives: int,
+    seed: int,
+) -> list[tuple[str, str, int, dict[str, Any]]]:
+    rows: list[tuple[str, str, int, dict[str, Any]]] = []
+    for index, record in enumerate(records):
+        example_id = str(record["example_id"])
+        negatives = record.get("hard_negatives")
+        if (
+            example_id not in excluded
+            and isinstance(negatives, list)
+            and len(negatives) >= minimum_hard_negatives
+        ):
+            digest = hashlib.sha256(f"{seed}:{example_id}".encode()).hexdigest()
+            rows.append((digest, example_id, index, record))
+    rows.sort(key=lambda item: (item[0], item[1]))
+    return rows
+
+
+def _id_list_sha256(ids: Sequence[str]) -> str:
+    return hashlib.sha256(("\n".join(ids) + "\n").encode()).hexdigest()
 
 
 def _selected_cohort(
@@ -180,22 +233,56 @@ def _selected_cohort(
     excluded_path = (
         root / "data/processed/v1/evaluation/task04-v1" / f"{cohort['exclude_subset']}.ids.jsonl"
     )
-    excluded = {str(row["id"]) for row in read_records(excluded_path)}
+    subset_excluded = {str(row["id"]) for row in read_records(excluded_path)}
     minimum = int(cohort["minimum_hard_negatives"])
     seed = int(cohort["selection_seed"])
-    eligible: list[tuple[str, str, int, dict[str, Any]]] = []
-    for index, record in enumerate(records):
-        example_id = str(record["example_id"])
-        negatives = record.get("hard_negatives")
-        if example_id not in excluded and isinstance(negatives, list) and len(negatives) >= minimum:
-            digest = hashlib.sha256(f"{seed}:{example_id}".encode()).hexdigest()
-            eligible.append((digest, example_id, index, record))
-    eligible.sort(key=lambda item: (item[0], item[1]))
+    prior_excluded: set[str] = set()
+    prior_identities: list[dict[str, Any]] = []
+    for raw_prior in cohort.get("prior_cohort_exclusions", []):
+        prior = cast(Mapping[str, Any], raw_prior)
+        manifest_path = root / str(prior["manifest"])
+        if _file_sha256(manifest_path) != str(prior["manifest_sha256"]):
+            raise ValueError("prospective prior cohort manifest fingerprint mismatch")
+        prior_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        prior_identity = cast(Mapping[str, Any], prior_manifest["cohort_identity"])
+        prior_minimum = int(prior_identity["minimum_hard_negatives"])
+        prior_rows = _selection_rows(
+            records,
+            excluded=subset_excluded | prior_excluded,
+            minimum_hard_negatives=prior_minimum,
+            seed=int(prior["selection_seed"]),
+        )[: int(prior["selected_count"])]
+        prior_ids = [item[1] for item in prior_rows]
+        prior_sha = _id_list_sha256(prior_ids)
+        if prior_sha != str(prior["selected_id_list_sha256"]):
+            raise ValueError("prospective prior cohort reconstruction drifted")
+        prior_excluded.update(prior_ids)
+        prior_identities.append(
+            {
+                "manifest_sha256": str(prior["manifest_sha256"]),
+                "selected_id_list_sha256": prior_sha,
+                "selected_count": len(prior_ids),
+            }
+        )
+    excluded = subset_excluded | prior_excluded
+    available = [record for record in records if str(record["example_id"]) not in excluded]
+    eligible_source_order = [
+        record
+        for record in available
+        if isinstance(record.get("hard_negatives"), list)
+        and len(record["hard_negatives"]) >= minimum
+    ]
+    eligible = _selection_rows(
+        records,
+        excluded=excluded,
+        minimum_hard_negatives=minimum,
+        seed=seed,
+    )
     selected_rows = eligible[: int(cohort["selected_count"])]
     selected = [item[3] for item in selected_rows]
     source_indices = [item[2] for item in selected_rows]
     example_ids = [item[1] for item in selected_rows]
-    id_sha = hashlib.sha256(("\n".join(example_ids) + "\n").encode()).hexdigest()
+    id_sha = _id_list_sha256(example_ids)
     record_digest = hashlib.sha256()
     metadata_rows = []
     group_ids = []
@@ -218,12 +305,33 @@ def _selected_cohort(
         b"".join(_canonical_bytes(row) + b"\n" for row in metadata_rows)
     ).hexdigest()
     checks = {
+        "available_after_exclusions": len(available),
         "eligible_count": len(eligible),
+        "remaining_source_order_id_list_sha256": _id_list_sha256(
+            [str(record["example_id"]) for record in available]
+        ),
+        "remaining_eligible_source_order_id_list_sha256": _id_list_sha256(
+            [str(record["example_id"]) for record in eligible_source_order]
+        ),
         "selected_id_list_sha256": id_sha,
+        "selected_group_ids_sha256": hashlib.sha256("\n".join(group_ids).encode()).hexdigest(),
+        "selected_source_indices_sha256": _canonical_sha256(source_indices),
         "selected_metadata_records_sha256": metadata_sha,
         "selected_source_records_sha256": record_digest.hexdigest(),
-        "intersection_with_excluded_subset": len(set(example_ids) & excluded),
+        "intersection_with_excluded_subset": len(set(example_ids) & subset_excluded),
+        "intersection_with_prior_cohorts": len(set(example_ids) & prior_excluded),
     }
+    if not prior_identities:
+        checks = {
+            field: checks[field]
+            for field in (
+                "eligible_count",
+                "selected_id_list_sha256",
+                "selected_metadata_records_sha256",
+                "selected_source_records_sha256",
+                "intersection_with_excluded_subset",
+            )
+        }
     preregistered = json.loads((root / str(cohort["manifest"])).read_text(encoding="utf-8"))
     preregistered_identity = cast(Mapping[str, Any], preregistered["cohort_identity"])
     expected = {
@@ -235,11 +343,32 @@ def _selected_cohort(
             preregistered_identity["selected_metadata_records_sha256"]
         ),
     }
+    if prior_identities:
+        expected.update(
+            {
+                "available_after_exclusions": int(cohort["available_after_exclusions"]),
+                "remaining_source_order_id_list_sha256": str(
+                    preregistered_identity["remaining_source_order_id_list_sha256"]
+                ),
+                "remaining_eligible_source_order_id_list_sha256": str(
+                    preregistered_identity["remaining_eligible_source_order_id_list_sha256"]
+                ),
+                "selected_group_ids_sha256": str(
+                    preregistered_identity["selected_group_ids_sha256"]
+                ),
+                "selected_source_indices_sha256": str(
+                    preregistered_identity["selected_source_indices_sha256"]
+                ),
+                "intersection_with_prior_cohorts": int(cohort["intersection_with_prior_cohorts"]),
+            }
+        )
     for field, value in expected.items():
         if checks[field] != value:
             raise ValueError(f"prospective cohort {field} drifted")
-    selection_policy = {
-        "policy": "sha256_unseen_dev_min_hn_v1",
+    selection_policy: dict[str, Any] = {
+        "policy": (
+            "sha256_unseen_dev_min_hn_v2" if prior_identities else "sha256_unseen_dev_min_hn_v1"
+        ),
         "selection_seed": seed,
         "minimum_hard_negatives": minimum,
         "selected_count": len(selected),
@@ -248,6 +377,8 @@ def _selected_cohort(
         "quality_metrics_used": [],
         "final_tests_used": [],
     }
+    if prior_identities:
+        selection_policy["prior_cohort_exclusions"] = prior_identities
     materialized = {
         "schema_version": 1,
         "contract": D01B_PROSPECTIVE_COHORT_CONTRACT,
@@ -375,6 +506,7 @@ def _write_selected(
     selected: Mapping[str, Sequence[Any]],
     objectives: Mapping[str, Mapping[str, float]],
     *,
+    contract: str,
     identity_sha256: str,
     probe_authorized: bool,
 ) -> None:
@@ -384,7 +516,7 @@ def _write_selected(
         for group_id in sorted(selected):
             for rank, item in enumerate(selected[group_id]):
                 row = {
-                    "contract": PROSPECTIVE_CONTRACT,
+                    "contract": contract,
                     "status": "prospective_selection_complete",
                     "selection_identity_sha256": identity_sha256,
                     "selection_rank": rank,
@@ -506,12 +638,13 @@ def select_compare_prospective(
         output_selected,
         selected,
         objectives,
+        contract=str(payload["contract"]),
         identity_sha256=identity_sha,
         probe_authorized=passed,
     )
     report = {
         "schema_version": 1,
-        "contract": PROSPECTIVE_CONTRACT,
+        "contract": payload["contract"],
         "status": "prospective_complete",
         "decision": "authorize_equal_budget_probe_inputs" if passed else "stop",
         "identity": {**input_identity, "identity_sha256": identity_sha},
