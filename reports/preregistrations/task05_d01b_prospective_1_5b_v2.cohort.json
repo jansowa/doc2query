@@ -1,19 +1,19 @@
 {
   "cohort_identity": {
     "available_after_exclusions": 7674,
-    "combined_exclusion_id_list_sha256": "83bf4eca7572abb9b0fe93a5329f0c6754f3cd969f51ac53e4b628e255d3d36e",
+    "combined_exclusion_id_list_sha256": "bceaf62c4d5672c2ee94a2fe6b6a258ce3b47243dd20649bacf8f34ba228f4b0",
     "eligible_count": 7591,
     "final_tests_used": [],
     "minimum_hard_negatives": 5,
     "prior_v1_selected_id_list_sha256": "b540e24cf04dbc3638921173f116e80d7a7714523a597eb5cc1dea408ebfbc57",
-    "remaining_eligible_source_order_id_list_sha256": "5ff61268ed64e3b0ea3aec2c4c0e32d808178a25750af61f12ba159b9459f410",
-    "remaining_source_order_id_list_sha256": "a4169833694fe593261766624b64f6f727848cd93c8da9dc5a2c47b53a4e1e3d",
+    "remaining_eligible_source_order_id_list_sha256": "02d3b4e9259951bfc52844273bc7b54d23d33d684248a24a9e44c3436ee67481",
+    "remaining_source_order_id_list_sha256": "f99718d7c918b949c2c1e15cc25e470a196f4871301e68fd6576b2fd9496f755",
     "selected_count": 2000,
-    "selected_group_ids_sha256": "483b3d7c9a0ddf197ac699fad5aa9f8c539c27f1cd0a894907a468e2046cfd81",
-    "selected_id_list_sha256": "b051a35d242838dec742dcf433a74fc3441d26d4ded1f795116a72724e09c09f",
-    "selected_metadata_records_sha256": "483798ba66b5c665e27754088efe50bf69eb260686e99c82bfe1dc6c45673e5b",
+    "selected_group_ids_sha256": "1ae5950b3c41f181253a28f19655e169389f33225f3f67620369b38879d6872c",
+    "selected_id_list_sha256": "819141f6c236a371797eb3272de50e59f00f7d678e66433f233f645a66b6d80d",
+    "selected_metadata_records_sha256": "5ad688e94453a03f8950b20485a940186c71cb1445b04dd12fa4f0afdb492487",
     "selected_source_indices_sha256": "8418662b5f14923d471d2875820946f6a57fa6eaac2a53da92fd0b5e245cc093",
-    "selected_source_records_sha256": "765f5ac50c64a05bbad2a36d42f5bc01ec8a9bb6dcf2df4c8a95a4692c5cd9e7",
+    "selected_source_records_sha256": "c49f8d45a2a54ab8a05f5454f6a684de4f7b14ba83cb21ca28ba1ed494063aa5",
     "selection_hash": "sha256(20260803:<example_id>)",
     "selection_seed": 20260803,
     "source_index_basis": "dev_intrinsic_frozen_manifest_order",
@@ -42,12 +42,12 @@
     "records_or_generations_inspected_manually": false
   },
   "exclusions": {
-    "dev_intrinsic_rank10_id_list_sha256": "fc5a7ab57056df9203f25847fe2758a04a96f3d5e9cf028f8ef8f2fc38f4ad68",
+    "dev_intrinsic_rank10_id_list_sha256": "33ee2411d2ccd3704dec019c8c618572ac9295551f43c4b678b29a2ababc7189",
     "prospective_v1_manifest": "reports/preregistrations/task05_d01b_prospective_1_5b_v1.cohort.json",
     "prospective_v1_manifest_sha256": "864cd7de6143fa4649738f6199e41749a86bec750d9c569ceee6500f2a9ca966",
     "prospective_v1_reconstruction_seed": 20260802,
     "prospective_v1_selected_count": 2000,
-    "prospective_v1_sorted_id_list_sha256": "142502b2d5905ad7408d1feec1a32400d2244e43f4c5d3b05762a1c2a72214ce"
+    "prospective_v1_sorted_id_list_sha256": "a90f810fc7bc0d563b0f6bbfdfcc9f6eb7593303945b07a3112c96c83a12fd02"
   },
   "final_tests_used": [],
   "schema_version": 1,

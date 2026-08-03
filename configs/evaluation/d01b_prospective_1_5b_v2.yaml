@@ -6,7 +6,7 @@ final_tests_used: []
 
 adr:
   path: reports/decisions/task05_d01b_prospective_validation_1_5b_v2.md
-  sha256: f27bd3d930996a321d7d266c65c84e57711642a83a70eb1e03a1c0f467bdce4c
+  sha256: 3bfd2bbe4f451a036a9b7c6150e3db5d512b7589bd036ccf368f3a56c7a70b1d
 
 selector:
   frozen_commit: 2164822
@@ -38,7 +38,7 @@ selector:
 
 cohort:
   manifest: reports/preregistrations/task05_d01b_prospective_1_5b_v2.cohort.json
-  manifest_sha256: 0de8c6ae82b24c7b8b9524745ddfa969a5e2f949f9ad64192fcf6a2ab683e02b
+  manifest_sha256: a3588adafd95faf682e9d795671374932515c8eef9751d05c108a9c30944c2cb
   source_frozen_manifest: data/processed/v1/evaluation/task04-v1/manifest.json
   source_subset: dev_intrinsic
   exclude_subset: dev_intrinsic_rank10
@@ -56,8 +56,8 @@ cohort:
   selected_count: 2000
   selection_seed: 20260803
   selection_hash: 'sha256("20260803:<example_id>")'
-  selected_id_list_sha256: b051a35d242838dec742dcf433a74fc3441d26d4ded1f795116a72724e09c09f
-  selected_records_sha256: 765f5ac50c64a05bbad2a36d42f5bc01ec8a9bb6dcf2df4c8a95a4692c5cd9e7
+  selected_id_list_sha256: 819141f6c236a371797eb3272de50e59f00f7d678e66433f233f645a66b6d80d
+  selected_records_sha256: c49f8d45a2a54ab8a05f5454f6a684de4f7b14ba83cb21ca28ba1ed494063aa5
   intersection_with_excluded_subset: 0
   intersection_with_prior_cohorts: 0
 

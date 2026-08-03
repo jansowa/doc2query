@@ -51,9 +51,9 @@ The minimum remains five hard negatives, leaving 7591 eligible records.
 Select 2000 records by ascending
 `SHA-256("20260803:<example_id>")`, with `example_id` as the tie-break. The
 selected ID-list SHA-256 is
-`b051a35d242838dec742dcf433a74fc3441d26d4ded1f795116a72724e09c09f`;
+`819141f6c236a371797eb3272de50e59f00f7d678e66433f233f645a66b6d80d`;
 the canonical selected source-record SHA-256 is
-`765f5ac50c64a05bbad2a36d42f5bc01ec8a9bb6dcf2df4c8a95a4692c5cd9e7`.
+`c49f8d45a2a54ab8a05f5454f6a684de4f7b14ba83cb21ca28ba1ed494063aa5`.
 Intersection with rank-10 and prospective v1 is zero. All 2000 records have an
 exact positive-ID and negative-ID match in the existing Task 02 natural-primary
 artifact. No text, generation or quality field influenced selection.
