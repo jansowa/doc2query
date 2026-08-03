@@ -1,0 +1,158 @@
+schema_version: 1
+contract: task05-d01b-prospective-1.5b-v2
+status: preregistered_before_generation
+preregistered_at: "2026-08-03"
+final_tests_used: []
+
+adr:
+  path: reports/decisions/task05_d01b_prospective_validation_1_5b_v2.md
+  sha256: f27bd3d930996a321d7d266c65c84e57711642a83a70eb1e03a1c0f467bdce4c
+
+selector:
+  frozen_commit: 2164822
+  implementation:
+    path: src/doc2query/evaluation/d01_usefulness.py
+    sha256: f8bb6ccd491a6e4f3fd721ca6368bcc75a450455082f5d0f6aa94a96e29c764c
+  retrospective_contract:
+    path: configs/evaluation/d01b_usefulness_hybrid_v1.yaml
+    sha256: 0ba63995648c57c5d68ec23c6b0c54008036c914d8d75f241f5a07db8c84abd5
+  candidate_count: 8
+  selected_count: 4
+  anchor: all_four_uncontrolled_queries
+  enumerate_all_subsets: true
+  feasibility_not_below_anchor:
+    - pool_recall_at_1
+    - corpus_round_trip_at_20
+    - sentence_level_source_hit
+    - format_valid
+  copy_risk_count_not_above_anchor: true
+  objective_weights:
+    natural_margin_alignment: 0.35
+    semantic_diversity: 0.30
+    lexical_diversity: 0.10
+    corpus_specificity: 0.15
+    low_copy_density: 0.10
+  natural_margin_scale: cohort_iqr_with_floor_1e-6
+  deterministic_tie_break: lexicographic_candidate_identity
+  shadow_reserved_from_selection: true
+
+cohort:
+  manifest: reports/preregistrations/task05_d01b_prospective_1_5b_v2.cohort.json
+  manifest_sha256: 0de8c6ae82b24c7b8b9524745ddfa969a5e2f949f9ad64192fcf6a2ab683e02b
+  source_frozen_manifest: data/processed/v1/evaluation/task04-v1/manifest.json
+  source_subset: dev_intrinsic
+  exclude_subset: dev_intrinsic_rank10
+  prior_cohort_exclusions:
+    - manifest: reports/preregistrations/task05_d01b_prospective_1_5b_v1.cohort.json
+      manifest_sha256: 864cd7de6143fa4649738f6199e41749a86bec750d9c569ceee6500f2a9ca966
+      selection_seed: 20260802
+      selected_count: 2000
+      selected_id_list_sha256: b540e24cf04dbc3638921173f116e80d7a7714523a597eb5cc1dea408ebfbc57
+  source_records: data/processed/v1/dev.parquet
+  source_records_sha256: 12b86da10c73707a58a8793111afcca0424981d738667a04c228014780a02a1d
+  minimum_hard_negatives: 5
+  available_after_exclusions: 7674
+  eligible_count: 7591
+  selected_count: 2000
+  selection_seed: 20260803
+  selection_hash: 'sha256("20260803:<example_id>")'
+  selected_id_list_sha256: b051a35d242838dec742dcf433a74fc3441d26d4ded1f795116a72724e09c09f
+  selected_records_sha256: 765f5ac50c64a05bbad2a36d42f5bc01ec8a9bb6dcf2df4c8a95a4692c5cd9e7
+  intersection_with_excluded_subset: 0
+  intersection_with_prior_cohorts: 0
+
+natural_primary_scores:
+  path: artifacts/task02/pfn_dev_v1/primary_scores.jsonl
+  sha256: 7a1f9f5949a26d3c09780ba30689fb259c1d20cd401a1e8860b8292461eef115
+  schema: possible_false_negative_dev_scores_v1
+  same_positive_and_intersecting_negatives: true
+
+arms:
+  baseline:
+    id: W05-1.5B-50K-8GB
+    generation_experiment_id: D01B-PROSPECTIVE-V2-W05-1.5B-S42
+    generation_config: configs/experiments/d01b_prospective_v2_w05_1_5b_s42.yaml
+    generation_config_sha256: 03d2c0042758d14ca2c8baad7aa1dcf69bd93d55f3fa4b9769756bad9e57455c
+    adapter: runs/W05-1.5B-50K-8GB/adapter
+    adapter_sha256: 01ad29339bc16167078534fd313a811a885b2c937d5b23d03f4949624318803b
+    training_manifest: runs/W05-1.5B-50K-8GB/run_manifest.json
+    training_manifest_sha256: 30bafb188bb47cd70b5e2d81242eca76c9b607890d19b7da7bea645fdb8d293c
+  controlled:
+    id: D01-1.5B-STYLE-50K-S42
+    generation_experiment_id: D01B-PROSPECTIVE-V2-D01-1.5B-S42
+    generation_config: configs/experiments/d01b_prospective_v2_d01_1_5b_s42.yaml
+    generation_config_sha256: 1a83b1289cd029a70f93a1a6aefc8044e6b58c166f25604896ee568a73fc6465
+    adapter: runs/D01-1.5B-STYLE-50K-S42/adapter
+    adapter_sha256: dc2beb9092740d5981850ee59c9c7815b6a612cf77ca353af88fd0b056a98c14
+    training_manifest: runs/D01-1.5B-STYLE-50K-S42/run_manifest.json
+    training_manifest_sha256: 81e733f84ab9b0280b115d3252460e5f400dd4205a9cf75bb8543e86fd84a7c5
+  shared_model:
+    name_or_path: speakleash/Bielik-1.5B-v3
+    revision: 4b25049621bf3952a1fc9314c89773102eda0333
+    trust_remote_code: false
+  decoding:
+    seed: 42
+    do_sample: true
+    temperature: 0.8
+    top_p: 0.95
+    max_new_tokens: 64
+    max_attempts_per_query: 16
+    queries_per_arm_per_passage: 4
+    exact_k_required: true
+    duplicate_outputs_forbidden: true
+    generation_batch_size: 16
+
+scoring:
+  primary:
+    config: configs/reranker/primary_polish_roberta_v3_cuda.yaml
+    name_or_path: sdadas/polish-reranker-roberta-v3
+    revision: e6471da541f4e7be33845b6d57248a8d8bde27e8
+    trust_remote_code: false
+  shadow:
+    config: configs/reranker/shadow_bge_v2_m3.yaml
+    name_or_path: BAAI/bge-reranker-v2-m3
+    revision: 953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e
+    trust_remote_code: false
+    reserved_from_selection: true
+  corpus_index:
+    path: data/processed/v1/evaluation/corpus-bm25-v1
+    fingerprint: 159af07f3b987fe492f9ff89f494521587a4d023fcb4fc62b69d7295d2a57258
+  semantic_model:
+    name_or_path: OPI-PIB/PolDense-150M
+    revision: b94ea7f951cc480369a85fa9021694eef80c3a00
+    trust_remote_code: false
+    similarity_prefix: "[sts]: "
+    normalize_embeddings: true
+    batch_size: 128
+
+copy_risk:
+  minimum_query_words: 4
+  copy_density: 0.6
+  normalized_lcs: 0.8
+  longest_copied_ngram: 3.0
+  query_to_passage_length_ratio: 0.3838827838827845
+
+evaluation:
+  comparison: hybrid_minus_baseline_anchor
+  resampling_unit: passage_query_group
+  bootstrap_samples: 10000
+  bootstrap_seed: 20260721
+  interval: paired_percentile_95
+  gates:
+    corpus_round_trip_at_20: {direction: higher, noninferiority_margin: 0.02}
+    sentence_level_source_hit: {direction: higher, noninferiority_margin: 0.02}
+    format_valid_rate: {direction: higher, noninferiority_margin: 0.005}
+    shadow_pool_recall_at_1: {direction: higher, noninferiority_margin: 0.02}
+    copy_risk_rate: {direction: lower, maximum_upper_ci: 0.0}
+    semantic_diversity: {direction: higher, noninferiority_margin: 0.0}
+  primary_bm25_improvement_may_be_construction_induced: true
+  all_gates_required_for_probe_authorization: true
+  promotion_scope: equal_budget_probe_inputs_only
+  probe_materialization_authorized_before_result: false
+  final_tests_forbidden: true
+  four_point_five_b_forbidden_before_pass: true
+
+outputs:
+  root: artifacts/task05/d01b_prospective_1_5b_v2
+  measurements: reports/measurements/task05_d01b_prospective_1_5b_v2
+  logs: logs/task05_d01b_prospective_1_5b_v2

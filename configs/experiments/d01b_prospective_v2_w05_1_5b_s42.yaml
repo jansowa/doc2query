@@ -1,0 +1,26 @@
+# @package _global_
+# Prospective D01b v2 baseline; quality decoding is frozen and only the
+# technical distinct-query completion ceiling changes from 3 to 16 attempts.
+defaults:
+  - w05_1_5b_50k_8gb
+  - _self_
+
+run:
+  experiment_id: D01B-PROSPECTIVE-V2-W05-1.5B-S42
+  output_dir: runs/D01B-PROSPECTIVE-V2-W05-1.5B-S42
+
+data:
+  input_path: data/input.jsonl
+  input_format: jsonl
+  eval_path: null
+  max_train_examples: null
+  max_eval_examples: null
+
+generation:
+  controlled: false
+  target_query_count: 4
+  do_sample: true
+  temperature: 0.8
+  top_p: 0.95
+  max_new_tokens: 64
+  max_attempts_per_query: 16

@@ -1,0 +1,55 @@
+{
+  "cohort_identity": {
+    "available_after_exclusions": 7674,
+    "combined_exclusion_id_list_sha256": "83bf4eca7572abb9b0fe93a5329f0c6754f3cd969f51ac53e4b628e255d3d36e",
+    "eligible_count": 7591,
+    "final_tests_used": [],
+    "minimum_hard_negatives": 5,
+    "prior_v1_selected_id_list_sha256": "b540e24cf04dbc3638921173f116e80d7a7714523a597eb5cc1dea408ebfbc57",
+    "remaining_eligible_source_order_id_list_sha256": "5ff61268ed64e3b0ea3aec2c4c0e32d808178a25750af61f12ba159b9459f410",
+    "remaining_source_order_id_list_sha256": "a4169833694fe593261766624b64f6f727848cd93c8da9dc5a2c47b53a4e1e3d",
+    "selected_count": 2000,
+    "selected_group_ids_sha256": "483b3d7c9a0ddf197ac699fad5aa9f8c539c27f1cd0a894907a468e2046cfd81",
+    "selected_id_list_sha256": "b051a35d242838dec742dcf433a74fc3441d26d4ded1f795116a72724e09c09f",
+    "selected_metadata_records_sha256": "483798ba66b5c665e27754088efe50bf69eb260686e99c82bfe1dc6c45673e5b",
+    "selected_source_indices_sha256": "8418662b5f14923d471d2875820946f6a57fa6eaac2a53da92fd0b5e245cc093",
+    "selected_source_records_sha256": "765f5ac50c64a05bbad2a36d42f5bc01ec8a9bb6dcf2df4c8a95a4692c5cd9e7",
+    "selection_hash": "sha256(20260803:<example_id>)",
+    "selection_seed": 20260803,
+    "source_index_basis": "dev_intrinsic_frozen_manifest_order",
+    "source_records_path": "data/processed/v1/dev.parquet",
+    "source_records_sha256": "12b86da10c73707a58a8793111afcca0424981d738667a04c228014780a02a1d",
+    "source_subset": "dev_intrinsic"
+  },
+  "contract": "task05-d01b-prospective-cohort-v2",
+  "eligibility_audit": {
+    "hard_negative_distribution_after_exclusions": {
+      "2": 3,
+      "3": 11,
+      "4": 69,
+      "5": 124,
+      "6": 353,
+      "7": 933,
+      "8": 2160,
+      "9": 4021
+    },
+    "intersection_with_dev_intrinsic_rank10": 0,
+    "intersection_with_prospective_v1": 0,
+    "natural_primary_negative_exact_match_count": 2000,
+    "natural_primary_positive_exact_match_count": 2000,
+    "natural_primary_score_sha256": "7a1f9f5949a26d3c09780ba30689fb259c1d20cd401a1e8860b8292461eef115",
+    "quality_fields_used": [],
+    "records_or_generations_inspected_manually": false
+  },
+  "exclusions": {
+    "dev_intrinsic_rank10_id_list_sha256": "fc5a7ab57056df9203f25847fe2758a04a96f3d5e9cf028f8ef8f2fc38f4ad68",
+    "prospective_v1_manifest": "reports/preregistrations/task05_d01b_prospective_1_5b_v1.cohort.json",
+    "prospective_v1_manifest_sha256": "864cd7de6143fa4649738f6199e41749a86bec750d9c569ceee6500f2a9ca966",
+    "prospective_v1_reconstruction_seed": 20260802,
+    "prospective_v1_selected_count": 2000,
+    "prospective_v1_sorted_id_list_sha256": "142502b2d5905ad7408d1feec1a32400d2244e43f4c5d3b05762a1c2a72214ce"
+  },
+  "final_tests_used": [],
+  "schema_version": 1,
+  "status": "preregistered_before_generation"
+}

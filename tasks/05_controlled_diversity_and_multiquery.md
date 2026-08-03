@@ -4,7 +4,20 @@
 
 ## Status
 
-`IMPLEMENTED`
+`IN PROGRESS`
+
+Aktualizacja 2026-08-03 (prospektywna prerejestracja v2): właściciel projektu
+zaakceptował techniczny limit 16 prób na slot. Metadata-only audyt wykluczył
+`dev_intrinsic_rank10` oraz całą kohortę prospective v1 i pozostawił 7591 z
+7674 rekordów z co najmniej 5 hard negative'ami. Przed jakąkolwiek generacją
+v2 zamrożono nową kohortę 2000 rekordów (SHA-256, seed 20260803), niezmieniony
+selector `2164822`, adaptery, sędziów, corpus, PolDense, guardraile i bootstrap.
+Jedyną zmianą protokołu jest symetryczne `max_attempts_per_query=16`; nadal
+obowiązują cztery różne poprawne query albo fail-closed. Przecięcie z rank-10 i
+prospective v1 wynosi zero, natural-primary ID match wynosi 2000/2000, a
+`final_tests_used=[]`. ADR:
+[`task05_d01b_prospective_validation_1_5b_v2.md`](../reports/decisions/task05_d01b_prospective_validation_1_5b_v2.md).
+Runner v2 i jego tanie testy są następnym krokiem; generacji v2 nie uruchomiono.
 
 Aktualizacja 2026-08-02 (prospektywna prerejestracja): metadata-only audyt
 `dev_intrinsic` poza wykorzystanym `dev_intrinsic_rank10` znalazł 9591 z 9674
