@@ -18,9 +18,17 @@ Crash-safe runner jest gotowy; jego fazy `preflight` i `prepare-cohort`
 przeszły na rzeczywistych pinach i powtórne przygotowanie rozpoznało identyczny
 manifest. Runner ma lock, atomowy status, osobne logi, identity-bound journale,
 fail-closed exact-K i możliwość wznowienia faz `generate`, `score` oraz
-`select-compare`. Nie wygenerowano ani nie obejrzano prospektywnych query.
-Pozostał drogi run 1.5B i wszystkie prerejestrowane bramki; probe, 4.5B i
-finalne testy pozostają niedozwolone.
+`select-compare`. Faza `generate` została następnie uruchomiona i prawidłowo
+zatrzymała się fail-closed przed scoringiem: controlled ukończył 8000/8000
+query, ale W05 tylko 7547/8000, z 320 grupami bez exact K po zamrożonych trzech
+próbach. Treści nowych query nie przeglądano. Ponowienie z istniejącego
+journala odtworzy ten sam niepełny wynik, więc obecny kontrakt nie dopuszcza
+scoringu ani selekcji. Blocker:
+[`task05_d01b_prospective_exact_k_2026-08-03.md`](../reports/blockers/task05_d01b_prospective_exact_k_2026-08-03.md).
+Ewentualny retry wymaga nowego ADR przed generacją na nadal niewidzianej
+kohorcie i jawnej polityki exact-K; nie wolno stroić selektora ani wykorzystać
+wyników jakościowych z nieudanej kohorty. Probe, 4.5B i finalne testy pozostają
+niedozwolone.
 
 Kod, kontrakty, preset i tanie testy CPU są gotowe. Zaimplementowano rozdzielną
 taksonomię `form`/`intent` z abstention i `intent_applicable`, kompatybilny
