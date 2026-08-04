@@ -30,10 +30,15 @@ zakończyła się `rc=0`: oba ramiona mają 8000/8000 query i zero exhausted
 groups. W05 zachował 1307 duplicate outputs, controlled odrzucił 42, a
 `final_tests_used=[]`. Przed scoringiem poprawiono wyłącznie techniczną
 kontrolę idle GPU: sterownik 550 nie obsługuje stabilnie endpointu
-`--query-compute-apps`, więc runner używa fail-closed fallbacku `nvidia-smi
-pmon` i nadal odmawia startu przy procesach `C`/`C+G` albo braku obu metod.
-Scoring nie rozpoczął jeszcze pierwszego wiersza. Następny krok to `score`, a
-potem `select-compare`.
+`--query-compute-apps`, więc runner używa trzech krótkich prób fail-closed
+fallbacku `nvidia-smi pmon` i nadal odmawia startu przy procesach `C`/`C+G`
+albo braku potwierdzenia stanu.
+Pierwsza próba scoringu zatrzymała się przed pierwszym trwałym wierszem: minimum
+5 hard negative’ów z prospektywnej kohorty nie było propagowane do wspólnego
+scorera, który zachował domyślny wymóg 10. Poprawka przekazuje podpisane minimum
+z tożsamości generacji, sprawdza je względem polityki kohorty i pozostawia
+domyślne 10 dla pozostałych ścieżek. Następny krok to ponowny `score`, a potem
+`select-compare`.
 
 Aktualizacja 2026-08-03 (prospektywna prerejestracja v2): właściciel projektu
 zaakceptował techniczny limit 16 prób na slot. Metadata-only audyt wykluczył

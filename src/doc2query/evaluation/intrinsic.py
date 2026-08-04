@@ -81,13 +81,18 @@ POOL_METRICS = (
 ROUND_TRIP_METRICS = tuple(f"corpus_round_trip_at_{cutoff}" for cutoff in CORPUS_ROUND_TRIP_CUTOFFS)
 
 
-def _document_texts(record: dict[str, Any]) -> tuple[str, str, list[str], list[str]]:
+def _document_texts(
+    record: dict[str, Any], *, minimum_hard_negatives: int
+) -> tuple[str, str, list[str], list[str]]:
     positive = record.get("positive")
     negatives = record.get("hard_negatives")
     if not isinstance(positive, dict) or not isinstance(positive.get("text"), str):
         raise ValueError("generation record requires positive{text,doc_id}")
-    if not isinstance(negatives, list) or len(negatives) < 10:
-        raise ValueError("intrinsic retrieval scoring requires at least 10 hard negatives")
+    if not isinstance(negatives, list) or len(negatives) < minimum_hard_negatives:
+        raise ValueError(
+            "intrinsic retrieval scoring requires at least "
+            f"{minimum_hard_negatives} hard negatives"
+        )
     negative_texts = [str(value["text"]) for value in negatives]
     negative_ids = [str(value["doc_id"]) for value in negatives]
     return (
@@ -305,6 +310,7 @@ def _resume_identity(
     test_fingerprint: str,
     experiment_id: str,
     corpus_index: CorpusIndex | None,
+    minimum_hard_negatives: int,
 ) -> dict[str, Any]:
     record_digest = hashlib.sha256()
     for record in records:
@@ -326,6 +332,7 @@ def _resume_identity(
         "corpus_index_fingerprint": (
             str(corpus_index.metadata.get("index_fingerprint")) if corpus_index else None
         ),
+        "minimum_hard_negatives": minimum_hard_negatives,
     }
 
 
@@ -425,10 +432,16 @@ def evaluate_intrinsic_records(
     bm25_workers: int = 8,
     progress_every: int = 100,
     archive_incompatible_scoring: bool = False,
+    minimum_hard_negatives: int = 10,
 ) -> dict[str, Any]:
     if not records:
         raise ValueError("intrinsic evaluation requires generations")
-    if scoring_batch_size < 1 or bm25_workers < 1 or progress_every < 1:
+    if (
+        scoring_batch_size < 1
+        or bm25_workers < 1
+        or progress_every < 1
+        or minimum_hard_negatives < 1
+    ):
         raise ValueError("scoring batch size, BM25 workers and progress interval must be positive")
     normalizer = SimplePolishNormalizer()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -441,6 +454,7 @@ def evaluate_intrinsic_records(
         test_fingerprint=test_fingerprint,
         experiment_id=experiment_id,
         corpus_index=corpus_index,
+        minimum_hard_negatives=minimum_hard_negatives,
     )
     archived_scoring: Path | None = None
     if identity_path.exists():
@@ -479,7 +493,10 @@ def evaluate_intrinsic_records(
     with ThreadPoolExecutor(max_workers=1) as corpus_executor:
         for batch_start in range(resumed_count, len(records), scoring_batch_size):
             batch = records[batch_start : batch_start + scoring_batch_size]
-            documents = [_document_texts(record) for record in batch]
+            documents = [
+                _document_texts(record, minimum_hard_negatives=minimum_hard_negatives)
+                for record in batch
+            ]
             corpus_future = (
                 corpus_executor.submit(
                     evaluate_round_trip_queries,

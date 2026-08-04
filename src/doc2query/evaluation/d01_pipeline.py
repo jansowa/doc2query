@@ -1020,6 +1020,19 @@ def score_d01_artifact(
     identity = generation_summary.get("identity", {})
     cohort = identity.get("cohort", {}) if isinstance(identity, Mapping) else {}
     assert_development_subset(str(cohort.get("subset", "")))
+    minimum_hard_negatives = identity.get("minimum_hard_negatives")
+    if (
+        isinstance(minimum_hard_negatives, bool)
+        or not isinstance(minimum_hard_negatives, int)
+        or minimum_hard_negatives < 1
+    ):
+        raise ValueError(
+            "D01 generation identity requires a positive integer minimum_hard_negatives"
+        )
+    selection_policy = cohort.get("selection_policy", {})
+    if isinstance(selection_policy, Mapping) and "minimum_hard_negatives" in selection_policy:
+        if selection_policy["minimum_hard_negatives"] != minimum_hard_negatives:
+            raise ValueError("D01 generation and cohort hard-negative minima differ")
     generation_rows = list(read_records(generations_path))
     expected_count = int(generation_summary.get("generation_count", 0))
     if len(generation_rows) != expected_count:
@@ -1050,6 +1063,7 @@ def score_d01_artifact(
         scoring_batch_size=scoring_batch_size,
         progress_every=progress_every,
         archive_incompatible_scoring=archive_incompatible,
+        minimum_hard_negatives=minimum_hard_negatives,
     )
     result["contract"] = D01_SCORING_CONTRACT
     result["generation_identity_sha256"] = identity["identity_sha256"]
@@ -1064,6 +1078,7 @@ def score_d01_artifact(
         "top_p": identity["generation"]["top_p"],
         "target_query_count": identity["generation"]["target_query_count"],
         "max_attempts_per_query": identity["generation"]["max_attempts_per_query"],
+        "minimum_hard_negatives": minimum_hard_negatives,
     }
     result["generation_stats"] = {
         field: generation_summary[field]

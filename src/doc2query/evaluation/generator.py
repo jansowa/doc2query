@@ -279,6 +279,7 @@ def score_generation_artifact(
     bm25_workers: int = 8,
     progress_every: int = 100,
     archive_incompatible_scoring: bool = False,
+    minimum_hard_negatives: int = 10,
 ) -> dict[str, Any]:
     generation_records = list(read_records(generations_path))
     dedup_map = Path("data/processed/v1/dedup_map.parquet")
@@ -310,6 +311,7 @@ def score_generation_artifact(
             bm25_workers=bm25_workers,
             progress_every=progress_every,
             archive_incompatible_scoring=archive_incompatible_scoring,
+            minimum_hard_negatives=minimum_hard_negatives,
         )
     finally:
         if corpus_index is not None:

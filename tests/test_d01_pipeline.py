@@ -534,6 +534,96 @@ def test_control_aggregation_and_primary_shadow_disagreement(tmp_path: Path) -> 
     assert set(summary["slices"]["requested_form"]) == {"full_question", "keyword_query"}
 
 
+def test_d01_scoring_propagates_signed_cohort_hard_negative_minimum(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    generations = tmp_path / "generations.jsonl"
+    summary_path = tmp_path / "generations.summary.json"
+    primary_config = tmp_path / "primary.yaml"
+    shadow_config = tmp_path / "shadow.yaml"
+    identity = {
+        "identity_sha256": "i" * 64,
+        "minimum_hard_negatives": 5,
+        "cohort": {
+            "subset": "dev_intrinsic",
+            "fingerprint": "f" * 64,
+            "selection_policy": {"minimum_hard_negatives": 5},
+        },
+        "seed_contract": {},
+        "generation": {
+            "max_new_tokens": 64,
+            "do_sample": True,
+            "temperature": 0.8,
+            "top_p": 0.95,
+            "target_query_count": 1,
+            "max_attempts_per_query": 16,
+        },
+    }
+    source = _record(0)
+    source["hard_negatives"] = source["hard_negatives"][:5]
+    row = {
+        "evaluation_id": "q-0::d-0::candidate::0",
+        "generation_identity_sha256": identity["identity_sha256"],
+        "frozen_subset": "dev_intrinsic",
+        "frozen_cohort_fingerprint": "f" * 64,
+        "final_tests_used": [],
+        "positive": source["positives"][0],
+        "hard_negatives": source["hard_negatives"],
+    }
+    generations.write_text(json.dumps(row) + "\n", encoding="utf-8")
+    _write_json(
+        summary_path,
+        {
+            "contract": D01_GENERATION_CONTRACT,
+            "experiment_id": "D01-fixture",
+            "generation_count": 1,
+            "source_passage_count": 1,
+            "target_queries_per_passage": 1,
+            "attempts": 1,
+            "invalid_outputs": 0,
+            "duplicate_outputs": 0,
+            "exhausted_groups": 0,
+            "effective_candidate_count_mean": 1.0,
+            "identity": identity,
+            "final_tests_used": [],
+        },
+    )
+    primary_config.write_text(
+        "name_or_path: fixture-primary\nrevision: fixture-revision\n", encoding="utf-8"
+    )
+    shadow_config.write_text("name_or_path: fixture-shadow\n", encoding="utf-8")
+    captured: dict[str, Any] = {}
+
+    def fake_score(_path: Path, **kwargs: Any) -> dict[str, Any]:
+        captured.update(kwargs)
+        return {
+            "protocols": {"corpus_retrieval": {"status": "measured"}},
+            "judges": {"primary_status": "measured", "shadow_status": "measured"},
+        }
+
+    monkeypatch.setattr(d01_pipeline, "score_generation_artifact", fake_score)
+    result = d01_pipeline.score_d01_artifact(
+        generations,
+        generation_summary_path=summary_path,
+        output_dir=tmp_path / "score",
+        primary_config=primary_config,
+        shadow_config=shadow_config,
+    )
+    assert captured["minimum_hard_negatives"] == 5
+    assert result["generation_contract"]["minimum_hard_negatives"] == 5
+
+    identity["cohort"]["selection_policy"]["minimum_hard_negatives"] = 6
+    _write_json(summary_path, {**json.loads(summary_path.read_text()), "identity": identity})
+    with pytest.raises(ValueError, match="hard-negative minima differ"):
+        d01_pipeline.score_d01_artifact(
+            generations,
+            generation_summary_path=summary_path,
+            output_dir=tmp_path / "score-drift",
+            primary_config=primary_config,
+            shadow_config=shadow_config,
+        )
+
+
 def _probe_contracts(
     tmp_path: Path, *, comparison_status: str = "intrinsic_complete"
 ) -> tuple[Path, ...]:

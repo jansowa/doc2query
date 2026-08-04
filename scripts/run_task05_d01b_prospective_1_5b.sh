@@ -82,16 +82,23 @@ run_phase() {
 }
 
 assert_gpu_idle() {
-  local active query_rc pmon_rc
+  local active query_rc pmon_rc attempt
   set +e
   active=$(nvidia-smi --query-compute-apps=pid,process_name --format=csv,noheader 2>/dev/null)
   query_rc=$?
   set -e
   if [[ $query_rc -ne 0 ]]; then
-    set +e
-    active=$(nvidia-smi pmon -c 1 2>/dev/null | awk '$3 == "C" || $3 == "C+G" {print $2 "," $10}')
-    pmon_rc=$?
-    set -e
+    pmon_rc=1
+    for attempt in 1 2 3; do
+      set +e
+      active=$(nvidia-smi pmon -c 1 2>/dev/null | awk '$3 == "C" || $3 == "C+G" {print $2 "," $10}')
+      pmon_rc=$?
+      set -e
+      if [[ $pmon_rc -eq 0 ]]; then
+        break
+      fi
+      sleep 1
+    done
     if [[ $pmon_rc -ne 0 ]]; then
       echo "cannot verify GPU compute-process state; refusing phase $PHASE" >&2
       return 5
@@ -165,7 +172,8 @@ case "$PHASE" in
           --primary-judge configs/reranker/primary_polish_roberta_v3_cuda.yaml \
           --shadow-judge configs/reranker/shadow_bge_v2_m3.yaml \
           --primary-judge-device cuda --shadow-judge-device cuda \
-          --corpus-index data/processed/v1/evaluation/corpus-bm25-v1
+          --corpus-index data/processed/v1/evaluation/corpus-bm25-v1 \
+          --archive-incompatible
       }
       score_one "$base" "$base_score"
       score_one "$controlled" "$controlled_score"

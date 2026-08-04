@@ -638,6 +638,47 @@ def test_intrinsic_smoke_writes_null_for_unmeasured(tmp_path: Path) -> None:
     assert json.loads((tmp_path / "summary.json").read_text())["test_fingerprint"] == "f" * 64
 
 
+def test_intrinsic_hard_negative_minimum_defaults_to_ten_and_can_be_pinned(
+    tmp_path: Path,
+) -> None:
+    source = _canonical("short-pool", negative_count=5)
+    generation = {
+        "evaluation_id": "short-pool::deterministic::0",
+        "experiment_id": "fixture",
+        "example_id": "short-pool",
+        "mode": "deterministic",
+        "candidate_index": 0,
+        "generated": "Gdzie leży Warszawa?",
+        "reference": source["query"],
+        "positive": source["positives"][0],
+        "hard_negatives": source["hard_negatives"],
+        "positive_count": 1,
+        "metadata": source["metadata"],
+    }
+    with pytest.raises(ValueError, match="at least 10 hard negatives"):
+        evaluate_intrinsic_records(
+            [generation],
+            primary=_OverlapScorer(),
+            shadow=None,
+            output_dir=tmp_path / "default",
+            test_fingerprint="f" * 64,
+            experiment_id="fixture",
+        )
+
+    summary = evaluate_intrinsic_records(
+        [generation],
+        primary=_OverlapScorer(),
+        shadow=None,
+        output_dir=tmp_path / "pinned",
+        test_fingerprint="f" * 64,
+        experiment_id="fixture",
+        minimum_hard_negatives=5,
+    )
+    assert summary["generation_count"] == 1
+    resume = json.loads((tmp_path / "pinned/scoring.resume.json").read_text())
+    assert resume["minimum_hard_negatives"] == 5
+
+
 def test_intrinsic_scoring_resumes_only_durable_batches(tmp_path: Path) -> None:
     records = []
     for index in range(3):
