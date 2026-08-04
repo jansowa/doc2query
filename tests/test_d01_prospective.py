@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -12,6 +13,7 @@ from doc2query.evaluation.d01_pipeline import generate_frozen_dev_batched
 from doc2query.evaluation.d01_prospective import (
     PREREGISTERED_COHORT_CONTRACTS,
     PROSPECTIVE_CONTRACTS,
+    _duplicate_rate,
     _id_list_sha256,
     _selection_rows,
     assert_exact_k_summary,
@@ -72,6 +74,46 @@ def test_v2_contract_and_prior_cohort_exclusion_are_explicit_and_deterministic()
         )
     ]
     assert _id_list_sha256(selected_ids) != _id_list_sha256(list(reversed(selected_ids)))
+
+
+def test_v3_batched_baseline_preserves_duplicate_slots(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert "task05-d01b-prospective-1.5b-v3" in PROSPECTIVE_CONTRACTS
+    assert "task05-d01b-prospective-cohort-v3" in PREREGISTERED_COHORT_CONTRACTS
+    records = [_record(0), _record(1)]
+    monkeypatch.setattr(d01_pipeline, "load_frozen_records", lambda _path, _subset: records)
+    monkeypatch.setattr(d01_pipeline, "evaluation_fingerprint", lambda _path, _subset: "f" * 64)
+    monkeypatch.setattr(d01_pipeline, "collect_code_provenance", lambda: {"commit": "fixture"})
+    cohort = {
+        "contract": D01B_PROSPECTIVE_COHORT_CONTRACT,
+        "selected_example_ids": ["q-0", "q-1"],
+        "selected_group_ids": ["q-0::d-0", "q-1::d-1"],
+        "selection_policy": {"minimum_hard_negatives": 5},
+        "selection_policy_fingerprint": "a" * 64,
+        "final_tests_used": [],
+    }
+    cohort_path = tmp_path / "cohort.json"
+    cohort_path.write_text(json.dumps(cohort), encoding="utf-8")
+    output = tmp_path / "prospective-v3.jsonl"
+
+    summary = generate_frozen_dev_batched(
+        Path("configs/experiments/d01b_prospective_v3_w05_1_5b_s42.yaml"),
+        frozen_manifest=tmp_path / "manifest.json",
+        subset="dev_intrinsic",
+        output_path=output,
+        cohort_manifest=cohort_path,
+        generation_batch_size=2,
+        backend=lambda prompts, _seeds: ["powtórzone pytanie"] * len(prompts),
+    )
+    rows = list(read_records(output))
+
+    assert summary["generation_count"] == 8
+    assert summary["attempts"] == 8
+    assert summary["duplicate_outputs"] == 6
+    assert summary["exhausted_groups"] == 0
+    assert [row["normalized_duplicate"] for row in rows[:4]] == [False, True, True, True]
+    assert _duplicate_rate([SimpleNamespace(text=row["generated"]) for row in rows[:4]]) == 0.75
 
 
 def test_prospective_cohort_allows_five_negatives_without_weakening_default(

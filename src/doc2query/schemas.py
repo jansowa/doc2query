@@ -235,6 +235,7 @@ class GenerationConfig(StrictModel):
     intents: list[QueryIntent] = Field(default_factory=lambda: [QueryIntent.UNKNOWN])
     focus_modes: list[FocusMode] = Field(default_factory=lambda: [FocusMode.NONE])
     max_attempts_per_query: int = Field(default=3, ge=1, le=20)
+    preserve_duplicate_slots: bool = False
 
     @model_validator(mode="after")
     def greedy_has_single_output(self) -> "GenerationConfig":

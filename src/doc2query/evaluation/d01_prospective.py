@@ -28,18 +28,21 @@ from doc2query.evaluation.d01_usefulness import (
 )
 from doc2query.evaluation.datasets import load_frozen_records
 from doc2query.evaluation.retrieval import percentile
+from doc2query.generation.deduplicate import query_key
 from doc2query.utils.records import read_records, write_json
 
 PROSPECTIVE_CONTRACTS = frozenset(
     {
         "task05-d01b-prospective-1.5b-v1",
         "task05-d01b-prospective-1.5b-v2",
+        "task05-d01b-prospective-1.5b-v3",
     }
 )
 PREREGISTERED_COHORT_CONTRACTS = frozenset(
     {
         "task05-d01b-prospective-cohort-v1",
         "task05-d01b-prospective-cohort-v2",
+        "task05-d01b-prospective-cohort-v3",
     }
 )
 
@@ -151,6 +154,10 @@ def preflight_prospective(path: Path) -> dict[str, Any]:
         config = load_config(config_path)
         if config.run.experiment_id != arm["generation_experiment_id"]:
             raise ValueError(f"{role} prospective experiment identity drifted")
+        if arm.get("preserve_duplicate_slots") is not None and bool(
+            arm["preserve_duplicate_slots"]
+        ) != bool(config.generation.preserve_duplicate_slots):
+            raise ValueError(f"{role} prospective duplicate policy drifted")
         expected_decoding = {
             "seed": config.run.seed,
             "do_sample": config.generation.do_sample,
@@ -366,9 +373,7 @@ def _selected_cohort(
         if checks[field] != value:
             raise ValueError(f"prospective cohort {field} drifted")
     selection_policy: dict[str, Any] = {
-        "policy": (
-            "sha256_unseen_dev_min_hn_v2" if prior_identities else "sha256_unseen_dev_min_hn_v1"
-        ),
+        "policy": f"sha256_unseen_dev_min_hn_v{len(prior_identities) + 1}",
         "selection_seed": seed,
         "minimum_hard_negatives": minimum,
         "selected_count": len(selected),
@@ -469,6 +474,27 @@ def _copy_risk_bootstrap(
         group_id: fmean(float(item.copy_risk) for item in items)
         for group_id, items in selected.items()
     }
+    return paired_bootstrap(left, right, samples=samples, seed=seed)
+
+
+def _duplicate_rate(items: Sequence[Any]) -> float:
+    if not items:
+        raise ValueError("cannot measure duplicate rate for an empty candidate group")
+    return 1.0 - len({query_key(str(item.text)) for item in items}) / len(items)
+
+
+def _duplicate_rate_bootstrap(
+    candidates: Sequence[Any], selected: Mapping[str, Sequence[Any]], *, samples: int, seed: int
+) -> dict[str, float | int]:
+    by_group: dict[str, list[Any]] = defaultdict(list)
+    for item in candidates:
+        by_group[str(item.group_id)].append(item)
+    anchors = {
+        group_id: [item for item in items if item.role == "baseline"]
+        for group_id, items in by_group.items()
+    }
+    left = {group_id: _duplicate_rate(items) for group_id, items in anchors.items()}
+    right = {group_id: _duplicate_rate(items) for group_id, items in selected.items()}
     return paired_bootstrap(left, right, samples=samples, seed=seed)
 
 
@@ -621,6 +647,9 @@ def select_compare_prospective(
         selection["paired_group_bootstrap_selected_minus_anchor"],
     )
     paired["copy_risk_rate"] = _copy_risk_bootstrap(
+        candidates, selected, samples=samples, seed=seed
+    )
+    paired["duplicate_rate"] = _duplicate_rate_bootstrap(
         candidates, selected, samples=samples, seed=seed
     )
     gates, passed = evaluate_prospective_gates(paired, cast(Mapping[str, Any], evaluation["gates"]))

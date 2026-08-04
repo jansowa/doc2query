@@ -184,8 +184,11 @@ def _audit_arm(
             if row.get("final_tests_used") != []:
                 raise ValueError(f"{arm_id}: row has final-test provenance")
             key = query_key(str(row.get("generated", "")))
-            if not key or key in seen:
+            is_duplicate = key in seen
+            if not key or (is_duplicate and not config.generation.preserve_duplicate_slots):
                 raise ValueError(f"{arm_id}: accepted output is empty/duplicate in {group_id}")
+            if bool(row.get("normalized_duplicate", False)) != is_duplicate:
+                raise ValueError(f"{arm_id}: normalized duplicate flag mismatch in {group_id}")
             seen.add(key)
             control_payload = row.get("control")
             explicit_slot = row.get("candidate_slot_index")

@@ -4,7 +4,7 @@
 
 ## Status
 
-`IN PROGRESS`
+`IMPLEMENTED`
 
 Aktualizacja 2026-08-04 (prospective v2/v3): run v2 zatrzymał się fail-closed
 przed scoringiem. Controlled ukończył 8000/8000 query, natomiast W05
@@ -20,8 +20,14 @@ generacją zamrożono kolejną kohortę 2000 rekordów (seed 20260804), bez
 przecięcia z rank-10, v1 i v2, z natural-primary ID match 2000/2000. Dodano
 prospektywny duplicate-rate guardrail, ale nie zmieniono wag selektora. ADR:
 [`task05_d01b_prospective_validation_1_5b_v3.md`](../reports/decisions/task05_d01b_prospective_validation_1_5b_v3.md).
-Następny krok to implementacja i tanie testy runnera v3; generacji v3 nie
-uruchomiono.
+Runner v3 jest gotowy z osobnym lockiem, statusem, logami i artefaktami.
+Duplicate policy należy do resolved config i identity; każdy zaakceptowany
+wiersz zapisuje `normalized_duplicate`, summary zachowuje raw duplicate count,
+a comparison liczy paired within-group duplicate rate bez użycia go przez
+selector. Rzeczywiste CPU `preflight` i dwukrotne `prepare-cohort` przeszły z
+`rc=0`; 254 testy, Ruff i ukierunkowany mypy są czyste. Generacji v3 nie
+uruchomiono. Następny krok to osobno autoryzowane `generate`, a po exact four
+valid slots fazy `score` i `select-compare`.
 
 Aktualizacja 2026-08-03 (prospektywna prerejestracja v2): właściciel projektu
 zaakceptował techniczny limit 16 prób na slot. Metadata-only audyt wykluczył

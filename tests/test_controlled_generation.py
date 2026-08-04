@@ -116,6 +116,28 @@ def test_generation_retries_duplicates_and_stops_at_limit() -> None:
     assert result.attempts == 6
 
 
+def test_generation_can_preserve_valid_duplicate_slots_without_retrying_them() -> None:
+    controls = [
+        QueryControl(form=QueryForm.KEYWORD_QUERY, intent=QueryIntent.FACT_LOOKUP),
+        QueryControl(form=QueryForm.FULL_QUESTION, intent=QueryIntent.DEFINITION),
+        QueryControl(form=QueryForm.KEYWORD_QUERY, intent=QueryIntent.ENTITY_LOOKUP),
+    ]
+    result = generate_query_set(
+        "To jest wystarczająco długi pasaż.",
+        controls,
+        lambda _prompt, _seed: "to samo",
+        seed=10,
+        max_attempts_per_query=16,
+        preserve_duplicate_slots=True,
+    )
+
+    assert [item.text for item in result.queries] == ["to samo"] * 3
+    assert [item.normalized_duplicate for item in result.queries] == [False, True, True]
+    assert result.exhausted is False
+    assert result.duplicate_outputs == 2
+    assert result.attempts == 3
+
+
 def test_multiquery_schema_accepts_contract_and_rejects_wrong_shape() -> None:
     payload = {
         "queries": [

@@ -18,6 +18,7 @@ class GeneratedQuery:
     control: QueryControl
     seed: int
     attempt: int
+    normalized_duplicate: bool = False
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,7 @@ def generate_query_set(
     *,
     seed: int,
     max_attempts_per_query: int = 3,
+    preserve_duplicate_slots: bool = False,
 ) -> GenerationBatch:
     if max_attempts_per_query < 1:
         raise ValueError("max_attempts_per_query must be positive")
@@ -61,11 +63,21 @@ def generate_query_set(
                 invalid += 1
                 continue
             key = query_key(text)
-            if key in seen:
+            is_duplicate = key in seen
+            if is_duplicate:
                 duplicates += 1
-                continue
+                if not preserve_duplicate_slots:
+                    continue
             seen.add(key)
-            accepted.append(GeneratedQuery(text, control, current_seed, attempt))
+            accepted.append(
+                GeneratedQuery(
+                    text,
+                    control,
+                    current_seed,
+                    attempt,
+                    normalized_duplicate=is_duplicate,
+                )
+            )
             break
     return GenerationBatch(
         tuple(accepted), attempts, len(accepted) < len(controls), duplicates, invalid

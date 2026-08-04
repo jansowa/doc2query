@@ -124,6 +124,7 @@ def run_controlled_generation(
                 backend,
                 seed=config.run.seed + record_index * 1000,
                 max_attempts_per_query=config.generation.max_attempts_per_query,
+                preserve_duplicate_slots=config.generation.preserve_duplicate_slots,
             )
             attempts += batch.attempts
             duplicates += batch.duplicate_outputs
@@ -141,6 +142,7 @@ def run_controlled_generation(
                         "control": item.control.model_dump(mode="json"),
                         "seed": item.seed,
                         "attempt": item.attempt,
+                        "normalized_duplicate": item.normalized_duplicate,
                     }
                 )
     elapsed = time.perf_counter() - started

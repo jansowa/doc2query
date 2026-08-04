@@ -556,13 +556,22 @@ def generate_frozen_dev_batched(
                         still_pending.append(state_index)
                         continue
                     key = query_key(text)
-                    if key in state["seen"]:
+                    is_duplicate = key in state["seen"]
+                    if is_duplicate:
                         state["duplicates"] += 1
-                        still_pending.append(state_index)
-                        continue
+                        if not config.generation.preserve_duplicate_slots:
+                            still_pending.append(state_index)
+                            continue
                     state["seen"].add(key)
                     state["accepted"].append(
-                        (control_index, text, state["controls"][control_index], item_seed, attempt)
+                        (
+                            control_index,
+                            text,
+                            state["controls"][control_index],
+                            item_seed,
+                            attempt,
+                            is_duplicate,
+                        )
                     )
                 pending = still_pending
         batch_groups = []
@@ -573,7 +582,7 @@ def generate_frozen_dev_batched(
             group_id = expected_ids[index]
             queries = []
             for candidate_index, item in enumerate(state["accepted"]):
-                slot, text, control, item_seed, attempt = item
+                slot, text, control, item_seed, attempt, is_duplicate = item
                 control_payload = control.model_dump(mode="json") if control is not None else None
                 queries.append(
                     {
@@ -602,6 +611,7 @@ def generate_frozen_dev_batched(
                         else None,
                         "seed": item_seed,
                         "attempt": attempt,
+                        "normalized_duplicate": is_duplicate,
                         "generation_identity_sha256": identity["identity_sha256"],
                         "frozen_subset": subset,
                         "frozen_cohort_fingerprint": identity["cohort"]["fingerprint"],
@@ -815,7 +825,7 @@ def generate_frozen_dev(
         controls = _controls(config, passage)
         frozen_index = source_indices[index] if source_indices is not None else index
         seed = config.run.seed + frozen_index * 1000
-        generated_items: list[tuple[str, QueryControl | None, int, int]]
+        generated_items: list[tuple[str, QueryControl | None, int, int, bool]]
         if config.generation.controlled:
             assert active_backend is not None
             assert all(item is not None for item in controls)
@@ -825,9 +835,17 @@ def generate_frozen_dev(
                 active_backend,
                 seed=seed,
                 max_attempts_per_query=config.generation.max_attempts_per_query,
+                preserve_duplicate_slots=config.generation.preserve_duplicate_slots,
             )
             generated_items = [
-                (item.text, item.control, item.seed, item.attempt) for item in result.queries
+                (
+                    item.text,
+                    item.control,
+                    item.seed,
+                    item.attempt,
+                    item.normalized_duplicate,
+                )
+                for item in result.queries
             ]
             group_stats = {
                 "attempts": result.attempts,
@@ -857,11 +875,13 @@ def generate_frozen_dev(
                         invalid_count += 1
                         continue
                     key = query_key(text)
-                    if key in seen:
+                    is_duplicate = key in seen
+                    if is_duplicate:
                         duplicate_count += 1
-                        continue
+                        if not config.generation.preserve_duplicate_slots:
+                            continue
                     seen.add(key)
-                    generated_items.append((text, None, item_seed, attempt))
+                    generated_items.append((text, None, item_seed, attempt, is_duplicate))
                     break
             group_stats = {
                 "attempts": attempt_count,
@@ -871,7 +891,9 @@ def generate_frozen_dev(
             }
         group_id = expected_ids[index]
         queries = []
-        for candidate_index, (text, control, item_seed, attempt) in enumerate(generated_items):
+        for candidate_index, (text, control, item_seed, attempt, is_duplicate) in enumerate(
+            generated_items
+        ):
             control_payload = control.model_dump(mode="json") if control is not None else None
             queries.append(
                 {
@@ -897,6 +919,7 @@ def generate_frozen_dev(
                     ),
                     "seed": item_seed,
                     "attempt": attempt,
+                    "normalized_duplicate": is_duplicate,
                     "generation_identity_sha256": identity["identity_sha256"],
                     "frozen_subset": subset,
                     "frozen_cohort_fingerprint": identity["cohort"]["fingerprint"],
