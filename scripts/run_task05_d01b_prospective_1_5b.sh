@@ -82,8 +82,21 @@ run_phase() {
 }
 
 assert_gpu_idle() {
-  local active
-  active=$(nvidia-smi --query-compute-apps=pid,process_name --format=csv,noheader 2>/dev/null || true)
+  local active query_rc pmon_rc
+  set +e
+  active=$(nvidia-smi --query-compute-apps=pid,process_name --format=csv,noheader 2>/dev/null)
+  query_rc=$?
+  set -e
+  if [[ $query_rc -ne 0 ]]; then
+    set +e
+    active=$(nvidia-smi pmon -c 1 2>/dev/null | awk '$3 == "C" || $3 == "C+G" {print $2 "," $10}')
+    pmon_rc=$?
+    set -e
+    if [[ $pmon_rc -ne 0 ]]; then
+      echo "cannot verify GPU compute-process state; refusing phase $PHASE" >&2
+      return 5
+    fi
+  fi
   if [[ -n $active ]]; then
     echo "GPU has active compute processes; refusing phase $PHASE" >&2
     echo "$active" >&2

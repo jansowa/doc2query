@@ -25,9 +25,15 @@ Duplicate policy należy do resolved config i identity; każdy zaakceptowany
 wiersz zapisuje `normalized_duplicate`, summary zachowuje raw duplicate count,
 a comparison liczy paired within-group duplicate rate bez użycia go przez
 selector. Rzeczywiste CPU `preflight` i dwukrotne `prepare-cohort` przeszły z
-`rc=0`; 254 testy, Ruff i ukierunkowany mypy są czyste. Generacji v3 nie
-uruchomiono. Następny krok to osobno autoryzowane `generate`, a po exact four
-valid slots fazy `score` i `select-compare`.
+`rc=0`; 254 testy, Ruff i ukierunkowany mypy są czyste. Generacja v3 również
+zakończyła się `rc=0`: oba ramiona mają 8000/8000 query i zero exhausted
+groups. W05 zachował 1307 duplicate outputs, controlled odrzucił 42, a
+`final_tests_used=[]`. Przed scoringiem poprawiono wyłącznie techniczną
+kontrolę idle GPU: sterownik 550 nie obsługuje stabilnie endpointu
+`--query-compute-apps`, więc runner używa fail-closed fallbacku `nvidia-smi
+pmon` i nadal odmawia startu przy procesach `C`/`C+G` albo braku obu metod.
+Scoring nie rozpoczął jeszcze pierwszego wiersza. Następny krok to `score`, a
+potem `select-compare`.
 
 Aktualizacja 2026-08-03 (prospektywna prerejestracja v2): właściciel projektu
 zaakceptował techniczny limit 16 prób na slot. Metadata-only audyt wykluczył
