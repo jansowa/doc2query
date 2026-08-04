@@ -1,0 +1,26 @@
+# @package _global_
+# Prospective D01b v3 controlled arm: unchanged distinct-output policy.
+defaults:
+  - d01_1_5b_style_50k_s42
+  - _self_
+
+run:
+  experiment_id: D01B-PROSPECTIVE-V3-D01-1.5B-S42
+  output_dir: runs/D01B-PROSPECTIVE-V3-D01-1.5B-S42
+
+data:
+  input_path: data/input.jsonl
+  input_format: jsonl
+  eval_path: null
+  max_train_examples: null
+  max_eval_examples: null
+
+generation:
+  controlled: true
+  target_query_count: 4
+  do_sample: true
+  temperature: 0.8
+  top_p: 0.95
+  max_new_tokens: 64
+  max_attempts_per_query: 16
+  preserve_duplicate_slots: false

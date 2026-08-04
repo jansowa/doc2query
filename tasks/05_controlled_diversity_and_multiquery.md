@@ -4,7 +4,24 @@
 
 ## Status
 
-`IMPLEMENTED`
+`IN PROGRESS`
+
+Aktualizacja 2026-08-04 (prospective v2/v3): run v2 zatrzymał się fail-closed
+przed scoringiem. Controlled ukończył 8000/8000 query, natomiast W05
+7912/8000; 62 grupy nie osiągnęły exact K mimo 16 prób, a 4873 z 12785 prób
+były duplikatami. Treści query nie przeglądano, scoringu ani selekcji nie
+uruchomiono, `final_tests_used=[]`. Blocker:
+[`task05_d01b_prospective_v2_exact_k_2026-08-04.md`](../reports/blockers/task05_d01b_prospective_v2_exact_k_2026-08-04.md).
+
+Właściciel zaakceptował prospective v3 zachowujące cztery niezależne,
+format-valid sloty W05 także wtedy, gdy tekst się powtarza; retry dotyczy tylko
+invalid output. Controlled i selector `2164822` pozostają bez zmian. Przed
+generacją zamrożono kolejną kohortę 2000 rekordów (seed 20260804), bez
+przecięcia z rank-10, v1 i v2, z natural-primary ID match 2000/2000. Dodano
+prospektywny duplicate-rate guardrail, ale nie zmieniono wag selektora. ADR:
+[`task05_d01b_prospective_validation_1_5b_v3.md`](../reports/decisions/task05_d01b_prospective_validation_1_5b_v3.md).
+Następny krok to implementacja i tanie testy runnera v3; generacji v3 nie
+uruchomiono.
 
 Aktualizacja 2026-08-03 (prospektywna prerejestracja v2): właściciel projektu
 zaakceptował techniczny limit 16 prób na slot. Metadata-only audyt wykluczył
