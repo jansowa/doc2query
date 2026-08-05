@@ -875,11 +875,15 @@ def materialize_prospective_probe_inputs(
             if not retained:
                 ineligible_groups.add(group_id)
             groups[group_id] += 1
+            pair_id = f"{row.get('experiment_id', generator_id)}:{row['evaluation_id']}"
             output.append(
                 {
-                    "pair_id": (f"{row.get('experiment_id', generator_id)}:{row['evaluation_id']}"),
+                    "pair_id": pair_id,
+                    "example_id": pair_id,
                     "query": str(row["generated"]),
+                    "generated": str(row["generated"]),
                     "positive": dict(positive),
+                    "positives": [dict(positive)],
                     "hard_negatives": retained,
                     "source_example_id": str(row["example_id"]),
                     "source_passage_id": str(row["doc_id"]),
@@ -928,8 +932,10 @@ def materialize_prospective_probe_inputs(
         for row in hybrid_materialized
         if str(row["_materialization_group_id"]) not in excluded_groups
     ]
-    for row in [*baseline_materialized, *hybrid_materialized]:
-        del row["_materialization_group_id"]
+    for rows in (baseline_materialized, hybrid_materialized):
+        rows.sort(key=lambda row: (str(row["_materialization_group_id"]), str(row["pair_id"])))
+        for row in rows:
+            del row["_materialization_group_id"]
     if len(baseline_materialized) != len(hybrid_materialized):
         raise ValueError("prospective probe arms have unequal pair budgets")
     if not baseline_materialized:

@@ -6,6 +6,24 @@
 
 `IMPLEMENTED`
 
+Aktualizacja 2026-08-05 (probe dev-screen preregistration): zaakceptowano
+prospektywny ADR
+[`task05_d01b_probe_dev_screen_v1.md`](../reports/decisions/task05_d01b_probe_dev_screen_v1.md)
+i machine-readable contract `d01b_probe_dev_screen_v1.yaml`. Zamrożono dokładnie
+dwa ramiona 1.5B: W05 control i prospective selected hybrid. Oba użyją tego
+samego deterministycznego prefixu 1984 par, 496 pozytywnych dokumentów i K=4,
+HN0+filter/drop, seed 42, batch 8, 250 kroków i token budget 1152000. Ocena jest
+wyłącznie na pełnym naturalnym `dev_intrinsic_rank10` (6598 query), który został
+wcześniej w całości wykluczony z kohorty treningowej. Przypięto corpus,
+guardraile P-04, 10000 bootstrapów i seed 20260721. Rzeczywisty CPU preflight
+przeszedł dwukrotnie; trening GPU nie wystartował i `final_tests_used=[]`.
+Crash-safe runner dopuszcza wyłącznie `dev_screen`; `dev_confirm`, 4.5B i testy
+finalne są zamknięte. Jedna komenda operatorska:
+`bash scripts/run_task05_d01b_probe_dev_screen.sh run-all`. ETA wynosi około
+7–8 godzin na tej maszynie na podstawie wcześniejszych sekwencyjnych probe z
+pełnokorpusową ewaluacją. Po runie tylko decyzja `eligible` może otworzyć osobną
+dyskusję o `dev_confirm`; pozostałe statusy zatrzymują promocję.
+
 Aktualizacja 2026-08-05 (equal-budget probe inputs): dozwolona materializacja
 prospective v3 zakończyła się `rc=0`, bez generacji, rescoringu, treningu ani
 otwarcia testu. Zastosowano istniejącą receptę `probe-v1.1-p03`:
@@ -19,9 +37,8 @@ negatyw na parę. Manifest ma `training_started=false`,
 `final_tests_used=[]`. Pełne 257 testów CPU, Ruff, format zmienionych plików i
 ukierunkowany mypy przeszły. Pomiar i hashe:
 [`task05_d01b_prospective_v3_probe_inputs_2026-08-05.md`](../reports/measurements/task05_d01b_prospective_v3_probe_inputs_2026-08-05.md).
-Następna bramka to osobna prospektywna decyzja o treningu, dev-only ewaluacji,
-seedach i CI. Obecny ADR nie pozwala wymyślić ani uruchomić komendy treningowej;
-4.5B i finalny test pozostają zamknięte.
+Następna bramka została zamrożona w późniejszym ADR probe dev-screen opisanym
+powyżej. 4.5B i finalny test pozostają zamknięte.
 
 Aktualizacja 2026-08-05 (prospective v3 complete): wznawialny scoring obu
 ramion zakończył się `rc=0`; baseline i controlled mają po 8000 kompletnych

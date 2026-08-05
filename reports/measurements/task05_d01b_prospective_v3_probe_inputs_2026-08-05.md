@@ -33,9 +33,9 @@ Both decisions were applied symmetrically, yielding a common equal budget.
 Artifacts:
 
 - `artifacts/task05/d01b_prospective_1_5b_v3/probe_inputs/w05_baseline.jsonl`,
-  SHA-256 `a409c7e05085b76cf10c40a1897e5070dd9841590c5d7e81c16de840a33ac49c`;
+  SHA-256 `d1006068b011b1180de8f05812de03217f7e9963a6c7f658f018600ca55dacc6`;
 - `artifacts/task05/d01b_prospective_1_5b_v3/probe_inputs/selected_hybrid.jsonl`,
-  SHA-256 `333917369ac76e8d0e8f760f402daf66b1f42f460a1af7c5f004cdb6d8acdda3`;
+  SHA-256 `809c5c4ec7f023d14286fdc65f6bdeb24e1c19f4cf4da109ef869da0a83ae432`;
 - `artifacts/task05/d01b_prospective_1_5b_v3/probe_inputs/manifest.json`.
 
 The manifest records `training_started=false`, `training_authorized=false`,
@@ -59,9 +59,8 @@ in files outside this change; those files were not modified.
 
 ## Remaining gate
 
-The v3 ADR explicitly authorizes input materialization only. It does not define
-or authorize the costly two-arm probe run, its evaluation subset, seed matrix,
-comparison/CI report, runtime command or promotion decision. Therefore no
-training command is declared and no probe training was started. A prospective
-training/evaluation decision must be frozen before such a command can be
-prepared; final tests and 4.5B remain forbidden.
+At the time of this materialization the v3 ADR authorized inputs only. A later
+prospective decision, `task05_d01b_probe_dev_screen_v1.md`, has now frozen and
+authorized only the two-arm `dev_screen`; its CPU preflight passed. Probe
+training still has not started. `dev_confirm`, final tests and 4.5B remain
+forbidden.
