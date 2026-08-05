@@ -65,6 +65,7 @@ def preflight_d01b_probe_dev_screen(config_path: Path) -> dict[str, Any]:
     root = _root(config_path)
     _pinned(root, cast(Mapping[str, Any], config["adr"]))
     _pinned(root, cast(Mapping[str, Any], config["amendment"]))
+    _pinned(root, cast(Mapping[str, Any], config["execution_amendment"]))
     source_section = cast(Mapping[str, Any], config["source_materialization"])
     source_path = _pinned(root, source_section)
     source = json.loads(source_path.read_text(encoding="utf-8"))
@@ -176,6 +177,13 @@ def preflight_d01b_probe_dev_screen(config_path: Path) -> dict[str, Any]:
         "log_root": "logs/task05/d01b_probe_dev_screen_v2_batch4",
     }:
         raise ValueError("D01b probe batch-4 output namespace drifted")
+    execution = cast(Mapping[str, Any], config["execution"])
+    if execution != {
+        "evaluation_encode_batch_size": 32,
+        "retrieval_query_batch_size": 512,
+        "retrieval_device": "cuda",
+    }:
+        raise ValueError("D01b probe execution-only batch amendment drifted")
     prefix_passages: dict[str, list[str]] = {}
     observed: dict[str, Any] = {}
     for role in ("control", "variant"):

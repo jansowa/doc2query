@@ -42,6 +42,9 @@ def _fixture(tmp_path: Path) -> Path:
     judge = _write(root / "judge.yaml", "name_or_path: judge\n")
     adr = _write(root / "reports/decisions/probe.md", "frozen before training\n")
     amendment = _write(root / "reports/decisions/amendment.md", "batch 4 restart\n")
+    execution_amendment = _write(
+        root / "reports/decisions/execution-amendment.md", "encode batch 32\n"
+    )
     corpus = _write(root / "data/documents.parquet", "fixture\n")
     ids = _jsonl(root / "data/dev.ids.jsonl", [{"id": "eval-1"}, {"id": "eval-2"}])
     manifest = _write(
@@ -103,6 +106,10 @@ def _fixture(tmp_path: Path) -> Path:
             "path": str(amendment.relative_to(root)),
             "sha256": _sha(amendment),
         },
+        "execution_amendment": {
+            "path": str(execution_amendment.relative_to(root)),
+            "sha256": _sha(execution_amendment),
+        },
         "source_materialization": {
             "path": str(source.relative_to(root)),
             "sha256": _sha(source),
@@ -154,6 +161,11 @@ def _fixture(tmp_path: Path) -> Path:
             "run_root": "runs/task05_d01b_probe_dev_screen_v2_batch4",
             "measurement_root": "reports/measurements/task05/d01b_probe_dev_screen_v2_batch4",
             "log_root": "logs/task05/d01b_probe_dev_screen_v2_batch4",
+        },
+        "execution": {
+            "evaluation_encode_batch_size": 32,
+            "retrieval_query_batch_size": 512,
+            "retrieval_device": "cuda",
         },
         "authorization": {
             "dev_screen_training": True,

@@ -142,7 +142,7 @@ train_arm() {
     --batch-size 4 \
     --train-prefix-limit 1984 \
     --checkpoint-interval-steps 50 \
-    --evaluation-encode-batch-size 64 \
+    --evaluation-encode-batch-size 32 \
     --retrieval-query-batch-size 512 \
     --retrieval-device cuda \
     --output-dir "$RUN_ROOT/$id"

@@ -574,9 +574,9 @@ def test_probe_corpus_cache_repairs_only_corrupt_shard(
     corrupt = tmp_path / "cache/chunk-00001.pt"
     corrupt.write_bytes(b"")
 
-    repaired = embedder_probe._ensure_corpus_embedding_cache(**arguments)
+    repaired = embedder_probe._ensure_corpus_embedding_cache(**(arguments | {"batch_size": 1}))
 
-    assert calls == [["3", "4"]]
+    assert calls == [["3"], ["4"]]
     assert repaired.lookup([2])[2].item() == 3.0
     assert corrupt.stat().st_size > 0
 

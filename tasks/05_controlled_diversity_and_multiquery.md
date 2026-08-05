@@ -6,6 +6,32 @@
 
 `IMPLEMENTED`
 
+Aktualizacja 2026-08-05 (encode-corpus batch 32 amendment): punktowa naprawa
+cache pozwoliła dokończyć całe ramię W05; istnieją jego kompletne 100/100
+shardów i `result.json`. Hybrid również ukończył trening 500/500 i rozpoczął
+kodowanie pełnego korpusu, ale maszyna wyłączyła się po zapisaniu 42/100
+shardów. Audyt potwierdził dla W05 100 poprawnych shardów, kompletny wynik i
+manifest `complete`; dla hybrid 42 poprawne shardy tworzące ciągły prefix
+0–41, zero invalid shardów, kompletny `train_summary.json`, brak `result.json`
+i manifest `in_progress`. Żadne z tych obliczeń nie wymaga powtórzenia.
+
+Na polecenie właściciela zapisano execution-only amendment
+[`task05_d01b_probe_encode_batch32_amendment_2026-08-05.md`](../reports/decisions/task05_d01b_probe_encode_batch32_amendment_2026-08-05.md).
+`evaluation_encode_batch_size` spada z 64 do 32; training batch 4, 500 kroków,
+retrieval query batch 512 i wszystkie piny badawcze pozostają bez zmian.
+Manifest hybrid zachowuje `chunk_size=24064`, dlatego nowy batch tylko dzieli
+każdy brakujący shard na mniejsze forwardy i nie zmienia granic ani identity
+cache. Test regresyjny potwierdza wznowienie tych samych shardów przy zmianie
+batcha. Po CPU preflight ta sama komenda
+`bash scripts/run_task05_d01b_probe_dev_screen.sh run-all` pominie ukończone
+W05, pominie trening hybrid i jego shardy 1–42, po czym rozpocznie od sharda
+43/100. Rzeczywisty CPU preflight zakończył się `rc=0`; pełne 260 testów CPU,
+Ruff, format, składnia runnera i ukierunkowany mypy przeszły. Pozostały czas
+szacowany jest na około 4–5 godzin. Compare pozostaje
+niewykonany; `dev_confirm`, 4.5B i finalne testy są zamknięte,
+`final_tests_used=[]`. Raport:
+[`task05_d01b_probe_encode_batch64_interruption_2026-08-05.md`](../reports/measurements/task05_d01b_probe_encode_batch64_interruption_2026-08-05.md).
+
 Aktualizacja 2026-08-05 (corrupt corpus shard repair): batch-4 W05 ma kompletny
 trening `500/500`, zapisany model i zgodny budżet 1152000 tokenów. Pierwsza
 ewaluacja została przerwana przy 5% kodowania korpusu przez wyłączenie maszyny,

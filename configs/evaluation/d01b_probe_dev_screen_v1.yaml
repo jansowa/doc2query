@@ -11,6 +11,10 @@ amendment:
   path: reports/decisions/task05_d01b_probe_dev_screen_batch4_amendment_2026-08-05.md
   sha256: 2fb2b7ff91deb688b42509ab1194551090d6e8ca0e8af4cffbd9ac56f04dee25
 
+execution_amendment:
+  path: reports/decisions/task05_d01b_probe_encode_batch32_amendment_2026-08-05.md
+  sha256: 995e6c4db4d81b644ea18fb36ce873a6773a86d4fe90d5993f10128e7a4e0bc1
+
 source_materialization:
   path: artifacts/task05/d01b_prospective_1_5b_v3/probe_inputs/manifest.json
   sha256: 477086cfb6c43fed1a3edaaaeb975f2b8f559a6bfeebfa25df3c01a822da6409
@@ -65,6 +69,11 @@ evaluation:
   bootstrap_samples: 10000
   bootstrap_seed: 20260721
   final_tests_forbidden: true
+
+execution:
+  evaluation_encode_batch_size: 32
+  retrieval_query_batch_size: 512
+  retrieval_device: cuda
 
 outputs:
   run_root: runs/task05_d01b_probe_dev_screen_v2_batch4
