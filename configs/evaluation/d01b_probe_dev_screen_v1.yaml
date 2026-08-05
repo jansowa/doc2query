@@ -1,11 +1,15 @@
 schema_version: 1
 contract: task05-d01b-probe-dev-screen-v1
-status: preregistered_before_training
+status: amended_before_restart
 final_tests_used: []
 
 adr:
   path: reports/decisions/task05_d01b_probe_dev_screen_v1.md
   sha256: 2fa91036b771d31b6fcc97e78ced7817d0764e67d795340cb60bcbb713c06807
+
+amendment:
+  path: reports/decisions/task05_d01b_probe_dev_screen_batch4_amendment_2026-08-05.md
+  sha256: 2fb2b7ff91deb688b42509ab1194551090d6e8ca0e8af4cffbd9ac56f04dee25
 
 source_materialization:
   path: artifacts/task05/d01b_prospective_1_5b_v3/probe_inputs/manifest.json
@@ -18,12 +22,12 @@ source_materialization:
 
 arms:
   control:
-    id: D01B-PROBE-W05-DEV-SCREEN-S42
+    id: D01B-PROBE-W05-DEV-SCREEN-S42-B4
     generator_id: W05-1.5B-50K-8GB
     input: artifacts/task05/d01b_prospective_1_5b_v3/probe_inputs/w05_baseline.jsonl
     sha256: c0c2bdc8bf1d99772bdc760dcce8225e56f44bbc785b759fa7dd2ac8752260b6
   variant:
-    id: D01B-PROBE-HYBRID-DEV-SCREEN-S42
+    id: D01B-PROBE-HYBRID-DEV-SCREEN-S42-B4
     generator_id: D01B-PROSPECTIVE-V3-HYBRID-1.5B-S42
     input: artifacts/task05/d01b_prospective_1_5b_v3/probe_inputs/selected_hybrid.jsonl
     sha256: ac9e7b3b76822fdd1ca2000264609b3db0ae74cb474d2e13434ba7e27c2a626d
@@ -35,8 +39,8 @@ training:
   train_prefix_pairs: 1984
   train_prefix_unique_passages: 496
   queries_per_passage: 4
-  max_steps: 250
-  batch_size: 8
+  max_steps: 500
+  batch_size: 4
   max_length: 192
   token_count: 1152000
   definition_version: probe-budget-v1
@@ -63,9 +67,9 @@ evaluation:
   final_tests_forbidden: true
 
 outputs:
-  run_root: runs/task05_d01b_probe_dev_screen_v1
-  measurement_root: reports/measurements/task05/d01b_probe_dev_screen_v1
-  log_root: logs/task05/d01b_probe_dev_screen_v1
+  run_root: runs/task05_d01b_probe_dev_screen_v2_batch4
+  measurement_root: reports/measurements/task05/d01b_probe_dev_screen_v2_batch4
+  log_root: logs/task05/d01b_probe_dev_screen_v2_batch4
 
 authorization:
   dev_screen_training: true

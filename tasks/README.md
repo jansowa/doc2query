@@ -38,7 +38,7 @@ uruchomiono.
 | [02](02_reranker_and_reward_proxies.md) | Zamrożone rerankery i proxy nagrody | `IMPLEMENTED` | Integracja, reward proxies i testy są gotowe; primary zmierzył pełny frozen dev, a query-macro próg Youdena `possible_false_negative` jest przypięty bez użycia testu. Bramka HN domierzyła primary/shadow na 775 wspólnych dev query z 10 negatywami; nadal pozostał pełny benchmark obu sędziów na całym dev/test i wymaganych slice'ach. |
 | [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | S07 jest kompletną, nieporównywalną budżetowo diagnostyką bez promocji. P-06 mass rescoring jest `SUPERSEDED`. Właściciel świadomie anulował ręczne P06-T i zaakceptował resztkowe ryzyko tłumaczeń na podstawie wcześniejszego udanego treningu embeddera; frozen train i próg `>=23.50` pozostają bez zmian. Nie kończyć lokalnego scoringu ani trenować drop/weighted. |
 | [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IMPLEMENTED` | P-01–P-05 i pełny S07 Harness/probe są gotowe. Pełna dev-only bramka HN0–HN3 ukończyła 775 wspólnych legalnych query i utrzymała HN0+filter/drop z powodu braku zgodnej primary/shadow podstawy do promocji nowego minera; nie otwarto testów finalnych. Artefakt S07 pozostaje `comparison_eligible=false`; pozostały porównywalne probe i testy finalistów. |
-| [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `IMPLEMENTED` | Prospective D01b v3 i wszystkie 7 bramek są kompletne; copy-risk spadł z `0.07125` do `0.0465`. Equal-budget probe inputs 1.5B hybrid-vs-W05 mają po 7936 par, 1984 dokumenty i K=4. Pierwszy start `dev_screen` zakończył się `rc=1` przed krokiem treningowym: wejścia nie miały pól zgodności istniejącego loadera. Materializator i fail-fast runner poprawiono, wejścia odtworzono bez zmiany budżetu, a CPU preflight ponownie przeszedł. Nie powstał checkpoint ani wynik; należy ponowić tę samą około 7–8-godzinną komendę operatorską. `dev_confirm` wymaga wyniku `eligible` i osobnej zgody; 4.5B oraz finalne testy pozostają zamknięte (`final_tests_used=[]`). Groq proxy ukończył 500/500 etykiet i 200/200 audytów; agreement człowieka pozostaje `NOT MEASURED`, a D00–D12 poza D01 nie są zmierzone. |
+| [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `IMPLEMENTED` | Prospective D01b v3 i wszystkie 7 bramek są kompletne; copy-risk spadł z `0.07125` do `0.0465`. Equal-budget probe inputs 1.5B hybrid-vs-W05 mają po 7936 par, 1984 dokumenty i K=4. Po naprawie loadera prawidłowy batch-8 run został przerwany przez wyłączenie maszyny podczas W05: log doszedł do 84/250, checkpoint jest z kroku 50, wynik nie powstał. Zaakceptowany przed restartem amendment zmniejsza batch do 4 i zwiększa kroki do 500, zachowując wspólny budżet 1 152 000 tokenów; używa nowych katalogów i nie wznawia niezgodnego checkpointu batch-8. CPU preflight batch-4 przeszedł; następny krok to ponowienie tej samej komendy operatorskiej. `dev_confirm` wymaga wyniku `eligible` i osobnej zgody; 4.5B oraz finalne testy pozostają zamknięte (`final_tests_used=[]`). Groq proxy ukończył 500/500 etykiet i 200/200 audytów; agreement człowieka pozostaje `NOT MEASURED`, a D00–D12 poza D01 nie są zmierzone. |
 | [06](06_candidate_scoring_and_preference_data.md) | Scoring kandydatów i dane preferencyjne | `TODO` | Wymaga stabilnego checkpointu SFT, ukończonego Harness v1.1 oraz Task 02 i 05. |
 | [07](07_dpo_training.md) | DPO i continued-SFT control | `TODO` | Wymaga danych preferencyjnych z Task 06. |
 | [08](08_grpo_multiobjective_rl.md) | Wielokryterialny GRPO/RL | `OPTIONAL / BLOCKED` | Uruchamiać wyłącznie po spełnieniu bramki i zapisaniu decyzji `reports/decisions/enable_grpo.md`. |
@@ -97,10 +97,12 @@ backlogiem. Zakres P-xx został przeniesiony do wskazanych plików zadań.
 
 Równobudżetowe wejścia probe 1.5B hybrid-vs-W05 są zmaterializowane, a osobny
 prospektywny ADR `task05-d01b-probe-dev-screen-v1` przeszedł CPU preflight.
-Pierwszy start runu zatrzymał się przed treningiem z powodu niezgodności pól
-wejścia z istniejącym loaderem. Po poprawce i ponownej materializacji CPU
-preflight przechodzi, nie istnieje checkpoint ani wynik do wznowienia.
-Najbliższy punkt wejścia to ponowienie około 7–8-godzinnego dev-only runu:
+Po naprawie wejścia kolejny run został przerwany przez wyłączenie maszyny
+podczas W05. Zachowano checkpoint batch-8 z kroku 50, ale amendment batch-4
+nie może go wznowić. Nowy protokół używa batch 4 i 500 kroków w osobnych
+katalogach, zachowując równy budżet 1 152 000 tokenów. CPU preflight nowego
+kontraktu zakończył się `rc=0`. Najbliższy punkt wejścia to ponowienie około
+7–8-godzinnego dev-only runu:
 `bash scripts/run_task05_d01b_probe_dev_screen.sh run-all`. Nie przelicza on
 generacji/scoringu generatora i nie używa finalnych testów. `dev_confirm` wolno
 rozważyć tylko po statusie `eligible` i osobnej aktualizacji stanu; 4.5B oraz

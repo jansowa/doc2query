@@ -6,6 +6,7 @@ import hashlib
 import json
 from collections import Counter
 from collections.abc import Mapping
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, cast
 
@@ -57,12 +58,13 @@ def preflight_d01b_probe_dev_screen(config_path: Path) -> dict[str, Any]:
     if (
         config.get("schema_version") != 1
         or config.get("contract") != D01B_PROBE_DEV_SCREEN_CONTRACT
-        or config.get("status") != "preregistered_before_training"
+        or config.get("status") != "amended_before_restart"
         or config.get("final_tests_used") != []
     ):
         raise ValueError("invalid D01b probe dev-screen contract")
     root = _root(config_path)
     _pinned(root, cast(Mapping[str, Any], config["adr"]))
+    _pinned(root, cast(Mapping[str, Any], config["amendment"]))
     source_section = cast(Mapping[str, Any], config["source_materialization"])
     source_path = _pinned(root, source_section)
     source = json.loads(source_path.read_text(encoding="utf-8"))
@@ -78,7 +80,8 @@ def preflight_d01b_probe_dev_screen(config_path: Path) -> dict[str, Any]:
     if (
         training.get("stage") != "dev_screen"
         or training.get("seed") != 42
-        or training.get("max_steps") != 250
+        or training.get("max_steps") != 500
+        or training.get("batch_size") != 4
         or training.get("train_prefix_pairs") != 1984
         or training.get("train_prefix_unique_passages") != 496
         or training.get("queries_per_passage") != 4
@@ -101,9 +104,21 @@ def preflight_d01b_probe_dev_screen(config_path: Path) -> dict[str, Any]:
         {"path": training["primary_judge"], "sha256": training["primary_judge_sha256"]},
     )
     recipe = ProbeRecipe.from_dict(_load_mapping(recipe_path))
+    runtime_recipe = ProbeRecipe.from_dict(
+        asdict(recipe)
+        | {
+            "seed": int(training["seed"]),
+            "max_steps": int(training["max_steps"]),
+            "batch_size": int(training["batch_size"]),
+        }
+    )
     contract = StatisticalContract.load(comparison_path)
     if recipe.seed != 42 or recipe.batch_size != 8 or recipe.max_length != 192:
         raise ValueError("probe recipe execution budget drifted")
+    if runtime_recipe.max_steps * runtime_recipe.batch_size * runtime_recipe.max_length * (
+        2 + runtime_recipe.negatives_per_example
+    ) != int(training["token_count"]):
+        raise ValueError("D01b probe amended token budget drifted")
     if (
         recipe.negative_recipe.strategy != "hn0_filter"
         or recipe.negative_recipe.false_negative_policy != "drop"
@@ -148,6 +163,19 @@ def preflight_d01b_probe_dev_screen(config_path: Path) -> dict[str, Any]:
 
     prefix_count = int(training["train_prefix_pairs"])
     arms = cast(Mapping[str, Any], config["arms"])
+    if (
+        cast(Mapping[str, Any], arms["control"]).get("id") != "D01B-PROBE-W05-DEV-SCREEN-S42-B4"
+        or cast(Mapping[str, Any], arms["variant"]).get("id")
+        != "D01B-PROBE-HYBRID-DEV-SCREEN-S42-B4"
+    ):
+        raise ValueError("D01b probe batch-4 arm identity drifted")
+    outputs = cast(Mapping[str, Any], config["outputs"])
+    if outputs != {
+        "run_root": "runs/task05_d01b_probe_dev_screen_v2_batch4",
+        "measurement_root": "reports/measurements/task05/d01b_probe_dev_screen_v2_batch4",
+        "log_root": "logs/task05/d01b_probe_dev_screen_v2_batch4",
+    }:
+        raise ValueError("D01b probe batch-4 output namespace drifted")
     prefix_passages: dict[str, list[str]] = {}
     observed: dict[str, Any] = {}
     for role in ("control", "variant"):
@@ -203,7 +231,8 @@ def preflight_d01b_probe_dev_screen(config_path: Path) -> dict[str, Any]:
         "config_sha256": _file_sha256(config_path),
         "arms": observed,
         "comparison_contract": contract.reference(),
-        "probe_recipe_fingerprint": recipe.fingerprint,
+        "base_probe_recipe_fingerprint": recipe.fingerprint,
+        "probe_recipe_fingerprint": runtime_recipe.fingerprint,
         "evaluation_subset": evaluation["subset"],
         "evaluation_query_count": len(evaluation_ids),
         "corpus": str(corpus_path.relative_to(root)),

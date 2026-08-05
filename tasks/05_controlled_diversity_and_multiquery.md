@@ -6,6 +6,29 @@
 
 `IMPLEMENTED`
 
+Aktualizacja 2026-08-05 (batch-4 restart amendment): prawidłowy run po
+naprawie loadera został przerwany przez wyłączenie maszyny podczas treningu
+W05. Status runnera nie zdążył zapisać końca fazy; log doszedł do kroku 84/250,
+a ostatni kompletny checkpoint batch-8 pochodzi z kroku 50. Nie powstał
+`result.json`, wynik ewaluacji ani dane drugiego ramienia. Na jawne polecenie
+właściciela zaakceptowano przed restartem amendment
+[`task05_d01b_probe_dev_screen_batch4_amendment_2026-08-05.md`](../reports/decisions/task05_d01b_probe_dev_screen_batch4_amendment_2026-08-05.md):
+batch zmniejszono z 8 do 4, a liczbę kroków zwiększono z 250 do 500. Oba
+ramiona nadal przetworzą po 2000 przykładów i dokładnie 1152000 tokenów.
+Checkpoint batch-8 pozostaje zachowany jako dowód przerwanego runu, ale nie
+jest zgodny z nową receptą; batch-4 używa osobnych katalogów `v2_batch4` i
+startuje od wspólnego modelu bazowego. Wszystkie pozostałe piny, wejścia,
+HN0+filter/drop, seed 42, panel 6598 naturalnych dev query, bootstrap i bramki
+pozostają bez zmian. Po CPU preflight należy ponowić tę samą komendę
+`bash scripts/run_task05_d01b_probe_dev_screen.sh run-all`; ETA pozostaje około
+7–8 godzin. Rzeczywisty CPU preflight amendmentu zakończył się `rc=0`,
+potwierdził runtime fingerprint batch-4/500 kroków i nie utworzył artefaktów
+treningowych w nowym katalogu. Pełne 259 testów CPU, Ruff, format zmienionych
+plików, składnia runnera i ukierunkowany mypy przeszły. `dev_confirm`, 4.5B i
+testy finalne są zamknięte;
+`final_tests_used=[]`. Pomiar incydentu:
+[`task05_d01b_probe_dev_screen_batch8_interruption_2026-08-05.md`](../reports/measurements/task05_d01b_probe_dev_screen_batch8_interruption_2026-08-05.md).
+
 Aktualizacja 2026-08-05 (probe dev-screen start failure): pierwsze wywołanie
 `run-all` zakończyło się `rc=1` przed pierwszym krokiem optymalizatora.
 Preflight przeszedł, lecz istniejący loader odrzucił wszystkie syntetyczne
@@ -45,6 +68,9 @@ finalne są zamknięte. Jedna komenda operatorska:
 7–8 godzin na tej maszynie na podstawie wcześniejszych sekwencyjnych probe z
 pełnokorpusową ewaluacją. Po runie tylko decyzja `eligible` może otworzyć osobną
 dyskusję o `dev_confirm`; pozostałe statusy zatrzymują promocję.
+Parametry batch 8/250 kroków z tej pierwotnej rejestracji zostały zastąpione
+wyłącznie dla restartu przez późniejszy amendment batch 4/500 kroków opisany
+powyżej; budżet tokenów i zakres autoryzacji nie zmieniły się.
 
 Aktualizacja 2026-08-05 (equal-budget probe inputs): dozwolona materializacja
 prospective v3 zakończyła się `rc=0`, bez generacji, rescoringu, treningu ani

@@ -41,6 +41,7 @@ def _fixture(tmp_path: Path) -> Path:
     shutil.copyfile(Path("configs/evaluation/probe_v1.yaml"), probe)
     judge = _write(root / "judge.yaml", "name_or_path: judge\n")
     adr = _write(root / "reports/decisions/probe.md", "frozen before training\n")
+    amendment = _write(root / "reports/decisions/amendment.md", "batch 4 restart\n")
     corpus = _write(root / "data/documents.parquet", "fixture\n")
     ids = _jsonl(root / "data/dev.ids.jsonl", [{"id": "eval-1"}, {"id": "eval-2"}])
     manifest = _write(
@@ -95,9 +96,13 @@ def _fixture(tmp_path: Path) -> Path:
     config = {
         "schema_version": 1,
         "contract": "task05-d01b-probe-dev-screen-v1",
-        "status": "preregistered_before_training",
+        "status": "amended_before_restart",
         "final_tests_used": [],
         "adr": {"path": str(adr.relative_to(root)), "sha256": _sha(adr)},
+        "amendment": {
+            "path": str(amendment.relative_to(root)),
+            "sha256": _sha(amendment),
+        },
         "source_materialization": {
             "path": str(source.relative_to(root)),
             "sha256": _sha(source),
@@ -106,13 +111,22 @@ def _fixture(tmp_path: Path) -> Path:
             "full_pair_count": 1984,
         },
         "arms": {
-            "control": {"input": str(control.relative_to(root)), "sha256": _sha(control)},
-            "variant": {"input": str(variant.relative_to(root)), "sha256": _sha(variant)},
+            "control": {
+                "id": "D01B-PROBE-W05-DEV-SCREEN-S42-B4",
+                "input": str(control.relative_to(root)),
+                "sha256": _sha(control),
+            },
+            "variant": {
+                "id": "D01B-PROBE-HYBRID-DEV-SCREEN-S42-B4",
+                "input": str(variant.relative_to(root)),
+                "sha256": _sha(variant),
+            },
         },
         "training": {
             "stage": "dev_screen",
             "seed": 42,
-            "max_steps": 250,
+            "max_steps": 500,
+            "batch_size": 4,
             "train_prefix_pairs": 1984,
             "train_prefix_unique_passages": 496,
             "queries_per_passage": 4,
@@ -136,6 +150,11 @@ def _fixture(tmp_path: Path) -> Path:
             "natural_guardrails_sha256": _sha(guardrails),
             "final_tests_forbidden": True,
         },
+        "outputs": {
+            "run_root": "runs/task05_d01b_probe_dev_screen_v2_batch4",
+            "measurement_root": "reports/measurements/task05/d01b_probe_dev_screen_v2_batch4",
+            "log_root": "logs/task05/d01b_probe_dev_screen_v2_batch4",
+        },
         "authorization": {
             "dev_screen_training": True,
             "dev_confirm": False,
@@ -152,6 +171,7 @@ def test_probe_dev_screen_preflight_accepts_exact_common_prefix(tmp_path: Path) 
     result = preflight_d01b_probe_dev_screen(_fixture(tmp_path))
     assert result["status"] == "verified"
     assert result["arms"]["control"]["prefix_unique_passages"] == 496
+    assert result["probe_recipe_fingerprint"] != result["base_probe_recipe_fingerprint"]
     assert result["final_tests_used"] == []
 
 

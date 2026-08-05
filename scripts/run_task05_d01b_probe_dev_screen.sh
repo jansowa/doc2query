@@ -15,9 +15,9 @@ esac
 
 PYTHON=${DOC2QUERY_PYTHON:-$ROOT/.venv-gpu/bin/python}
 CONFIG=configs/evaluation/d01b_probe_dev_screen_v1.yaml
-RUN_ROOT=runs/task05_d01b_probe_dev_screen_v1
-MEASUREMENT_ROOT=reports/measurements/task05/d01b_probe_dev_screen_v1
-LOG_ROOT=logs/task05/d01b_probe_dev_screen_v1
+RUN_ROOT=runs/task05_d01b_probe_dev_screen_v2_batch4
+MEASUREMENT_ROOT=reports/measurements/task05/d01b_probe_dev_screen_v2_batch4
+LOG_ROOT=logs/task05/d01b_probe_dev_screen_v2_batch4
 STATUS=$MEASUREMENT_ROOT/status.json
 mkdir -p "$RUN_ROOT" "$MEASUREMENT_ROOT" "$LOG_ROOT"
 
@@ -83,13 +83,13 @@ from pathlib import Path
 path = Path(sys.argv[1])
 payload = {
     "schema_version": 1,
-    "contract": "task05-d01b-probe-dev-screen-runner-v1",
+    "contract": "task05-d01b-probe-dev-screen-runner-v2-batch4",
     "phases": {},
     "final_tests_used": [],
 }
 if path.is_file():
     payload = json.loads(path.read_text(encoding="utf-8"))
-if payload.get("contract") != "task05-d01b-probe-dev-screen-runner-v1" or payload.get("final_tests_used") != []:
+if payload.get("contract") != "task05-d01b-probe-dev-screen-runner-v2-batch4" or payload.get("final_tests_used") != []:
     raise ValueError("D01b probe runner status identity drifted")
 payload["phases"][sys.argv[2]] = {
     "started_at": sys.argv[3],
@@ -138,8 +138,8 @@ train_arm() {
     --corpus data/processed/v1/documents.parquet \
     --primary-judge-config configs/reranker/primary_polish_roberta_v3_p03_gpu.yaml \
     --seed 42 \
-    --max-steps 250 \
-    --batch-size 8 \
+    --max-steps 500 \
+    --batch-size 4 \
     --train-prefix-limit 1984 \
     --checkpoint-interval-steps 50 \
     --evaluation-encode-batch-size 64 \
@@ -151,11 +151,11 @@ train_arm() {
 train_both() {
   preflight
   train_arm \
-    D01B-PROBE-W05-DEV-SCREEN-S42 \
+    D01B-PROBE-W05-DEV-SCREEN-S42-B4 \
     artifacts/task05/d01b_prospective_1_5b_v3/probe_inputs/w05_baseline.jsonl \
     W05-1.5B-50K-8GB
   train_arm \
-    D01B-PROBE-HYBRID-DEV-SCREEN-S42 \
+    D01B-PROBE-HYBRID-DEV-SCREEN-S42-B4 \
     artifacts/task05/d01b_prospective_1_5b_v3/probe_inputs/selected_hybrid.jsonl \
     D01B-PROSPECTIVE-V3-HYBRID-1.5B-S42
 }
