@@ -167,6 +167,8 @@ def preflight_d01b_probe_dev_screen(config_path: Path) -> dict[str, Any]:
         if any(
             row.get("example_id") != row.get("pair_id")
             or row.get("generated") != row.get("query")
+            or row.get("mode") != "deterministic"
+            or row.get("candidate_index") != 0
             or not isinstance(row.get("positives"), list)
             or not row.get("hard_negatives")
             for row in prefix

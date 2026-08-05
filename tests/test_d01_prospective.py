@@ -21,6 +21,7 @@ from doc2query.evaluation.d01_prospective import (
     evaluate_prospective_gates,
     materialize_prospective_probe_inputs,
 )
+from doc2query.evaluation.embedder_probe import _synthetic_map
 from doc2query.utils.records import read_records
 
 
@@ -318,6 +319,7 @@ def test_materialize_prospective_probe_inputs_is_equal_budget_and_fail_closed(
     assert manifest["arms"]["baseline_w05"]["pair_count"] == 4
     assert manifest["arms"]["selected_hybrid"]["pair_count"] == 4
     assert {len(row["hard_negatives"]) for row in read_records(hybrid_output)} == {1}
+    assert len(_synthetic_map(hybrid_output)) == 4
 
     report["probe_materialization_authorized"] = False
     report_path.write_text(json.dumps(report), encoding="utf-8")

@@ -111,7 +111,7 @@ run_logged() {
   log=$LOG_ROOT/$phase.log
   printf '[%s] START %s\n' "$started" "$phase" | tee -a "$log"
   set +e
-  "$@" >>"$log" 2>&1
+  ( set -e; "$@" ) >>"$log" 2>&1
   rc=$?
   set -e
   finished=$(date --iso-8601=seconds)

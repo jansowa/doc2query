@@ -33,9 +33,9 @@ Both decisions were applied symmetrically, yielding a common equal budget.
 Artifacts:
 
 - `artifacts/task05/d01b_prospective_1_5b_v3/probe_inputs/w05_baseline.jsonl`,
-  SHA-256 `d1006068b011b1180de8f05812de03217f7e9963a6c7f658f018600ca55dacc6`;
+  SHA-256 `c0c2bdc8bf1d99772bdc760dcce8225e56f44bbc785b759fa7dd2ac8752260b6`;
 - `artifacts/task05/d01b_prospective_1_5b_v3/probe_inputs/selected_hybrid.jsonl`,
-  SHA-256 `809c5c4ec7f023d14286fdc65f6bdeb24e1c19f4cf4da109ef869da0a83ae432`;
+  SHA-256 `ac9e7b3b76822fdd1ca2000264609b3db0ae74cb474d2e13434ba7e27c2a626d`;
 - `artifacts/task05/d01b_prospective_1_5b_v3/probe_inputs/manifest.json`.
 
 The manifest records `training_started=false`, `training_authorized=false`,

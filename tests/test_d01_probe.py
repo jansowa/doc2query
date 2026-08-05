@@ -71,6 +71,8 @@ def _fixture(tmp_path: Path) -> Path:
                     "example_id": pair_id,
                     "query": pair_id,
                     "generated": pair_id,
+                    "mode": "deterministic",
+                    "candidate_index": 0,
                     "positives": [{"doc_id": f"doc-{group}", "text": "positive"}],
                     "hard_negatives": [{"doc_id": "negative", "text": "negative"}],
                     "source_example_id": f"train-{group}",

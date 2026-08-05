@@ -6,6 +6,28 @@
 
 `IMPLEMENTED`
 
+Aktualizacja 2026-08-05 (probe dev-screen start failure): pierwsze wywołanie
+`run-all` zakończyło się `rc=1` przed pierwszym krokiem optymalizatora.
+Preflight przeszedł, lecz istniejący loader odrzucił wszystkie syntetyczne
+wiersze, ponieważ materializator nie zapisał jego legacy pól
+`mode=deterministic` i `candidate_index=0`; runner nie przerwał następnie
+sekwencji i bezskutecznie spróbował drugiego ramienia oraz porównania. Nie
+powstał checkpoint, `result.json` ani pomiar probe. Materializator zapisuje
+teraz wymagane pola, preflight sprawdza je fail-closed, a runner zatrzymuje
+sekwencję na pierwszym błędzie. Oba wejścia odtworzono bez zmiany kohorty i
+budżetu: nadal po 7936 par, 1984 dokumenty i K=4. Nowe SHA-256 to
+`c0c2bdc8bf1d99772bdc760dcce8225e56f44bbc785b759fa7dd2ac8752260b6`
+dla W05 oraz
+`ac9e7b3b76822fdd1ca2000264609b3db0ae74cb474d2e13434ba7e27c2a626d`
+dla hybrydy; manifest ma SHA-256
+`477086cfb6c43fed1a3edaaaeb975f2b8f559a6bfeebfa25df3c01a822da6409`.
+CPU preflight po poprawce zakończył się `rc=0`. Następny krok to ponowienie
+tej samej komendy `bash scripts/run_task05_d01b_probe_dev_screen.sh run-all`
+z ETA około 7–8 godzin. Pełne 259 testów CPU i Ruff oraz ukierunkowany mypy
+przeszły. `dev_confirm`, 4.5B i testy finalne pozostają zamknięte;
+`final_tests_used=[]`. Raport incydentu:
+[`task05_d01b_probe_dev_screen_start_failure_2026-08-05.md`](../reports/measurements/task05_d01b_probe_dev_screen_start_failure_2026-08-05.md).
+
 Aktualizacja 2026-08-05 (probe dev-screen preregistration): zaakceptowano
 prospektywny ADR
 [`task05_d01b_probe_dev_screen_v1.md`](../reports/decisions/task05_d01b_probe_dev_screen_v1.md)

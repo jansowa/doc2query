@@ -9,7 +9,7 @@ adr:
 
 source_materialization:
   path: artifacts/task05/d01b_prospective_1_5b_v3/probe_inputs/manifest.json
-  sha256: 6f338020988b4b2b49d99517a49e0146278b085848621941bd7d5ad1423b6fd0
+  sha256: 477086cfb6c43fed1a3edaaaeb975f2b8f559a6bfeebfa25df3c01a822da6409
   contract: task05-d01b-prospective-probe-inputs-v1
   status: materialized_and_cpu_validated
   full_pair_count: 7936
@@ -21,12 +21,12 @@ arms:
     id: D01B-PROBE-W05-DEV-SCREEN-S42
     generator_id: W05-1.5B-50K-8GB
     input: artifacts/task05/d01b_prospective_1_5b_v3/probe_inputs/w05_baseline.jsonl
-    sha256: d1006068b011b1180de8f05812de03217f7e9963a6c7f658f018600ca55dacc6
+    sha256: c0c2bdc8bf1d99772bdc760dcce8225e56f44bbc785b759fa7dd2ac8752260b6
   variant:
     id: D01B-PROBE-HYBRID-DEV-SCREEN-S42
     generator_id: D01B-PROSPECTIVE-V3-HYBRID-1.5B-S42
     input: artifacts/task05/d01b_prospective_1_5b_v3/probe_inputs/selected_hybrid.jsonl
-    sha256: 809c5c4ec7f023d14286fdc65f6bdeb24e1c19f4cf4da109ef869da0a83ae432
+    sha256: ac9e7b3b76822fdd1ca2000264609b3db0ae74cb474d2e13434ba7e27c2a626d
 
 training:
   stage: dev_screen

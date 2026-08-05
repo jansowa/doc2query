@@ -882,6 +882,8 @@ def materialize_prospective_probe_inputs(
                     "example_id": pair_id,
                     "query": str(row["generated"]),
                     "generated": str(row["generated"]),
+                    "mode": "deterministic",
+                    "candidate_index": 0,
                     "positive": dict(positive),
                     "positives": [dict(positive)],
                     "hard_negatives": retained,
