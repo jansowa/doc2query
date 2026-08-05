@@ -19,6 +19,7 @@ from doc2query.evaluation.d01_prospective import (
     assert_exact_k_summary,
     assert_scoring_summary,
     evaluate_prospective_gates,
+    materialize_prospective_probe_inputs,
 )
 from doc2query.utils.records import read_records
 
@@ -216,3 +217,119 @@ def test_exact_k_and_scoring_validators(tmp_path: Path) -> None:
     scoring.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(ValueError, match="scoring is incomplete"):
         assert_scoring_summary(scoring)
+
+
+def test_materialize_prospective_probe_inputs_is_equal_budget_and_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    contract_sha = "c" * 64
+    contract = {
+        "contract": "task05-d01b-prospective-1.5b-v3",
+        "scoring": {
+            "primary": {
+                "name_or_path": "sdadas/polish-reranker-roberta-v3",
+                "revision": "e6471da541f4e7be33845b6d57248a8d8bde27e8",
+            }
+        },
+        "arms": {"baseline": {"id": "W05-1.5B-50K-8GB"}},
+    }
+    monkeypatch.setattr(
+        "doc2query.evaluation.d01_prospective.load_prospective_contract",
+        lambda _path: (contract, tmp_path, contract_sha),
+    )
+
+    def scored(role: str) -> list[dict[str, Any]]:
+        return [
+            {
+                "evaluation_id": f"candidate-{index}",
+                "evaluation_group_id": "group-1",
+                "example_id": "q-1",
+                "doc_id": "d-1",
+                "generated": f"query {role} {index}",
+                "experiment_id": f"experiment-{role}",
+                "positive": {"doc_id": "d-1", "text": "positive"},
+                "hard_negatives": [
+                    {"doc_id": "n-1", "text": "negative one"},
+                    {"doc_id": "n-2", "text": "negative two"},
+                ],
+                "primary_negative_scores": [0.0, 99.0],
+                "final_tests_used": [],
+            }
+            for index in range(4)
+        ]
+
+    baseline_rows, controlled_rows = scored("baseline"), scored("controlled")
+    baseline_path, controlled_path = tmp_path / "baseline.jsonl", tmp_path / "controlled.jsonl"
+    for path, rows in ((baseline_path, baseline_rows), (controlled_path, controlled_rows)):
+        path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    selected_path = tmp_path / "selected.jsonl"
+    selection_identity = "s" * 64
+    selected = [
+        {
+            "evaluation_id": row["evaluation_id"],
+            "role": "baseline" if row in baseline_rows else "controlled",
+            "selection_identity_sha256": selection_identity,
+            "probe_materialization_authorized": True,
+            "final_tests_used": [],
+        }
+        for row in [*baseline_rows[:2], *controlled_rows[:2]]
+    ]
+    selected_path.write_text("".join(json.dumps(row) + "\n" for row in selected), encoding="utf-8")
+    file_hash = d01_pipeline._file_sha256
+    report = {
+        "contract": contract["contract"],
+        "status": "prospective_complete",
+        "decision": "authorize_equal_budget_probe_inputs",
+        "all_preregistered_gates_passed": True,
+        "probe_materialization_authorized": True,
+        "four_point_five_b_authorized": False,
+        "final_tests_used": [],
+        "selected_count": 4,
+        "selected_rows_sha256": file_hash(selected_path),
+        "cohort": {"group_count": 1},
+        "identity": {
+            "contract_sha256": contract_sha,
+            "baseline_rows_sha256": file_hash(baseline_path),
+            "controlled_rows_sha256": file_hash(controlled_path),
+            "identity_sha256": selection_identity,
+        },
+    }
+    report_path = tmp_path / "report.json"
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+    baseline_output = tmp_path / "probe" / "baseline.jsonl"
+    hybrid_output = tmp_path / "probe" / "hybrid.jsonl"
+    manifest_output = tmp_path / "probe" / "manifest.json"
+
+    manifest = materialize_prospective_probe_inputs(
+        tmp_path / "contract.yaml",
+        report_path=report_path,
+        selected_rows_path=selected_path,
+        baseline_rows_path=baseline_path,
+        controlled_rows_path=controlled_path,
+        probe_recipe_path=Path("configs/evaluation/probe_v1.yaml"),
+        baseline_output=baseline_output,
+        hybrid_output=hybrid_output,
+        manifest_output=manifest_output,
+    )
+
+    assert manifest["status"] == "materialized_and_cpu_validated"
+    assert manifest["training_authorized"] is False
+    assert manifest["final_tests_used"] == []
+    assert manifest["arms"]["baseline_w05"]["pair_count"] == 4
+    assert manifest["arms"]["selected_hybrid"]["pair_count"] == 4
+    assert {len(row["hard_negatives"]) for row in read_records(hybrid_output)} == {1}
+
+    report["probe_materialization_authorized"] = False
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+    with pytest.raises(ValueError, match="does not authorize"):
+        materialize_prospective_probe_inputs(
+            tmp_path / "contract.yaml",
+            report_path=report_path,
+            selected_rows_path=selected_path,
+            baseline_rows_path=baseline_path,
+            controlled_rows_path=controlled_path,
+            probe_recipe_path=Path("configs/evaluation/probe_v1.yaml"),
+            baseline_output=baseline_output,
+            hybrid_output=hybrid_output,
+            manifest_output=manifest_output,
+        )

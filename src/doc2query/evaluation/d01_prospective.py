@@ -7,6 +7,7 @@ import json
 import os
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
+from dataclasses import asdict
 from pathlib import Path
 from statistics import fmean
 from typing import Any, cast
@@ -27,7 +28,9 @@ from doc2query.evaluation.d01_usefulness import (
     _selection_report,
 )
 from doc2query.evaluation.datasets import load_frozen_records
+from doc2query.evaluation.embedder_probe import ProbeRecipe
 from doc2query.evaluation.retrieval import percentile
+from doc2query.evaluation.statistical_contract import build_budget_manifest
 from doc2query.generation.deduplicate import query_key
 from doc2query.utils.records import read_records, write_json
 
@@ -45,6 +48,7 @@ PREREGISTERED_COHORT_CONTRACTS = frozenset(
         "task05-d01b-prospective-cohort-v3",
     }
 )
+PROSPECTIVE_PROBE_INPUT_CONTRACT = "task05-d01b-prospective-probe-inputs-v1"
 
 
 def _file_sha256(path: Path) -> str:
@@ -67,6 +71,17 @@ def _atomic_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
     write_json(temporary, value)
+    os.replace(temporary, path)
+
+
+def _atomic_jsonl(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    with temporary.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
     os.replace(temporary, path)
 
 
@@ -735,3 +750,259 @@ def select_compare_prospective(
     output_markdown.parent.mkdir(parents=True, exist_ok=True)
     output_markdown.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return report
+
+
+def materialize_prospective_probe_inputs(
+    contract_path: Path,
+    *,
+    report_path: Path,
+    selected_rows_path: Path,
+    baseline_rows_path: Path,
+    controlled_rows_path: Path,
+    probe_recipe_path: Path,
+    baseline_output: Path,
+    hybrid_output: Path,
+    manifest_output: Path,
+) -> dict[str, Any]:
+    """Materialize the authorized equal-budget pair inputs without starting training."""
+    contract, _root, contract_sha = load_prospective_contract(contract_path)
+    if str(contract["contract"]) != "task05-d01b-prospective-1.5b-v3":
+        raise ValueError("probe inputs require the successful prospective v3 contract")
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    required_report = {
+        "contract": contract["contract"],
+        "status": "prospective_complete",
+        "decision": "authorize_equal_budget_probe_inputs",
+        "all_preregistered_gates_passed": True,
+        "probe_materialization_authorized": True,
+        "four_point_five_b_authorized": False,
+        "final_tests_used": [],
+    }
+    if any(report.get(key) != value for key, value in required_report.items()):
+        raise ValueError("prospective report does not authorize probe input materialization")
+    identity = cast(Mapping[str, Any], report.get("identity", {}))
+    if identity.get("contract_sha256") != contract_sha:
+        raise ValueError("prospective report contract identity drifted")
+    if report.get("selected_rows_sha256") != _file_sha256(selected_rows_path):
+        raise ValueError("prospective selected rows fingerprint drifted")
+    expected_scored_hashes = {
+        "baseline": identity.get("baseline_rows_sha256"),
+        "controlled": identity.get("controlled_rows_sha256"),
+    }
+    scored_paths = {"baseline": baseline_rows_path, "controlled": controlled_rows_path}
+    if any(
+        _file_sha256(scored_paths[role]) != expected_scored_hashes[role] for role in scored_paths
+    ):
+        raise ValueError("prospective scored rows fingerprint drifted")
+
+    recipe_raw = yaml.safe_load(probe_recipe_path.read_text(encoding="utf-8"))
+    if not isinstance(recipe_raw, Mapping):
+        raise ValueError("probe recipe must be a mapping")
+    recipe = ProbeRecipe.from_dict(recipe_raw)
+    if (
+        recipe.negative_recipe.strategy != "hn0_filter"
+        or recipe.negative_recipe.false_negative_policy != "drop"
+    ):
+        raise ValueError("prospective probe inputs require frozen HN0+filter/drop")
+    calibration = recipe.negative_recipe.load_calibration()
+    if calibration is None:
+        raise ValueError("prospective probe inputs require the pinned dev calibration")
+    primary_pin = cast(Mapping[str, Any], cast(Mapping[str, Any], contract["scoring"])["primary"])
+    if calibration.primary_judge_name != primary_pin.get(
+        "name_or_path"
+    ) or calibration.primary_judge_revision != primary_pin.get("revision"):
+        raise ValueError("probe calibration does not match prospective primary judge")
+
+    scored: dict[tuple[str, str], dict[str, Any]] = {}
+    by_role: dict[str, list[dict[str, Any]]] = {}
+    for role, path in scored_paths.items():
+        rows = list(read_records(path))
+        if len(rows) != int(report["selected_count"]):
+            raise ValueError(f"prospective {role} arm is not exact equal budget")
+        by_role[role] = rows
+        for row in rows:
+            evaluation_id = str(row.get("evaluation_id", ""))
+            key = (role, evaluation_id)
+            if not evaluation_id or key in scored:
+                raise ValueError("prospective scoring identities are not unique")
+            if row.get("final_tests_used") != []:
+                raise ValueError("probe materialization forbids final-test provenance")
+            scored[key] = row
+
+    selected = list(read_records(selected_rows_path))
+    if len(selected) != int(report["selected_count"]):
+        raise ValueError("prospective selected arm is not equal budget")
+    selected_ids: list[tuple[str, str]] = []
+    expected_selection_identity = identity.get("identity_sha256")
+    for row in selected:
+        evaluation_id = str(row.get("evaluation_id", ""))
+        role = str(row.get("role", ""))
+        key = (role, evaluation_id)
+        if (
+            key not in scored
+            or row.get("selection_identity_sha256") != expected_selection_identity
+            or row.get("probe_materialization_authorized") is not True
+            or row.get("final_tests_used") != []
+        ):
+            raise ValueError("selected row is not authorized by the prospective report")
+        selected_ids.append(key)
+    if len(set(selected_ids)) != len(selected_ids):
+        raise ValueError("prospective selected identities are not unique")
+
+    def materialize(
+        rows: Sequence[Mapping[str, Any]], generator_id: str
+    ) -> tuple[list[dict[str, Any]], set[str]]:
+        output: list[dict[str, Any]] = []
+        groups: dict[str, int] = defaultdict(int)
+        ineligible_groups: set[str] = set()
+        for row in rows:
+            negatives = row.get("hard_negatives")
+            scores = row.get("primary_negative_scores")
+            positive = row.get("positive")
+            if (
+                not isinstance(negatives, list)
+                or not isinstance(scores, list)
+                or len(negatives) != len(scores)
+                or not isinstance(positive, Mapping)
+            ):
+                raise ValueError("scored row lacks aligned positive/negative evidence")
+            retained = [
+                negative
+                for negative, score in zip(negatives, scores, strict=True)
+                if float(score) < calibration.threshold
+            ]
+            group_id = str(row["evaluation_group_id"])
+            if not retained:
+                ineligible_groups.add(group_id)
+            groups[group_id] += 1
+            output.append(
+                {
+                    "pair_id": (f"{row.get('experiment_id', generator_id)}:{row['evaluation_id']}"),
+                    "query": str(row["generated"]),
+                    "positive": dict(positive),
+                    "hard_negatives": retained,
+                    "source_example_id": str(row["example_id"]),
+                    "source_passage_id": str(row["doc_id"]),
+                    "generator_experiment_id": generator_id,
+                    "_materialization_group_id": group_id,
+                }
+            )
+        expected_groups = int(cast(Mapping[str, Any], report["cohort"])["group_count"])
+        if len(groups) != expected_groups or set(groups.values()) != {4}:
+            raise ValueError("probe inputs require exactly four queries per passage")
+        return output, ineligible_groups
+
+    baseline_materialized, baseline_ineligible = materialize(
+        by_role["baseline"], str(cast(Mapping[str, Any], contract["arms"])["baseline"]["id"])
+    )
+    hybrid_materialized, hybrid_ineligible = materialize(
+        [scored[key] for key in selected_ids],
+        "D01B-PROSPECTIVE-V3-HYBRID-1.5B-S42",
+    )
+    ineligible_groups = baseline_ineligible | hybrid_ineligible
+    group_to_passage: dict[str, str] = {}
+    for row in [*baseline_materialized, *hybrid_materialized]:
+        group_id = str(row["_materialization_group_id"])
+        passage_id = str(row["source_passage_id"])
+        previous = group_to_passage.setdefault(group_id, passage_id)
+        if previous != passage_id:
+            raise ValueError("prospective group maps to multiple positive passages")
+    seen_passages: set[str] = set()
+    duplicate_passage_groups: set[str] = set()
+    for group_id in sorted(group_to_passage):
+        if group_id in ineligible_groups:
+            continue
+        passage_id = group_to_passage[group_id]
+        if passage_id in seen_passages:
+            duplicate_passage_groups.add(group_id)
+        else:
+            seen_passages.add(passage_id)
+    excluded_groups = ineligible_groups | duplicate_passage_groups
+    baseline_materialized = [
+        row
+        for row in baseline_materialized
+        if str(row["_materialization_group_id"]) not in excluded_groups
+    ]
+    hybrid_materialized = [
+        row
+        for row in hybrid_materialized
+        if str(row["_materialization_group_id"]) not in excluded_groups
+    ]
+    for row in [*baseline_materialized, *hybrid_materialized]:
+        del row["_materialization_group_id"]
+    if len(baseline_materialized) != len(hybrid_materialized):
+        raise ValueError("prospective probe arms have unequal pair budgets")
+    if not baseline_materialized:
+        raise ValueError("dual-arm HN0+filter/drop intersection is empty")
+    _atomic_jsonl(baseline_output, baseline_materialized)
+    _atomic_jsonl(hybrid_output, hybrid_materialized)
+    pair_count = len(baseline_materialized)
+    source_group_count = int(cast(Mapping[str, Any], report["cohort"])["group_count"])
+    group_count = source_group_count - len(excluded_groups)
+    if pair_count != group_count * 4:
+        raise ValueError("common eligible probe cohort is not uniform exact K=4")
+    for rows in (baseline_materialized, hybrid_materialized):
+        passage_counts: dict[str, int] = defaultdict(int)
+        for row in rows:
+            passage_counts[str(row["source_passage_id"])] += 1
+        if len(passage_counts) != group_count or set(passage_counts.values()) != {4}:
+            raise ValueError("probe input has duplicate passages or non-uniform K")
+    training_budget = build_budget_manifest(
+        token_count=(
+            recipe.max_steps
+            * recipe.batch_size
+            * recipe.max_length
+            * (2 + recipe.negatives_per_example)
+        ),
+        pair_count=pair_count,
+        unique_passage_count=group_count,
+        queries_per_passage=4,
+    )
+    manifest = {
+        "schema_version": 1,
+        "contract": PROSPECTIVE_PROBE_INPUT_CONTRACT,
+        "status": "materialized_and_cpu_validated",
+        "source_contract": contract["contract"],
+        "source_contract_sha256": contract_sha,
+        "source_report": str(report_path),
+        "source_report_sha256": _file_sha256(report_path),
+        "selection_identity_sha256": expected_selection_identity,
+        "selection_policy": "frozen_best_four_of_eight_hybrid_vs_all_four_observed_w05",
+        "negative_recipe": recipe.negative_recipe.manifest(calibration),
+        "probe_recipe": asdict(recipe),
+        "probe_recipe_fingerprint": recipe.fingerprint,
+        "comparison_budget": training_budget,
+        "common_eligibility": {
+            "policy": "dual_arm_group_intersection_hn0_filter_drop",
+            "source_group_count": source_group_count,
+            "eligible_group_count": group_count,
+            "dropped_group_count": len(excluded_groups),
+            "hn_filter_dropped_group_count": len(ineligible_groups),
+            "duplicate_passage_dropped_group_count": len(duplicate_passage_groups),
+            "baseline_ineligible_group_count": len(baseline_ineligible),
+            "hybrid_ineligible_group_count": len(hybrid_ineligible),
+            "dropped_group_ids_sha256": _canonical_sha256(sorted(excluded_groups)),
+        },
+        "arms": {
+            "baseline_w05": {
+                "path": str(baseline_output),
+                "sha256": _file_sha256(baseline_output),
+                "pair_count": pair_count,
+                "unique_passage_count": group_count,
+                "queries_per_passage": 4,
+            },
+            "selected_hybrid": {
+                "path": str(hybrid_output),
+                "sha256": _file_sha256(hybrid_output),
+                "pair_count": pair_count,
+                "unique_passage_count": group_count,
+                "queries_per_passage": 4,
+            },
+        },
+        "training_started": False,
+        "training_authorized": False,
+        "four_point_five_b_authorized": False,
+        "final_tests_used": [],
+    }
+    _atomic_json(manifest_output, manifest)
+    return manifest

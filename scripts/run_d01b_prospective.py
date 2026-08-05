@@ -10,6 +10,7 @@ from pathlib import Path
 from doc2query.evaluation.d01_prospective import (
     assert_exact_k_summary,
     assert_scoring_summary,
+    materialize_prospective_probe_inputs,
     preflight_prospective,
     prepare_prospective_cohort,
     select_compare_prospective,
@@ -28,6 +29,7 @@ def main() -> int:
             "validate-exact-k",
             "validate-scoring",
             "select-compare",
+            "materialize-probe-inputs",
         ),
     )
     parser.add_argument("--contract", type=Path, required=True)
@@ -40,6 +42,12 @@ def main() -> int:
     parser.add_argument("--semantic-cache-dir", type=Path)
     parser.add_argument("--semantic-device", default="cuda")
     parser.add_argument("--summary", type=Path)
+    parser.add_argument("--report", type=Path)
+    parser.add_argument("--selected-rows", type=Path)
+    parser.add_argument("--probe-recipe", type=Path)
+    parser.add_argument("--baseline-output", type=Path)
+    parser.add_argument("--hybrid-output", type=Path)
+    parser.add_argument("--manifest-output", type=Path)
     args = parser.parse_args()
     if args.command == "preflight":
         result = preflight_prospective(args.contract)
@@ -59,7 +67,7 @@ def main() -> int:
         if args.summary is None:
             parser.error("validate-scoring requires --summary")
         result = assert_scoring_summary(args.summary)
-    else:
+    elif args.command == "select-compare":
         required = {
             "cohort_manifest": args.cohort_manifest,
             "baseline_rows": args.baseline_rows,
@@ -82,6 +90,31 @@ def main() -> int:
             output_selected=args.output_selected,
             semantic_cache_dir=args.semantic_cache_dir,
             semantic_device=args.semantic_device,
+        )
+    else:
+        required = {
+            "report": args.report,
+            "selected_rows": args.selected_rows,
+            "baseline_rows": args.baseline_rows,
+            "controlled_rows": args.controlled_rows,
+            "probe_recipe": args.probe_recipe,
+            "baseline_output": args.baseline_output,
+            "hybrid_output": args.hybrid_output,
+            "manifest_output": args.manifest_output,
+        }
+        missing = [name for name, value in required.items() if value is None]
+        if missing:
+            parser.error(f"materialize-probe-inputs missing arguments: {', '.join(missing)}")
+        result = materialize_prospective_probe_inputs(
+            args.contract,
+            report_path=args.report,
+            selected_rows_path=args.selected_rows,
+            baseline_rows_path=args.baseline_rows,
+            controlled_rows_path=args.controlled_rows,
+            probe_recipe_path=args.probe_recipe,
+            baseline_output=args.baseline_output,
+            hybrid_output=args.hybrid_output,
+            manifest_output=args.manifest_output,
         )
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     return 0

@@ -6,6 +6,23 @@
 
 `IMPLEMENTED`
 
+Aktualizacja 2026-08-05 (equal-budget probe inputs): dozwolona materializacja
+prospective v3 zakończyła się `rc=0`, bez generacji, rescoringu, treningu ani
+otwarcia testu. Zastosowano istniejącą receptę `probe-v1.1-p03`:
+HN0+filter/drop z przypiętą kalibracją Task 02, wspólne przecięcie
+kwalifikowalności obu ramion, całe grupy K=4 i jedna grupa na pozytywny
+dokument. Dziewięć grup odpadło przez HN filter, a siedem przez powtórzony
+pozytywny dokument. W05 i selected hybrid mają finalnie po 7936 par, 1984
+unikalne dokumenty, dokładnie K=4, unikalne `pair_id` i co najmniej jeden
+negatyw na parę. Manifest ma `training_started=false`,
+`training_authorized=false`, `four_point_five_b_authorized=false` i
+`final_tests_used=[]`. Pełne 257 testów CPU, Ruff, format zmienionych plików i
+ukierunkowany mypy przeszły. Pomiar i hashe:
+[`task05_d01b_prospective_v3_probe_inputs_2026-08-05.md`](../reports/measurements/task05_d01b_prospective_v3_probe_inputs_2026-08-05.md).
+Następna bramka to osobna prospektywna decyzja o treningu, dev-only ewaluacji,
+seedach i CI. Obecny ADR nie pozwala wymyślić ani uruchomić komendy treningowej;
+4.5B i finalny test pozostają zamknięte.
+
 Aktualizacja 2026-08-05 (prospective v3 complete): wznawialny scoring obu
 ramion zakończył się `rc=0`; baseline i controlled mają po 8000 kompletnych
 wierszy z primary, reserved shadow i corpus retrieval. `select-compare`

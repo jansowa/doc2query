@@ -38,7 +38,7 @@ uruchomiono.
 | [02](02_reranker_and_reward_proxies.md) | Zamrożone rerankery i proxy nagrody | `IMPLEMENTED` | Integracja, reward proxies i testy są gotowe; primary zmierzył pełny frozen dev, a query-macro próg Youdena `possible_false_negative` jest przypięty bez użycia testu. Bramka HN domierzyła primary/shadow na 775 wspólnych dev query z 10 negatywami; nadal pozostał pełny benchmark obu sędziów na całym dev/test i wymaganych slice'ach. |
 | [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | S07 jest kompletną, nieporównywalną budżetowo diagnostyką bez promocji. P-06 mass rescoring jest `SUPERSEDED`. Właściciel świadomie anulował ręczne P06-T i zaakceptował resztkowe ryzyko tłumaczeń na podstawie wcześniejszego udanego treningu embeddera; frozen train i próg `>=23.50` pozostają bez zmian. Nie kończyć lokalnego scoringu ani trenować drop/weighted. |
 | [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IMPLEMENTED` | P-01–P-05 i pełny S07 Harness/probe są gotowe. Pełna dev-only bramka HN0–HN3 ukończyła 775 wspólnych legalnych query i utrzymała HN0+filter/drop z powodu braku zgodnej primary/shadow podstawy do promocji nowego minera; nie otwarto testów finalnych. Artefakt S07 pozostaje `comparison_eligible=false`; pozostały porównywalne probe i testy finalistów. |
-| [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `IMPLEMENTED` | Prospective D01b v3 jest kompletne na świeżej kohorcie 2000: oba ramiona mają 8000/8000 wygenerowanych i ocenionych query, wszystkie 7 prerejestrowanych bramek przeszło, a selector wybrał 8000 równolicznych rekordów. Copy-risk spadł z `0.07125` do `0.0465`; decyzja `authorize_equal_budget_probe_inputs` dopuszcza wyłącznie materializację 1.5B hybrid-vs-W05. Następny krok to przygotowanie i CPU walidacja równobudżetowych wejść według istniejącego probe contract; trening probe wymaga osobnej zgody. 4.5B i finalne testy pozostają zamknięte (`final_tests_used=[]`). Groq proxy ukończył 500/500 etykiet i 200/200 audytów; agreement człowieka pozostaje `NOT MEASURED`, a D00–D12 poza D01 nie są zmierzone. |
+| [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `IMPLEMENTED` | Prospective D01b v3 jest kompletne na świeżej kohorcie 2000 i wszystkie 7 prerejestrowanych bramek przeszło; copy-risk spadł z `0.07125` do `0.0465`. Dozwolone equal-budget probe inputs 1.5B hybrid-vs-W05 są zmaterializowane i zwalidowane CPU: po wspólnym HN0+filter/drop oraz deduplikacji pozytywnych dokumentów każde ramię ma 7936 par, 1984 dokumenty i K=4. Manifest ma `training_started=false`, `training_authorized=false` i `final_tests_used=[]`. Następna bramka to osobna prospektywna decyzja definiująca run probe, jego dev-only ewaluację, seedy i CI; obecny kontrakt nie pozwala podać ani uruchomić komendy treningowej. 4.5B i finalne testy pozostają zamknięte. Groq proxy ukończył 500/500 etykiet i 200/200 audytów; agreement człowieka pozostaje `NOT MEASURED`, a D00–D12 poza D01 nie są zmierzone. |
 | [06](06_candidate_scoring_and_preference_data.md) | Scoring kandydatów i dane preferencyjne | `TODO` | Wymaga stabilnego checkpointu SFT, ukończonego Harness v1.1 oraz Task 02 i 05. |
 | [07](07_dpo_training.md) | DPO i continued-SFT control | `TODO` | Wymaga danych preferencyjnych z Task 06. |
 | [08](08_grpo_multiobjective_rl.md) | Wielokryterialny GRPO/RL | `OPTIONAL / BLOCKED` | Uruchamiać wyłącznie po spełnieniu bramki i zapisaniu decyzji `reports/decisions/enable_grpo.md`. |
@@ -95,11 +95,13 @@ backlogiem. Zakres P-xx został przeniesiony do wskazanych plików zadań.
    finalnym ADR.
 7. **Opcjonalne:** Task 08, P-09 i Task 11 wyłącznie po własnych bramkach.
 
-Najbliższy punkt wejścia to materializacja i CPU walidacja równobudżetowych
-wejść probe 1.5B hybrid-vs-W05 wyłącznie z raportu prospective v3. Nie używać
-do tego retrospektywnego raportu i nie przeliczać ukończonej generacji,
-scoringu ani `select-compare`. Sam trening probe wymaga osobnej zgody; 4.5B i
-finalne testy pozostają zamknięte.
+Równobudżetowe wejścia probe 1.5B hybrid-vs-W05 są zmaterializowane i
+zwalidowane CPU wyłącznie z raportu prospective v3; nie przeliczono generacji,
+scoringu ani `select-compare`. Najbliższy punkt wejścia to osobna prospektywna
+decyzja zamrażająca trening probe, dev-only zbiór ewaluacyjny, seedy, CI i
+komendę operatorską. Obecny kontrakt jawnie nie autoryzuje treningu, dlatego
+nie wolno jeszcze podawać ani uruchamiać komendy. 4.5B i finalne testy pozostają
+zamknięte.
 Nie uruchamiać pełnego
 `scripts/score_train_margins.py`, nie ustalać lokalnego progu i nie trenować
 ordinary/drop/weighted bez nowego prospektywnego ADR opartego na ręcznie

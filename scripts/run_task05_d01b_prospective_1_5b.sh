@@ -6,9 +6,9 @@ cd "$ROOT"
 
 PHASE=${1:-}
 case "$PHASE" in
-  preflight|prepare-cohort|generate|score|select-compare) ;;
+  preflight|prepare-cohort|generate|score|select-compare|materialize-probe-inputs) ;;
   *)
-    echo "usage: $0 {preflight|prepare-cohort|generate|score|select-compare}" >&2
+    echo "usage: $0 {preflight|prepare-cohort|generate|score|select-compare|materialize-probe-inputs}" >&2
     exit 2
     ;;
 esac
@@ -198,5 +198,17 @@ case "$PHASE" in
         --output-selected "$root/selected.jsonl" \
         --semantic-cache-dir "$root/semantic_cache" --semantic-device cuda
     ' _ "$PYTHON" "$CONTRACT" "$COHORT" "$BASE_SCORE" "$CONTROLLED_SCORE" "$MEASUREMENT_ROOT"
+    ;;
+  materialize-probe-inputs)
+    run_phase "$PYTHON" scripts/run_d01b_prospective.py materialize-probe-inputs \
+      --contract "$CONTRACT" \
+      --report "$MEASUREMENT_ROOT/report.json" \
+      --selected-rows "$MEASUREMENT_ROOT/selected.jsonl" \
+      --baseline-rows "$BASE_SCORE/per_generation.jsonl" \
+      --controlled-rows "$CONTROLLED_SCORE/per_generation.jsonl" \
+      --probe-recipe configs/evaluation/probe_v1.yaml \
+      --baseline-output "$ARTIFACT_ROOT/probe_inputs/w05_baseline.jsonl" \
+      --hybrid-output "$ARTIFACT_ROOT/probe_inputs/selected_hybrid.jsonl" \
+      --manifest-output "$ARTIFACT_ROOT/probe_inputs/manifest.json"
     ;;
 esac
