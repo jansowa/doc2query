@@ -822,8 +822,36 @@ def _encode_batched(
 
 def _atomic_torch_save(value: torch.Tensor, path: Path) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
-    torch.save(value, temporary)
+    with temporary.open("wb") as handle:
+        torch.save(value, handle)
+        handle.flush()
+        os.fsync(handle.fileno())
     os.replace(temporary, path)
+    directory = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
+def _valid_embedding_shard(path: Path, *, expected_rows: int) -> bool:
+    if not path.is_file() or path.stat().st_size == 0:
+        return False
+    try:
+        value = torch.load(path, map_location="cpu", weights_only=True, mmap=True)
+    except TypeError:  # pragma: no cover - compatibility with older supported torch
+        try:
+            value = torch.load(path, map_location="cpu", weights_only=True)
+        except Exception:
+            return False
+    except Exception:
+        return False
+    return bool(
+        isinstance(value, torch.Tensor)
+        and value.ndim == 2
+        and value.is_floating_point()
+        and value.shape[0] == expected_rows
+    )
 
 
 def _embedding_manifest(cache_dir: Path) -> dict[str, Any] | None:
@@ -882,7 +910,7 @@ def _ensure_corpus_embedding_cache(
         start = shard_index * chunk_size
         end = min(start + chunk_size, row_count)
         shard = cache_dir / f"chunk-{shard_index:05d}.pt"
-        if shard.is_file():
+        if _valid_embedding_shard(shard, expected_rows=end - start):
             if _progress_enabled():
                 print(
                     f"[resume] encode_corpus shard {shard_index + 1}/{shard_count} reused",
@@ -892,8 +920,10 @@ def _ensure_corpus_embedding_cache(
         else:
             if texts is None or model is None or tokenizer is None:
                 raise ValueError(
-                    "corpus embedding cache is incomplete and no encoder input is loaded"
+                    "corpus embedding cache is incomplete or corrupt and no encoder input is loaded"
                 )
+            if shard.is_file():
+                _stage(f"repairing invalid corpus embedding shard {shard_index + 1}/{shard_count}")
             encoded = []
             for batch_start in range(start, end, batch_size):
                 encoded.append(
@@ -1114,7 +1144,16 @@ def evaluate_probe(
     corpus_cache_complete = bool(
         existing_manifest
         and expected_shards
-        and all((cache_dir / f"chunk-{index:05d}.pt").is_file() for index in range(expected_shards))
+        and all(
+            _valid_embedding_shard(
+                cache_dir / f"chunk-{index:05d}.pt",
+                expected_rows=min(
+                    manifest_chunk_size,
+                    corpus_count - index * manifest_chunk_size,
+                ),
+            )
+            for index in range(expected_shards)
+        )
     )
     if not corpus_cache_complete and corpus_texts is None:
         corpus = {str(row["doc_id"]): str(row["text"]) for row in read_records(documents_path)}

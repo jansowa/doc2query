@@ -6,6 +6,31 @@
 
 `IMPLEMENTED`
 
+Aktualizacja 2026-08-05 (corrupt corpus shard repair): batch-4 W05 ma kompletny
+trening `500/500`, zapisany model i zgodny budżet 1152000 tokenów. Pierwsza
+ewaluacja została przerwana przy 5% kodowania korpusu przez wyłączenie maszyny,
+pozostawiając zerowy `chunk-00005.pt`. Kolejne `run-all` prawidłowo pominęło
+trening i wykorzystało shardy 1–5, lecz błędnie uznało pusty shard 6 za gotowy,
+zakodowało shardy 7–100 i dopiero przy budowie indeksu zakończyło się `rc=1`:
+`torch.load(..., mmap=True)` nie mógł odczytać pustego pliku. Audyt potwierdził
+99/100 poprawnych shardów, dokładnie jeden invalid indeks 5, kompletny
+`train_summary.json`, brak W05 `result.json` i brak startu ramienia hybrid.
+
+Cache sprawdza teraz rozmiar, format torch, typ, wymiarowość i oczekiwaną liczbę
+wierszy każdego sharda przed uznaniem go za kompletny. Niepoprawny shard jest
+punktowo ponownie kodowany, a zapis używa pliku tymczasowego, `fsync`, atomowego
+`os.replace` i synchronizacji katalogu. Test regresyjny odtwarza zerowy shard i
+potwierdza, że pozostałe są używane bez ponownego kodowania. Rzeczywisty audyt
+artefaktu wskazuje `valid_shards=99`, `invalid_shards=[5]`; CPU preflight po
+poprawce zakończył się `rc=0`. Pełne 260 testów CPU, Ruff, format i
+ukierunkowany mypy przeszły. Następne
+`bash scripts/run_task05_d01b_probe_dev_screen.sh run-all` zachowa ukończony
+trening oraz 99 dobrych shardów W05, przeliczy tylko shard 6/100, a potem
+dokończy W05, hybrid i compare. Szacowany pozostały czas to około 4–5 godzin.
+Nie otwarto finalnego testu, hybrid i compare pozostają niewykonane,
+`dev_confirm` oraz 4.5B są zamknięte, `final_tests_used=[]`. Raport:
+[`task05_d01b_probe_dev_screen_corrupt_shard_2026-08-05.md`](../reports/measurements/task05_d01b_probe_dev_screen_corrupt_shard_2026-08-05.md).
+
 Aktualizacja 2026-08-05 (batch-4 restart amendment): prawidłowy run po
 naprawie loadera został przerwany przez wyłączenie maszyny podczas treningu
 W05. Status runnera nie zdążył zapisać końca fazy; log doszedł do kroku 84/250,

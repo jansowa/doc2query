@@ -379,9 +379,7 @@ def test_probe_resumes_atomic_training_checkpoint(
         embedder_probe,
         "_tokenize",
         lambda _tokenizer, texts, _max_length, device, **_kwargs: {
-            "values": torch.tensor(
-                [[float(len(text) % 7 + 1)] for text in texts], device=device
-            )
+            "values": torch.tensor([[float(len(text) % 7 + 1)] for text in texts], device=device)
         },
     )
     recipe = ProbeRecipe(
@@ -424,6 +422,7 @@ def test_probe_resumes_atomic_training_checkpoint(
             raise RuntimeError("simulated interruption")
 
     monkeypatch.setattr(embedder_probe, "_progress", interrupt_at_step_three)
+
     def run_training() -> dict[str, Any]:
         return train_probe(
             rows,
@@ -538,6 +537,48 @@ def test_sharded_embedding_index_rejects_incomplete_cache(tmp_path: Path) -> Non
     torch.save(torch.ones(3, 2), tmp_path / "chunk-00000.pt")
     with pytest.raises(ValueError, match="first missing shard"):
         ShardedEmbeddingIndex.load(tmp_path, row_count=7, chunk_size=3)
+
+
+def test_probe_corpus_cache_repairs_only_corrupt_shard(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_encode(
+        _model: Any,
+        _tokenizer: Any,
+        texts: list[str],
+        *,
+        max_length: int,
+        device: torch.device,
+    ) -> torch.Tensor:
+        del max_length, device
+        calls.append(texts)
+        return torch.tensor([[float(text)] for text in texts])
+
+    monkeypatch.setattr(embedder_probe, "_encode", fake_encode)
+    arguments = {
+        "cache_dir": tmp_path / "cache",
+        "cache_identity": {"fixture": "v1"},
+        "row_count": 5,
+        "texts": ["1", "2", "3", "4", "5"],
+        "model": cast(Any, object()),
+        "tokenizer": object(),
+        "max_length": 8,
+        "batch_size": 2,
+        "device": torch.device("cpu"),
+    }
+    first = embedder_probe._ensure_corpus_embedding_cache(**arguments)
+    assert len(first.shards) == 3
+    calls.clear()
+    corrupt = tmp_path / "cache/chunk-00001.pt"
+    corrupt.write_bytes(b"")
+
+    repaired = embedder_probe._ensure_corpus_embedding_cache(**arguments)
+
+    assert calls == [["3", "4"]]
+    assert repaired.lookup([2])[2].item() == 3.0
+    assert corrupt.stat().st_size > 0
 
 
 def test_probe_retrieval_journal_recovers_only_truncated_final_row(tmp_path: Path) -> None:
