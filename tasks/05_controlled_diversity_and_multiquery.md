@@ -6,6 +6,23 @@
 
 `IMPLEMENTED`
 
+Aktualizacja 2026-08-05 (prospective v3 complete): wznawialny scoring obu
+ramion zakończył się `rc=0`; baseline i controlled mają po 8000 kompletnych
+wierszy z primary, reserved shadow i corpus retrieval. `select-compare`
+zakończył się `rc=0` na 2000 grupach i 16000 kandydatach. Wszystkie siedem
+prerejestrowanych bramek przeszło, w tym reserved-shadow Recall@1,
+sentence-level source hit, corpus round-trip@20, format, copy-risk, semantic
+diversity i duplicate rate. Niezmieniony selector wybrał 8000 rekordów,
+zmienił skład 1906/2000 grup i obniżył copy-risk z `0.07125` do `0.0465`.
+Raport ma status `prospective_complete`, decyzję
+`authorize_equal_budget_probe_inputs`, zgodne hashe frozen selektora i
+`final_tests_used=[]`:
+[`report.md`](../reports/measurements/task05/d01b_prospective_1_5b_v3/report.md).
+Decyzja dopuszcza wyłącznie materializację równobudżetowych wejść probe 1.5B
+hybrid-vs-W05. Nie dopuszcza jeszcze treningu probe, 4.5B, zmiany selektora ani
+otwarcia finalnego testu. Następny krok to materializacja i CPU walidacja wejść
+według istniejącego kontraktu probe; potem osobna decyzja o kosztownym treningu.
+
 Aktualizacja 2026-08-04 (prospective v2/v3): run v2 zatrzymał się fail-closed
 przed scoringiem. Controlled ukończył 8000/8000 query, natomiast W05
 7912/8000; 62 grupy nie osiągnęły exact K mimo 16 prób, a 4873 z 12785 prób
@@ -37,8 +54,9 @@ Pierwsza próba scoringu zatrzymała się przed pierwszym trwałym wierszem: min
 5 hard negative’ów z prospektywnej kohorty nie było propagowane do wspólnego
 scorera, który zachował domyślny wymóg 10. Poprawka przekazuje podpisane minimum
 z tożsamości generacji, sprawdza je względem polityki kohorty i pozostawia
-domyślne 10 dla pozostałych ścieżek. Następny krok to ponowny `score`, a potem
-`select-compare`.
+domyślne 10 dla pozostałych ścieżek. Poprawiony run `score` oraz późniejszy
+`select-compare` zakończyły się następnie `rc=0`; wynik i dalszy zakres opisuje
+aktualizacja z 2026-08-05 powyżej.
 
 Aktualizacja 2026-08-03 (prospektywna prerejestracja v2): właściciel projektu
 zaakceptował techniczny limit 16 prób na slot. Metadata-only audyt wykluczył
@@ -176,11 +194,13 @@ proxy 500/500 etykiet oraz 200/200 audytów koncepcji; agregacje mają status
 `complete`, ale nie zastępują oceny człowieka. Plan, wyniki, hashe i komendy:
 [`task05_natural_audits_2026-07-26.md`](../reports/plans/task05_natural_audits_2026-07-26.md).
 
-Do statusu `DONE` pozostają: niewidziana walidacja D01b, eksperymenty D00–D12
-poza D01 na wspólnych kandydatach i budżetach, ewentualne rzeczywiste ręczne
-oceny zmaterializowanych audytów 500 etykiet i 200 ekstrakcji koncepcji, human
-check oraz porównawcze probe embeddera z CI. Opisowa kalibracja naturalnych
-query jest zmaterializowana, ale nie zastępuje ręcznego pomiaru accuracy.
+Do statusu `DONE` pozostają: materializacja, osobno autoryzowane porównawcze
+probe embeddera z CI, eksperymenty D00–D12 poza D01 na wspólnych kandydatach i
+budżetach, ewentualne rzeczywiste ręczne oceny zmaterializowanych audytów 500
+etykiet i 200 ekstrakcji koncepcji oraz human check. Prospektywna walidacja
+D01b v3 jest ukończona. Opisowa kalibracja naturalnych query jest
+zmaterializowana, ale nie zastępuje ręcznego pomiaru accuracy. Finalnego testu
+nie wolno otworzyć przed zamrożeniem rzeczywistych finalistów.
 
 Aktualizacja 2026-08-02: pełny scoring i oba matched `compare` zakończyły się
 `rc=0`. Kontrolowane ramiona 1.5B i 4.5B zwiększyły różnorodność i przeszły
