@@ -21,15 +21,31 @@ planu; atomowy manifest jawnie zapisuje `planned_not_generated`,
 `generation_started=false`, `scoring_started=false` i `final_tests_used=[]`.
 Szablon pozostaje planning-only i nie autoryzuje modelu ani runu.
 
-Testy modułów, CLI i konfiguracji: 32 passed; Ruff, format i ukierunkowany
-mypy są czyste.
+Zaimplementowano kolejny model-free etap: ścisły `GeneratedCandidate` związany
+z `CandidateGenerationRequest`, pełne provenance generatora i decoding oraz
+oddzielne kontrakty primary, shadow, corpus retrieval, lexical/copy, focus,
+style i format evidence. Fail-closed assembler wymaga dokładnego pokrycia 1:1,
+sprawdza ID, plan, checkpoint/adapter, passage/split/cluster, przypiętych
+sędziów i ich revisions, ponownie liczy oba marginy, rozdziela surowe skale
+primary/shadow, odrzuca test i duplikaty po normalizacji. Zapisuje kanoniczny
+`CandidateEvidenceBundle` oraz manifest z hashami wejść, licznikami i statusem
+`evidence_assembled_not_ranked`. Assembler nie ma pola ani logiki
+`total_score`, nie kalibruje, nie ustala wag/progów i nie wybiera par.
+
+Dla nowego przyrostu wraz z wcześniejszym plannerem i selekcją ukierunkowany
+zestaw lekkich testów CPU ma wynik 22 passed; Ruff, format, ukierunkowany mypy,
+oba `--help` i `git diff --check` są czyste. Nie uruchomiono pełnego pytest ani
+benchmarków, aby nie konkurować z aktywnym `dev_confirm` Task 05.
 
 Nie uruchomiono generacji, scoringu modeli, materializacji właściwych
-preferencji ani audytu człowieka. `generate_candidates.py` i
+preferencji ani audytu człowieka. Nadal nie wykonano kalibracji, zamrożenia wag
+i progów, rankingu ani wyboru `chosen/rejected`. `generate_candidates.py` i
 `score_candidates.py` pozostają celowo niewdrożone, ponieważ ich poprawne
 kontrakty wykonawcze zależą od stabilnego checkpointu wybranego po Task 05 oraz
-prospektywnie przypiętych sędziów i progów. Nie należy zastępować ich atrapami
-ani uruchamiać kampanii przed osobną konfiguracją.
+prospektywnie przypiętych sędziów i progów. Nowe skrypty
+`validate_generated_candidates.py` i `assemble_candidate_evidence.py` jedynie
+walidują lub składają wcześniej policzone rekordy. Nie należy uruchamiać
+kampanii przed osobną konfiguracją.
 
 ## Cel
 
