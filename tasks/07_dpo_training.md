@@ -4,7 +4,25 @@
 
 ## Status
 
-`TODO`
+`IN PROGRESS`
+
+Gotowy jest wyłącznie model-free, przedeksperymentalny fundament. Obejmuje
+ścisłe kontrakty preference/continued-SFT/weighted-SFT, provenance Task 06,
+tożsamości modelu, adaptera i tokenizera, wcześniej policzone długości oraz
+reference logprobs, fail-closed walidatory, deterministyczny matched-budget
+planner trzech obowiązkowych ramion i czystą funkcję sigmoid DPO loss.
+Manifest planu ma status `planned_not_trained`, hashe wszystkich wejść oraz
+jawne flagi potwierdzające brak ładowania modeli, liczenia logprobów i treningu.
+
+Ukierunkowany zestaw 24 lekkich testów CPU przechodzi wraz z Ruff,
+formatowaniem i ukierunkowanym mypy. Sprawdzono `--help` trzech nowych
+skryptów. Nie uruchomiono pełnego pytest ani żadnego procesu modelowego, aby
+nie konkurować z aktywnym runem Task 05.
+
+Nie wykonano treningów, modelowych smoke testów, tokenizacji modelem,
+właściwego precompute reference logprobs, QLoRA/PEFT save-load, kalibracji
+wag, wyboru beta/LR, ewaluacji, wielu seedów ani żadnej bramki promocji.
+Wszystkie testy finalne pozostają zamknięte (`final_tests_used=[]`).
 
 ## Cel
 
