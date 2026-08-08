@@ -4,7 +4,21 @@
 
 ## Status
 
-`TODO`
+`IN PROGRESS`
+
+Zaimplementowano niezależny od wyniku Task 05 fundament: ścisłe kontrakty
+scored-candidate/preference z pełnymi składowymi i provenance,
+deterministyczną selekcję `top-vs-near-miss`/`top-vs-bottom`, kontrolę leakage
+passage i near-duplicate cluster, eksport TRL wraz z obowiązkowym zbiorem
+continued-SFT oraz eksport/import ślepego audytu A/B. Testy modułu, CLI i
+konfiguracji: 28 passed; Ruff, format i ukierunkowany mypy są czyste.
+
+Nie uruchomiono generacji, scoringu modeli, materializacji właściwych
+preferencji ani audytu człowieka. `generate_candidates.py` i
+`score_candidates.py` pozostają celowo niewdrożone, ponieważ ich poprawne
+kontrakty wykonawcze zależą od stabilnego checkpointu wybranego po Task 05 oraz
+prospektywnie przypiętych sędziów i progów. Nie należy zastępować ich atrapami
+ani uruchamiać kampanii przed osobną konfiguracją.
 
 ## Cel
 
