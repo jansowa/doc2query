@@ -6,6 +6,45 @@
 
 `IMPLEMENTED`
 
+Aktualizacja 2026-08-07 (dev-confirm batch-2 restart amendment): pierwsza
+próba pełnego D01b `dev_confirm` B4 zakończyła filter_negatives 7936/7936 w
+693.5 s, załadowała model treningowy i doszła do zalogowanego kroku 100/2000,
+po czym maszyna wyłączyła się przed checkpointem z kroku 200. Nie powstał
+kompletny model, wynik retrieval ani decyzja dev-confirm i nie otwarto finalnych
+testów. Przerwany namespace B4 pozostaje wyłącznie artefaktem wykonawczym.
+
+Przed restartem zapisano
+[`task05_d01b_probe_dev_confirm_batch2_amendment_2026-08-07.md`](../reports/decisions/task05_d01b_probe_dev_confirm_batch2_amendment_2026-08-07.md).
+Restart używa świeżego namespace `v2_batch2`, batch 2 i 4000 kroków zamiast
+batch 4 / 2000, zachowując dokładnie 4608000 tokenów, 7936 par, 1984
+dokumenty, K=4 i seedy 42/43/44. Checkpoint jest zapisywany co 100 kroków.
+Po zakończeniu HN0+filter/drop nieużywany primary reranker jest zwalniany z GPU
+przed załadowaniem trainable probe; nie zmienia to żadnego score ani wyboru
+par. Encode batch 32 i wszystkie zamrożone metryki/bramki pozostają bez zmian.
+Następny krok: `bash scripts/run_task05_d01b_probe_dev_confirm.sh preflight`,
+a po `status=verified` ta sama ścieżka `run-all`.
+
+Aktualizacja 2026-08-07 (probe dev-confirm preregistration): równobudżetowy
+`dev_screen` 1.5B hybrid-vs-W05 został domknięty. Końcowy
+`bash scripts/run_task05_d01b_probe_dev_screen.sh run-all` zakończył się
+`rc=0`, zapisał `status=dev_screen_complete`, `dev_confirm_authorized=true`
+i `final_tests_used=[]`. Decyzja P-04 ma status `eligible`: dolna granica 95%
+CI dla różnicy `corpus_ndcg_at_10` wynosi `0.012093457847827558` przy
+wymaganym minimum `+0.01`; `corpus_round_trip_at_20`,
+`sentence_level_source_hit` i `format_valid_rate` również przeszły swoje
+bramki non-inferiority. Dev-screen nie należy uruchamiać ponownie.
+
+Na tej podstawie prerejestrowano
+[`task05_d01b_probe_dev_confirm_v1.md`](../reports/decisions/task05_d01b_probe_dev_confirm_v1.md).
+`dev_confirm` używa całych równobudżetowych wejść: 7936 par, 1984 dokumentów,
+K=4 i 4608000 tokenów na ramię i seed. Zachowuje batch 4, max length 192,
+HN0+filter/drop i encode batch 32; zwiększa pełny budżet do 2000 kroków oraz
+uruchamia niezależne seedy 42/43/44. Ewaluacja pozostaje wyłącznie na
+`dev_intrinsic_rank10`; 4.5B i finalne testy są zamknięte.
+
+Następny krok operatorski:
+`bash scripts/run_task05_d01b_probe_dev_confirm.sh preflight`, a po poprawnym
+wyniku `bash scripts/run_task05_d01b_probe_dev_confirm.sh run-all`.
 Aktualizacja 2026-08-05 (encode-corpus batch 32 amendment): punktowa naprawa
 cache pozwoliła dokończyć całe ramię W05; istnieją jego kompletne 100/100
 shardów i `result.json`. Hybrid również ukończył trening 500/500 i rozpoczął

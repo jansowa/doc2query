@@ -14,11 +14,12 @@ import yaml
 
 from doc2query.evaluation.embedder_probe import ProbeRecipe
 from doc2query.evaluation.p04_decision import evaluate_p04_comparison
-from doc2query.evaluation.p05_guardrails import build_dev_screen_report
+from doc2query.evaluation.p05_guardrails import build_dev_confirm_report, build_dev_screen_report
 from doc2query.evaluation.statistical_contract import StatisticalContract
 from doc2query.utils.records import read_records, write_json
 
 D01B_PROBE_DEV_SCREEN_CONTRACT = "task05-d01b-probe-dev-screen-v1"
+D01B_PROBE_DEV_CONFIRM_CONTRACT = "task05-d01b-probe-dev-confirm-v1"
 
 
 def _file_sha256(path: Path) -> str:
@@ -289,6 +290,329 @@ def build_d01b_probe_dev_screen_decision(config_path: Path) -> dict[str, Any]:
         "preflight": preflight,
         "decision": decision,
         "dev_confirm_authorized": decision.get("status") == "eligible",
+        "four_point_five_b_authorized": False,
+        "final_tests_used": [],
+    }
+    write_json(measurement_root / "summary.json", summary)
+    return summary
+
+
+def preflight_d01b_probe_dev_confirm(config_path: Path) -> dict[str, Any]:
+    """Validate the full-budget three-seed dev-confirm contract before GPU training."""
+    config = _load_mapping(config_path)
+    if (
+        config.get("schema_version") != 1
+        or config.get("contract") != D01B_PROBE_DEV_CONFIRM_CONTRACT
+        or config.get("status") != "amended_before_restart"
+        or config.get("final_tests_used") != []
+    ):
+        raise ValueError("invalid D01b probe dev-confirm contract")
+    root = _root(config_path)
+    _pinned(root, cast(Mapping[str, Any], config["adr"]))
+    _pinned(root, cast(Mapping[str, Any], config["restart_amendment"]))
+
+    source_screen_section = cast(Mapping[str, Any], config["source_dev_screen"])
+    source_screen_path = _pinned(root, source_screen_section)
+    source_screen = json.loads(source_screen_path.read_text(encoding="utf-8"))
+    source_decision = source_screen.get("decision")
+    if (
+        source_screen.get("contract") != source_screen_section.get("contract")
+        or source_screen.get("status") != source_screen_section.get("status")
+        or source_screen.get("dev_confirm_authorized") is not True
+        or source_screen.get("four_point_five_b_authorized") is not False
+        or source_screen.get("final_tests_used") != []
+        or not isinstance(source_decision, Mapping)
+        or source_decision.get("stage") != "dev_screen"
+        or source_decision.get("status")
+        != source_screen_section.get("required_decision_status")
+        or source_decision.get("errors") != []
+    ):
+        raise ValueError("dev-screen result does not authorize D01b dev-confirm")
+
+    source_section = cast(Mapping[str, Any], config["source_materialization"])
+    if (
+        source_section.get("full_pair_count") != 7936
+        or source_section.get("full_unique_passage_count") != 1984
+        or source_section.get("queries_per_passage") != 4
+    ):
+        raise ValueError("source materialization budget metadata drifted")
+    source_path = _pinned(root, source_section)
+    source = json.loads(source_path.read_text(encoding="utf-8"))
+    if (
+        source.get("contract") != source_section.get("contract")
+        or source.get("status") != source_section.get("status")
+        or source.get("final_tests_used") != []
+        or source.get("training_started") is not False
+    ):
+        raise ValueError("source materialization is not a valid frozen probe input")
+
+    training = cast(Mapping[str, Any], config["training"])
+    seeds = training.get("seeds")
+    if (
+        training.get("stage") != "dev_confirm"
+        or seeds != [42, 43, 44]
+        or training.get("budget_fraction") != 1.0
+        or training.get("max_steps") != 4000
+        or training.get("batch_size") != 2
+        or training.get("max_length") != 192
+        or training.get("train_pair_count") != 7936
+        or training.get("train_unique_passages") != 1984
+        or training.get("queries_per_passage") != 4
+        or training.get("token_count") != 4_608_000
+        or training.get("definition_version") != "probe-budget-v1"
+        or training.get("checkpoint_interval_steps") != 100
+    ):
+        raise ValueError("D01b probe dev-confirm budget drifted")
+
+    recipe_path = _pinned(
+        root,
+        {"path": training["probe_recipe"], "sha256": training["probe_recipe_sha256"]},
+    )
+    comparison_path = _pinned(
+        root,
+        {
+            "path": training["comparison_contract"],
+            "sha256": training["comparison_contract_sha256"],
+        },
+    )
+    _pinned(
+        root,
+        {"path": training["primary_judge"], "sha256": training["primary_judge_sha256"]},
+    )
+    recipe = ProbeRecipe.from_dict(_load_mapping(recipe_path))
+    contract = StatisticalContract.load(comparison_path)
+    if recipe.seed != 42 or recipe.batch_size != 8 or recipe.max_length != 192:
+        raise ValueError("probe recipe execution budget drifted")
+    if (
+        recipe.negative_recipe.strategy != "hn0_filter"
+        or recipe.negative_recipe.false_negative_policy != "drop"
+    ):
+        raise ValueError("D01b probe requires HN0+filter/drop")
+
+    runtime_fingerprints: dict[str, str] = {}
+    assert isinstance(seeds, list)
+    for seed in seeds:
+        runtime_recipe = ProbeRecipe.from_dict(
+            asdict(recipe)
+            | {
+                "seed": int(seed),
+                "max_steps": int(training["max_steps"]),
+                "batch_size": int(training["batch_size"]),
+            }
+        )
+        if runtime_recipe.max_steps * runtime_recipe.batch_size * runtime_recipe.max_length * (
+            2 + runtime_recipe.negatives_per_example
+        ) != int(training["token_count"]):
+            raise ValueError(f"D01b probe dev-confirm token budget drifted for seed {seed}")
+        runtime_fingerprints[str(seed)] = runtime_recipe.fingerprint
+
+    evaluation = cast(Mapping[str, Any], config["evaluation"])
+    manifest_path = _pinned(
+        root,
+        {
+            "path": evaluation["frozen_manifest"],
+            "sha256": evaluation["frozen_manifest_sha256"],
+        },
+    )
+    corpus_path = _pinned(
+        root, {"path": evaluation["corpus"], "sha256": evaluation["corpus_sha256"]}
+    )
+    guardrails_path = _pinned(
+        root,
+        {
+            "path": evaluation["natural_guardrails"],
+            "sha256": evaluation["natural_guardrails_sha256"],
+        },
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    sets = manifest.get("sets")
+    subset = sets.get(str(evaluation["subset"])) if isinstance(sets, Mapping) else None
+    if (
+        not isinstance(subset, Mapping)
+        or subset.get("id_count") != evaluation["subset_id_count"]
+        or subset.get("id_list_sha256") != evaluation["subset_id_list_sha256"]
+        or evaluation.get("subset") != "dev_intrinsic_rank10"
+        or evaluation.get("bootstrap_samples") != 10_000
+        or evaluation.get("bootstrap_seed") != 20_260_721
+        or evaluation.get("fixed_seed_aggregation")
+        != "per_query_mean_before_query_resampling"
+        or evaluation.get("final_tests_forbidden") is not True
+    ):
+        raise ValueError("frozen dev-confirm evaluation contract drifted")
+    evaluation_ids = {str(row["id"]) for row in read_records(root / str(subset["id_path"]))}
+    if len(evaluation_ids) != int(evaluation["subset_id_count"]):
+        raise ValueError("frozen dev evaluation ID count drifted")
+    guardrail_ids = {str(row["example_id"]) for row in read_records(guardrails_path)}
+    if guardrail_ids != evaluation_ids:
+        raise ValueError("natural guardrails do not cover the exact dev panel")
+
+    arms = cast(Mapping[str, Any], config["arms"])
+    expected_runs = {
+        "control": {
+            "42": "D01B-PROBE-W05-DEV-CONFIRM-S42-B2",
+            "43": "D01B-PROBE-W05-DEV-CONFIRM-S43-B2",
+            "44": "D01B-PROBE-W05-DEV-CONFIRM-S44-B2",
+        },
+        "variant": {
+            "42": "D01B-PROBE-HYBRID-DEV-CONFIRM-S42-B2",
+            "43": "D01B-PROBE-HYBRID-DEV-CONFIRM-S43-B2",
+            "44": "D01B-PROBE-HYBRID-DEV-CONFIRM-S44-B2",
+        },
+    }
+    expected_comparison_ids = {
+        "control": "D01B-PROBE-W05-DEV-CONFIRM-B2",
+        "variant": "D01B-PROBE-HYBRID-DEV-CONFIRM-B2",
+    }
+    expected_generators = {
+        "control": "W05-1.5B-50K-8GB",
+        "variant": "D01B-PROSPECTIVE-V3-HYBRID-1.5B-S42",
+    }
+    observed: dict[str, Any] = {}
+    ordered_passages: dict[str, list[str]] = {}
+    for role in ("control", "variant"):
+        arm = cast(Mapping[str, Any], arms[role])
+        if (
+            arm.get("comparison_id") != expected_comparison_ids[role]
+            or arm.get("generator_id") != expected_generators[role]
+            or arm.get("runs") != expected_runs[role]
+        ):
+            raise ValueError(f"D01b dev-confirm {role} identity drifted")
+        input_path = _pinned(root, arm, path_key="input")
+        rows = list(read_records(input_path))
+        if len(rows) != int(source_section["full_pair_count"]):
+            raise ValueError(f"{role} full probe input count drifted")
+        if len({str(row.get("pair_id", "")) for row in rows}) != len(rows):
+            raise ValueError(f"{role} probe pair identities are not unique")
+        counts = Counter(str(row.get("source_passage_id", "")) for row in rows)
+        if (
+            len(counts) != int(training["train_unique_passages"])
+            or set(counts.values()) != {int(training["queries_per_passage"])}
+        ):
+            raise ValueError(f"{role} full probe input is not uniform exact K")
+        if any(
+            row.get("example_id") != row.get("pair_id")
+            or row.get("generated") != row.get("query")
+            or row.get("mode") != "deterministic"
+            or row.get("candidate_index") != 0
+            or not isinstance(row.get("positives"), list)
+            or not row.get("hard_negatives")
+            for row in rows
+        ):
+            raise ValueError(f"{role} full input is incompatible with the frozen probe loader")
+        source_ids = {str(row["source_example_id"]) for row in rows}
+        if source_ids & evaluation_ids:
+            raise ValueError(f"{role} full training input overlaps the dev evaluation panel")
+        ordered_passages[role] = list(counts)
+        observed[role] = {
+            "input": str(input_path.relative_to(root)),
+            "sha256": _file_sha256(input_path),
+            "full_pair_count": len(rows),
+            "full_unique_passages": len(counts),
+            "queries_per_passage": next(iter(set(counts.values()))),
+        }
+    if ordered_passages["control"] != ordered_passages["variant"]:
+        raise ValueError("dev-confirm arms do not use the same ordered passage cohort")
+
+    outputs = cast(Mapping[str, Any], config["outputs"])
+    if outputs != {
+        "run_root": "runs/task05_d01b_probe_dev_confirm_v2_batch2",
+        "measurement_root": "reports/measurements/task05/d01b_probe_dev_confirm_v2_batch2",
+        "log_root": "logs/task05/d01b_probe_dev_confirm_v2_batch2",
+    }:
+        raise ValueError("D01b dev-confirm output namespace drifted")
+    execution = cast(Mapping[str, Any], config["execution"])
+    if execution != {
+        "evaluation_encode_batch_size": 8,
+        "retrieval_query_batch_size": 512,
+        "retrieval_device": "cuda",
+    }:
+        raise ValueError("D01b dev-confirm execution settings drifted")
+    authorization = cast(Mapping[str, Any], config["authorization"])
+    if authorization != {
+        "dev_screen_training": False,
+        "dev_confirm_training": True,
+        "four_point_five_b": False,
+        "final_tests": False,
+    }:
+        raise ValueError("D01b dev-confirm authorization scope drifted")
+
+    return {
+        "schema_version": 1,
+        "contract": config["contract"],
+        "status": "verified",
+        "config_sha256": _file_sha256(config_path),
+        "source_dev_screen_sha256": _file_sha256(source_screen_path),
+        "arms": observed,
+        "seeds": seeds,
+        "comparison_contract": contract.reference(),
+        "base_probe_recipe_fingerprint": recipe.fingerprint,
+        "probe_recipe_fingerprints": runtime_fingerprints,
+        "evaluation_subset": evaluation["subset"],
+        "evaluation_query_count": len(evaluation_ids),
+        "corpus": str(corpus_path.relative_to(root)),
+        "final_tests_used": [],
+    }
+
+
+def build_d01b_probe_dev_confirm_decision(config_path: Path) -> dict[str, Any]:
+    """Build the full-budget three-seed P-04 dev-confirm report and decision."""
+    preflight = preflight_d01b_probe_dev_confirm(config_path)
+    config = _load_mapping(config_path)
+    root = _root(config_path)
+    training = cast(Mapping[str, Any], config["training"])
+    evaluation = cast(Mapping[str, Any], config["evaluation"])
+    outputs = cast(Mapping[str, Any], config["outputs"])
+    arms = cast(Mapping[str, Any], config["arms"])
+    run_root = root / str(outputs["run_root"])
+    measurement_root = root / str(outputs["measurement_root"])
+    control = cast(Mapping[str, Any], arms["control"])
+    variant = cast(Mapping[str, Any], arms["variant"])
+    control_runs = cast(Mapping[str, Any], control["runs"])
+    variant_runs = cast(Mapping[str, Any], variant["runs"])
+    seeds = cast(list[int], training["seeds"])
+
+    control_results: dict[int, dict[str, Any]] = {}
+    variant_results: dict[int, dict[str, Any]] = {}
+    control_paths: dict[int, Path] = {}
+    variant_paths: dict[int, Path] = {}
+    for seed in seeds:
+        control_dir = run_root / str(control_runs[str(seed)])
+        variant_dir = run_root / str(variant_runs[str(seed)])
+        control_results[seed] = json.loads(
+            (control_dir / "result.json").read_text(encoding="utf-8")
+        )
+        variant_results[seed] = json.loads(
+            (variant_dir / "result.json").read_text(encoding="utf-8")
+        )
+        control_paths[seed] = control_dir / "corpus_retrieval_per_query.jsonl"
+        variant_paths[seed] = variant_dir / "corpus_retrieval_per_query.jsonl"
+
+    contract = StatisticalContract.load(root / str(training["comparison_contract"]))
+    guardrails = root / str(evaluation["natural_guardrails"])
+    report = build_dev_confirm_report(
+        arm_id=str(variant["comparison_id"]),
+        control_id=str(control["comparison_id"]),
+        arm_results=variant_results,
+        control_results=control_results,
+        arm_per_query_paths=variant_paths,
+        control_per_query_paths=control_paths,
+        arm_guardrails_path=guardrails,
+        control_guardrails_path=guardrails,
+        contract=contract,
+    )
+    decision = evaluate_p04_comparison(
+        report, control_manifest=control_results[seeds[0]], contract=contract
+    )
+    measurement_root.mkdir(parents=True, exist_ok=True)
+    write_json(measurement_root / "comparison_report.json", report)
+    write_json(measurement_root / "decision.json", decision)
+    summary = {
+        "schema_version": 1,
+        "contract": config["contract"],
+        "status": "dev_confirm_complete",
+        "preflight": preflight,
+        "decision": decision,
+        "retained_for_finalist_freeze": decision.get("status") == "eligible",
         "four_point_five_b_authorized": False,
         "final_tests_used": [],
     }

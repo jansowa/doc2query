@@ -178,3 +178,189 @@ def build_dev_screen_report(
             ),
         },
     }
+
+
+def build_dev_confirm_report(
+    *,
+    arm_id: str,
+    control_id: str,
+    arm_results: Mapping[int, Mapping[str, Any]],
+    control_results: Mapping[int, Mapping[str, Any]],
+    arm_per_query_paths: Mapping[int, Path],
+    control_per_query_paths: Mapping[int, Path],
+    arm_guardrails_path: Path,
+    control_guardrails_path: Path,
+    contract: StatisticalContract,
+) -> dict[str, Any]:
+    """Build the fixed-seed P-04 dev-confirm report without pooling seed variance."""
+    seed_sets = (
+        set(arm_results),
+        set(control_results),
+        set(arm_per_query_paths),
+        set(control_per_query_paths),
+    )
+    if not seed_sets[0] or any(seeds != seed_sets[0] for seeds in seed_sets[1:]):
+        raise ValueError("dev-confirm requires the same non-empty seed set for both arms")
+    seeds = sorted(seed_sets[0])
+
+    guardrail_metrics = (
+        "corpus_round_trip_at_20",
+        "sentence_level_source_hit",
+        "format_valid_rate",
+    )
+    arm_guardrails = {
+        metric: _metric_map(arm_guardrails_path, metric) for metric in guardrail_metrics
+    }
+    control_guardrails = {
+        metric: _metric_map(control_guardrails_path, metric) for metric in guardrail_metrics
+    }
+
+    arm_by_seed: dict[int, dict[str, dict[str, float]]] = {}
+    control_by_seed: dict[int, dict[str, dict[str, float]]] = {}
+    common_budget: dict[str, Any] | None = None
+    common_ids: set[str] | None = None
+    per_seed: list[dict[str, Any]] = []
+    control_per_seed: list[dict[str, Any]] = []
+
+    for seed in seeds:
+        arm_result = arm_results[seed]
+        control_result = control_results[seed]
+        budget = arm_result.get("comparison_budget")
+        control_budget = control_result.get("comparison_budget")
+        if not isinstance(budget, Mapping) or budget != control_budget:
+            raise ValueError(f"P-04 dev-confirm seed {seed} has a comparison-budget mismatch")
+        if common_budget is None:
+            common_budget = dict(budget)
+        elif dict(budget) != common_budget:
+            raise ValueError("P-04 dev-confirm comparison budget differs across seeds")
+        if arm_result.get("statistical_contract") != contract.reference():
+            raise ValueError(f"arm seed {seed} statistical contract does not match P-04")
+        if control_result.get("statistical_contract") != contract.reference():
+            raise ValueError(f"control seed {seed} statistical contract does not match P-04")
+
+        arm_values = {
+            "corpus_ndcg_at_10": _metric_map(
+                arm_per_query_paths[seed], "corpus_ndcg_at_10"
+            ),
+            **arm_guardrails,
+        }
+        control_values = {
+            "corpus_ndcg_at_10": _metric_map(
+                control_per_query_paths[seed], "corpus_ndcg_at_10"
+            ),
+            **control_guardrails,
+        }
+        id_sets = [set(values) for values in (*arm_values.values(), *control_values.values())]
+        if any(ids != id_sets[0] for ids in id_sets[1:]):
+            raise ValueError(
+                f"P-04 dev-confirm seed {seed} requires identical query IDs for every metric"
+            )
+        if common_ids is None:
+            common_ids = id_sets[0]
+        elif id_sets[0] != common_ids:
+            raise ValueError("P-04 dev-confirm query IDs differ across training seeds")
+
+        arm_by_seed[seed] = arm_values
+        control_by_seed[seed] = control_values
+        arm_means = {metric: fmean(values.values()) for metric, values in arm_values.items()}
+        control_means = {
+            metric: fmean(values.values()) for metric, values in control_values.items()
+        }
+        per_seed.append({"seed": seed, "metrics": arm_means})
+        control_per_seed.append({"seed": seed, "metrics": control_means})
+
+    assert common_budget is not None
+    assert common_ids is not None
+    ids = sorted(common_ids)
+
+    arm_query_means: dict[str, dict[str, float]] = {}
+    control_query_means: dict[str, dict[str, float]] = {}
+    for metric in REQUIRED_METRICS:
+        arm_query_means[metric] = {
+            query_id: fmean(arm_by_seed[seed][metric][query_id] for seed in seeds)
+            for query_id in ids
+        }
+        control_query_means[metric] = {
+            query_id: fmean(control_by_seed[seed][metric][query_id] for seed in seeds)
+            for query_id in ids
+        }
+
+    bootstraps = {
+        metric: _paired_bootstrap_pcg64(
+            control_query_means[metric],
+            arm_query_means[metric],
+            samples=10_000,
+            seed=20_260_721,
+        )
+        for metric in REQUIRED_METRICS
+    }
+    training_seed_summary = {
+        metric: _summary(
+            [
+                float(row["metrics"][metric])
+                for row in per_seed
+                if isinstance(row.get("metrics"), Mapping)
+            ]
+        )
+        for metric in REQUIRED_METRICS
+    }
+    control_training_seed_summary = {
+        metric: _summary(
+            [
+                float(row["metrics"][metric])
+                for row in control_per_seed
+                if isinstance(row.get("metrics"), Mapping)
+            ]
+        )
+        for metric in REQUIRED_METRICS
+    }
+
+    return {
+        "schema_version": 1,
+        "arm_id": arm_id,
+        "control_id": control_id,
+        "stage": "dev_confirm",
+        "evaluation_sets": ["dev_intrinsic"],
+        "data_sources": ["dev_intrinsic"],
+        "actual_frozen_subset": "dev_intrinsic_rank10",
+        "final_tests_used": [],
+        "statistical_contract": contract.reference(),
+        "comparison_budget": common_budget,
+        "per_seed": per_seed,
+        "training_seed_summary": training_seed_summary,
+        "control_per_seed": control_per_seed,
+        "control_training_seed_summary": control_training_seed_summary,
+        "paired_query_bootstrap": {
+            "unit": "query",
+            "paired": True,
+            "query_id_fingerprint": query_id_fingerprint(ids),
+            "query_count": len(ids),
+            "includes_training_seed_variance": False,
+            "fixed_training_seed_aggregation": "per_query_mean_before_query_resampling",
+            "samples": 10_000,
+            "seed": 20_260_721,
+            "rng": "numpy.random.PCG64",
+            "metrics": {
+                metric: {
+                    "difference": result["difference"],
+                    "ci_low": result["ci95_low"],
+                    "ci_high": result["ci95_high"],
+                    "variant_win_fraction": result["variant_win_fraction"],
+                }
+                for metric, result in bootstraps.items()
+            },
+        },
+        "guardrail_semantics": {
+            "corpus_round_trip_at_20": (
+                "known-positive hit@20 on the shared frozen natural dev query; "
+                "frozen independently of probe-training seed"
+            ),
+            "sentence_level_source_hit": (
+                "frozen-primary best source sentence beats the hardest inherited negative; "
+                "shared natural dev query"
+            ),
+            "format_valid_rate": (
+                "single-query format validity of the shared frozen natural dev query"
+            ),
+        },
+    }

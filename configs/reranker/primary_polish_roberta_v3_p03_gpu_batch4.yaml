@@ -1,0 +1,8 @@
+# Frozen P-03 judge identity with conservative GPU execution settings for Task 05 dev-confirm.
+name_or_path: sdadas/polish-reranker-roberta-v3
+revision: e6471da541f4e7be33845b6d57248a8d8bde27e8
+license: gemma
+max_length: 8192
+batch_size: 4
+device: cuda
+trust_remote_code: false

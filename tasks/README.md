@@ -38,7 +38,7 @@ uruchomiono.
 | [02](02_reranker_and_reward_proxies.md) | Zamrożone rerankery i proxy nagrody | `IMPLEMENTED` | Integracja, reward proxies i testy są gotowe; primary zmierzył pełny frozen dev, a query-macro próg Youdena `possible_false_negative` jest przypięty bez użycia testu. Bramka HN domierzyła primary/shadow na 775 wspólnych dev query z 10 negatywami; nadal pozostał pełny benchmark obu sędziów na całym dev/test i wymaganych slice'ach. |
 | [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | S07 jest kompletną, nieporównywalną budżetowo diagnostyką bez promocji. P-06 mass rescoring jest `SUPERSEDED`. Właściciel świadomie anulował ręczne P06-T i zaakceptował resztkowe ryzyko tłumaczeń na podstawie wcześniejszego udanego treningu embeddera; frozen train i próg `>=23.50` pozostają bez zmian. Nie kończyć lokalnego scoringu ani trenować drop/weighted. |
 | [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IMPLEMENTED` | P-01–P-05 i pełny S07 Harness/probe są gotowe. Pełna dev-only bramka HN0–HN3 ukończyła 775 wspólnych legalnych query i utrzymała HN0+filter/drop z powodu braku zgodnej primary/shadow podstawy do promocji nowego minera; nie otwarto testów finalnych. Artefakt S07 pozostaje `comparison_eligible=false`; pozostały porównywalne probe i testy finalistów. |
-| [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `IMPLEMENTED` | Prospective D01b v3 i wszystkie 7 bramek są kompletne; copy-risk spadł z `0.07125` do `0.0465`. Equal-budget probe inputs 1.5B hybrid-vs-W05 mają po 7936 par, 1984 dokumenty i K=4. W05 batch-4 jest kompletny wraz z `result.json`; hybrid ukończył trening 500/500 i ma 42/100 poprawnych shardów korpusu, po czym maszyna wyłączyła się podczas `encode_corpus`. Execution-only amendment zmniejsza encode batch 64→32 bez zmiany zapisanego `chunk_size=24064`, treningu, metryk ani bramek. Walidacja cache zachowa całe W05 i 42 shardy hybrid; wznowienie zacznie kodowanie od sharda 43/100. CPU preflight przeszedł; następny krok to ta sama komenda `run-all`, a compare nie został wykonany. `dev_confirm` wymaga wyniku `eligible` i osobnej zgody; 4.5B oraz finalne testy pozostają zamknięte (`final_tests_used=[]`). Groq proxy ukończył 500/500 etykiet i 200/200 audytów; agreement człowieka pozostaje `NOT MEASURED`, a D00–D12 poza D01 nie są zmierzone. |
+| [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `IMPLEMENTED` | Prospective D01b v3 i wszystkie 7 bramek są kompletne; copy-risk spadł z `0.07125` do `0.0465`. Equal-budget probe `dev_screen` 1.5B hybrid-vs-W05 zakończył się `rc=0` i decyzją `eligible`: dolna granica 95% CI dla `corpus_ndcg_at_10` wynosi `0.012093457847827558` przy progu `+0.01`, a wszystkie guardraile przeszły. Pierwsza próba pełnego `dev_confirm` B4 została przerwana przez wyłączenie maszyny po zakończeniu filteringu 7936/7936 i po zalogowanym kroku 100/2000, przed pierwszym checkpointem. Prospektywny restart amendment zamraża B2 / 4000 kroków / checkpoint co 100 kroków przy niezmienionym budżecie 4608000 tokenów, seedach 42/43/44 i świeżym namespace `v2_batch2`; następny krok to CPU preflight, a potem `run-all`. 4.5B oraz finalne testy pozostają zamknięte (`final_tests_used=[]`). Groq proxy ukończył 500/500 etykiet i 200/200 audytów; agreement człowieka pozostaje `NOT MEASURED`, a D00–D12 poza D01 nie są zmierzone. |
 | [06](06_candidate_scoring_and_preference_data.md) | Scoring kandydatów i dane preferencyjne | `TODO` | Wymaga stabilnego checkpointu SFT, ukończonego Harness v1.1 oraz Task 02 i 05. |
 | [07](07_dpo_training.md) | DPO i continued-SFT control | `TODO` | Wymaga danych preferencyjnych z Task 06. |
 | [08](08_grpo_multiobjective_rl.md) | Wielokryterialny GRPO/RL | `OPTIONAL / BLOCKED` | Uruchamiać wyłącznie po spełnieniu bramki i zapisaniu decyzji `reports/decisions/enable_grpo.md`. |
@@ -86,31 +86,38 @@ backlogiem. Zakres P-xx został przeniesiony do wskazanych plików zadań.
    poprawę shadow Recall@1, ale nie może autoryzować probe na tym samym dev.
    Prospective v3 uruchomiło niezmieniony selektor na niewidzianej kohorcie
    2000 rekordów: wszystkie prerejestrowane bramki przeszły, a decyzja
-   `authorize_equal_budget_probe_inputs` dopuszcza materializację równobudżetowych
-   wejść 1.5B hybrid-vs-W05. Nie jest to zgoda na trening probe, 4.5B ani
-   otwarcie finalnych testów. Pozostałe D00–D12 nadal wymagają własnych
-   pomiarów i bramek.
+   `authorize_equal_budget_probe_inputs` doprowadziła do równobudżetowego
+   `dev_screen` 1.5B hybrid-vs-W05. Run zakończył się `rc=0`; hybrid uzyskał
+   status `eligible`, z dolną granicą 95% CI dla `corpus_ndcg_at_10`
+   `0.012093457847827558` przy wymaganym minimum `+0.01`, a wszystkie
+   prerejestrowane guardraile non-inferiority przeszły. Osobny ADR
+   `task05-d01b-probe-dev-confirm-v1` dopuszcza teraz wyłącznie pełnobudżetowy
+   `dev_confirm` na seedach 42/43/44. Nie otwiera 4.5B ani finalnych testów.
+   Pozostałe D00–D12 nadal wymagają własnych pomiarów i bramek.
 5. **Po Task 05:** P-08 w Task 06 i Task 07.
 6. **Kampania:** Task 09 dopiero po wcześniejszych etapach; Task 10 dopiero po
    finalnym ADR.
 7. **Opcjonalne:** Task 08, P-09 i Task 11 wyłącznie po własnych bramkach.
 
-Równobudżetowe wejścia probe 1.5B hybrid-vs-W05 są zmaterializowane, a osobny
-prospektywny ADR `task05-d01b-probe-dev-screen-v1` przeszedł CPU preflight.
-Po naprawie wejścia kolejny run został przerwany przez wyłączenie maszyny
-podczas W05. Zachowano checkpoint batch-8 z kroku 50, ale amendment batch-4
-nie może go wznowić. Nowy protokół używa batch 4 i 500 kroków w osobnych
-katalogach, zachowując równy budżet 1 152 000 tokenów. CPU preflight nowego
-kontraktu zakończył się `rc=0`. Batch-4 W05 jest już kompletny, a punktowa
-naprawa jego cache zadziałała. Hybrid ukończył trening i 42/100 shardów przed
-następnym wyłączeniem maszyny. Encode batch zmniejszono wykonawczo z 64 do 32;
-istniejący rozmiar shardów i wszystkie 42 poprawne pliki pozostają bez zmian.
-CPU preflight zakończył się `rc=0`; najbliższy punkt wejścia to ponowienie
-dev-only runu:
-`bash scripts/run_task05_d01b_probe_dev_screen.sh run-all`. Nie przelicza on
-generacji/scoringu generatora i nie używa finalnych testów. `dev_confirm` wolno
-rozważyć tylko po statusie `eligible` i osobnej aktualizacji stanu; 4.5B oraz
-finalne testy pozostają zamknięte.
+Równobudżetowy D01b probe `dev_screen` 1.5B hybrid-vs-W05 jest ukończony.
+Końcowy `run-all` zakończył się `rc=0`, zapisał `dev_screen_complete`,
+`dev_confirm_authorized=true` i `final_tests_used=[]`. Hybrid uzyskał
+`eligible`; dolna granica 95% CI dla `corpus_ndcg_at_10` wynosi
+`0.012093457847827558` przy progu `+0.01`, a wszystkie guardraile przeszły.
+Nie uruchamiać ponownie dev-screen.
+
+Osobny prospektywny ADR `task05-d01b-probe-dev-confirm-v1` zamroził pełny
+`dev_confirm`. Pierwsza próba B4 została przerwana sprzętowo po filteringu
+7936/7936 i kroku 100/2000, przed pierwszym checkpointem i przed jakimkolwiek
+wynikiem dev-confirm. Amendment
+`task05_d01b_probe_dev_confirm_batch2_amendment_2026-08-07.md` wymaga świeżego
+restartu: pełne 7936 par / 1984 dokumenty / K=4, batch 2, 4000 kroków,
+checkpoint co 100 kroków, seedy 42/43/44, ten sam budżet 4608000 tokenów,
+ten sam frozen dev i ten sam P-04. Najbliższy punkt wejścia to:
+`bash scripts/run_task05_d01b_probe_dev_confirm.sh preflight`, a po poprawnym
+preflight:
+`bash scripts/run_task05_d01b_probe_dev_confirm.sh run-all`.
+4.5B i wszystkie finalne testy pozostają zamknięte.
 Nie uruchamiać pełnego
 `scripts/score_train_margins.py`, nie ustalać lokalnego progu i nie trenować
 ordinary/drop/weighted bez nowego prospektywnego ADR opartego na ręcznie
@@ -120,8 +127,8 @@ Nie należy ponownie uruchamiać
 decyzje są kompletne. I02/I04/I05 pozostają odroczone, S00 jest zmierzone,
 S07 diagnostycznie kompletne, P-06 mass rescoring zamknięte jako
 `SUPERSEDED`, ręczne P06-T świadomie anulowano, a
-`dev_confirm`, niewykonane D00–D12, Task 06 i wszystkie testy finalne pozostają
-zamknięte. D01 jest dopuszczony wyłącznie na train/dev.
+niewykonane D00–D12, Task 06 i wszystkie testy finalne pozostają zamknięte.
+D01 `dev_confirm` jest dopuszczony wyłącznie na train/dev.
 
 ## Kolejność bazowa
 

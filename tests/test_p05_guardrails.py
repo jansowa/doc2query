@@ -7,7 +7,10 @@ from typing import Any
 import pytest
 
 from doc2query.evaluation.p04_decision import evaluate_p04_comparison
-from doc2query.evaluation.p05_guardrails import build_dev_screen_report
+from doc2query.evaluation.p05_guardrails import (
+    build_dev_confirm_report,
+    build_dev_screen_report,
+)
 from doc2query.evaluation.statistical_contract import StatisticalContract, build_budget_manifest
 
 
@@ -84,3 +87,72 @@ def test_build_report_rejects_unpaired_guardrails(tmp_path: Path) -> None:
             control_guardrails_path=paths[3],
             contract=contract,
         )
+
+
+def test_build_dev_confirm_report_separates_seed_variance_from_query_bootstrap(
+    tmp_path: Path,
+) -> None:
+    contract = StatisticalContract.load(Path("configs/evaluation/comparison_contract_v1.yaml"))
+    manifest = {
+        "statistical_contract": contract.reference(),
+        "comparison_budget": build_budget_manifest(
+            token_count=400, pair_count=40, unique_passage_count=10, queries_per_passage=4
+        ),
+    }
+    ids = ["a", "b", "c"]
+    arm_paths: dict[int, Path] = {}
+    control_paths: dict[int, Path] = {}
+    arm_results: dict[int, dict[str, Any]] = {}
+    control_results: dict[int, dict[str, Any]] = {}
+    for offset, seed in enumerate((42, 43, 44)):
+        control_path = tmp_path / f"control-{seed}.jsonl"
+        arm_path = tmp_path / f"arm-{seed}.jsonl"
+        _write(
+            control_path,
+            [
+                {"example_id": key, "corpus_ndcg_at_10": 0.10 + offset * 0.005}
+                for key in ids
+            ],
+        )
+        _write(
+            arm_path,
+            [
+                {"example_id": key, "corpus_ndcg_at_10": 0.13 + offset * 0.005}
+                for key in ids
+            ],
+        )
+        control_paths[seed] = control_path
+        arm_paths[seed] = arm_path
+        control_results[seed] = dict(manifest)
+        arm_results[seed] = dict(manifest)
+
+    guardrails = tmp_path / "guardrails.jsonl"
+    shared = {
+        "corpus_round_trip_at_20": 1.0,
+        "sentence_level_source_hit": 1.0,
+        "format_valid_rate": 1.0,
+    }
+    _write(guardrails, [{"example_id": key, **shared} for key in ids])
+
+    report = build_dev_confirm_report(
+        arm_id="arm-confirm",
+        control_id="control-confirm",
+        arm_results=arm_results,
+        control_results=control_results,
+        arm_per_query_paths=arm_paths,
+        control_per_query_paths=control_paths,
+        arm_guardrails_path=guardrails,
+        control_guardrails_path=guardrails,
+        contract=contract,
+    )
+    decision = evaluate_p04_comparison(
+        report, control_manifest=control_results[42], contract=contract
+    )
+    assert decision["status"] == "eligible"
+    assert [row["seed"] for row in report["per_seed"]] == [42, 43, 44]
+    assert report["training_seed_summary"]["corpus_ndcg_at_10"]["sample_sd"] > 0
+    assert report["paired_query_bootstrap"]["includes_training_seed_variance"] is False
+    assert (
+        report["paired_query_bootstrap"]["fixed_training_seed_aggregation"]
+        == "per_query_mean_before_query_resampling"
+    )

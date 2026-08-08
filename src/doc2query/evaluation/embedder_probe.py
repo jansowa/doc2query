@@ -1524,6 +1524,14 @@ def run_probe_experiment(
             documents_path=documents_path,
             progress=(_progress_callback("filter_negatives") if _progress_enabled() else None),
         )
+        release_scorer = getattr(primary_scorer, "release", None)
+        if callable(release_scorer):
+            release_scorer()
+            primary_scorer = None
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            _stage("released primary judge CUDA memory before probe training")
         train_summary = train_probe(
             pairs,
             recipe=recipe,

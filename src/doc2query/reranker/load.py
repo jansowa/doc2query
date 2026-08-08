@@ -39,12 +39,24 @@ class TransformersReranker:
         ).to(config.device)
         self._model.eval()
         self._model.requires_grad_(False)
+        self._released = False
 
     @property
     def name(self) -> str:
         return self.config.name_or_path
 
+    def release(self) -> None:
+        """Release the frozen scorer after one-shot filtering is complete."""
+        if self._released:
+            return
+        del self._model
+        self._released = True
+        if self._torch.cuda.is_available():
+            self._torch.cuda.empty_cache()
+
     def score_pairs(self, pairs: Sequence[tuple[str, str]]) -> list[float]:
+        if self._released:
+            raise RuntimeError("frozen reranker was released after one-shot scoring")
         scores: list[float] = []
         with self._torch.inference_mode():
             for start in range(0, len(pairs), self.config.batch_size):

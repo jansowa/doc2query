@@ -1,0 +1,99 @@
+schema_version: 1
+contract: task05-d01b-probe-dev-confirm-v1
+status: amended_before_restart
+final_tests_used: []
+
+adr:
+  path: reports/decisions/task05_d01b_probe_dev_confirm_v1.md
+  sha256: 92fbd108f89ef236ba34d956a1730879717a59b1bbfcd2f1d88b1aeda521691c
+
+restart_amendment:
+  path: reports/decisions/task05_d01b_probe_dev_confirm_encodebatch8_amendment_2026-08-08.md
+  sha256: d7adf78e46ef097b97c3a4f7420f1238ed0d7e5550e6cc9a1189daf42a8db669
+
+source_dev_screen:
+  path: reports/measurements/task05/d01b_probe_dev_screen_v2_batch4/summary.json
+  sha256: 040a9791e6464e60e4418c85d80144a9cd2f7d7f91b95417357d67dc59b706c0
+  contract: task05-d01b-probe-dev-screen-v1
+  status: dev_screen_complete
+  required_decision_status: eligible
+
+source_materialization:
+  path: artifacts/task05/d01b_prospective_1_5b_v3/probe_inputs/manifest.json
+  sha256: 477086cfb6c43fed1a3edaaaeb975f2b8f559a6bfeebfa25df3c01a822da6409
+  contract: task05-d01b-prospective-probe-inputs-v1
+  status: materialized_and_cpu_validated
+  full_pair_count: 7936
+  full_unique_passage_count: 1984
+  queries_per_passage: 4
+
+arms:
+  control:
+    comparison_id: D01B-PROBE-W05-DEV-CONFIRM-B2
+    generator_id: W05-1.5B-50K-8GB
+    input: artifacts/task05/d01b_prospective_1_5b_v3/probe_inputs/w05_baseline.jsonl
+    sha256: c0c2bdc8bf1d99772bdc760dcce8225e56f44bbc785b759fa7dd2ac8752260b6
+    runs:
+      "42": D01B-PROBE-W05-DEV-CONFIRM-S42-B2
+      "43": D01B-PROBE-W05-DEV-CONFIRM-S43-B2
+      "44": D01B-PROBE-W05-DEV-CONFIRM-S44-B2
+  variant:
+    comparison_id: D01B-PROBE-HYBRID-DEV-CONFIRM-B2
+    generator_id: D01B-PROSPECTIVE-V3-HYBRID-1.5B-S42
+    input: artifacts/task05/d01b_prospective_1_5b_v3/probe_inputs/selected_hybrid.jsonl
+    sha256: ac9e7b3b76822fdd1ca2000264609b3db0ae74cb474d2e13434ba7e27c2a626d
+    runs:
+      "42": D01B-PROBE-HYBRID-DEV-CONFIRM-S42-B2
+      "43": D01B-PROBE-HYBRID-DEV-CONFIRM-S43-B2
+      "44": D01B-PROBE-HYBRID-DEV-CONFIRM-S44-B2
+
+training:
+  stage: dev_confirm
+  seeds: [42, 43, 44]
+  budget_fraction: 1.0
+  train_pair_count: 7936
+  train_unique_passages: 1984
+  queries_per_passage: 4
+  max_steps: 4000
+  batch_size: 2
+  max_length: 192
+  token_count: 4608000
+  definition_version: probe-budget-v1
+  probe_recipe: configs/evaluation/probe_v1.yaml
+  probe_recipe_sha256: 3ba6114ef37652d2fa49bb788e61a7ff26d6af59ecad50f9697715d53dc1f00b
+  comparison_contract: configs/evaluation/comparison_contract_v1.yaml
+  comparison_contract_sha256: 75c2060d8a48b1ceaa554d97b4ec9af607b4b07634dffe29717d35d77c3f5b5c
+  primary_judge: configs/reranker/primary_polish_roberta_v3_p03_gpu_batch4.yaml
+  primary_judge_sha256: 7c305ea90d186c4977549f309522db1fe4c4f50b419b6fac39fd23a2b3722008
+  checkpoint_interval_steps: 100
+
+evaluation:
+  frozen_manifest: data/processed/v1/evaluation/task04-v1/manifest.json
+  frozen_manifest_sha256: 65e70a27939faec31ae5cd694434ce3454056eeaccc903dfdac9d3487d06ed83
+  subset: dev_intrinsic_rank10
+  subset_id_count: 6598
+  subset_id_list_sha256: 33ee2411d2ccd3704dec019c8c618572ac9295551f43c4b678b29a2ababc7189
+  corpus: data/processed/v1/documents.parquet
+  corpus_sha256: 78f9f2be82ba6e42b80e80b4f77c4ff050c3ec783f1fc422f5b21313381deca7
+  natural_guardrails: runs/task04_p05_dev_screen/dev_screen/P05-GOLD-NATURAL-S42/p04_guardrails_per_query.jsonl
+  natural_guardrails_sha256: b755378433fe07fc1c4b82c15908a063ce6c248825779b7ae44b4460bafc9f51
+  bootstrap_samples: 10000
+  bootstrap_seed: 20260721
+  fixed_seed_aggregation: per_query_mean_before_query_resampling
+  final_tests_forbidden: true
+
+execution:
+  evaluation_encode_batch_size: 8
+  retrieval_query_batch_size: 512
+  retrieval_device: cuda
+
+outputs:
+  run_root: runs/task05_d01b_probe_dev_confirm_v2_batch2
+  measurement_root: reports/measurements/task05/d01b_probe_dev_confirm_v2_batch2
+  log_root: logs/task05/d01b_probe_dev_confirm_v2_batch2
+
+authorization:
+  dev_screen_training: false
+  dev_confirm_training: true
+  four_point_five_b: false
+  final_tests: false
