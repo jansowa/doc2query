@@ -6,7 +6,11 @@ from typing import Any, Literal
 
 from pydantic import Field, field_validator, model_validator
 
-from doc2query.schemas import StrictModel
+from doc2query.schemas import FocusMode, QueryControl, QueryForm, QueryIntent, StrictModel
+
+
+def _default_planning_splits() -> list[Literal["train", "dev"]]:
+    return ["train"]
 
 
 class CandidateScore(StrictModel):
@@ -102,3 +106,65 @@ class CandidateSet(StrictModel):
         if len(set(self.rejected_candidate_ids)) != len(self.rejected_candidate_ids):
             raise ValueError("rejected candidate IDs must be unique")
         return self
+
+
+class CandidatePlanningConfig(StrictModel):
+    """Model-independent axes for a future, separately authorized generation run."""
+
+    plan_id: str = Field(min_length=1, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+    plan_seed: int = Field(default=42, ge=0, le=2**32 - 1)
+    target_candidates_per_passage: int = Field(default=8, ge=4, le=8)
+    forms: list[QueryForm] = Field(min_length=1)
+    intents: list[QueryIntent] = Field(min_length=1)
+    focus_modes: list[FocusMode] = Field(min_length=1)
+    temperatures: list[float] = Field(min_length=2)
+    seeds: list[int] = Field(min_length=2)
+    top_p: float = Field(default=0.95, gt=0.0, le=1.0)
+    max_new_tokens: int = Field(default=64, ge=1, le=96)
+    allowed_splits: list[Literal["train", "dev"]] = Field(default_factory=_default_planning_splits)
+
+    @field_validator("forms", "intents", "focus_modes", "temperatures", "seeds", "allowed_splits")
+    @classmethod
+    def axes_are_unique(cls, value: list[Any]) -> list[Any]:
+        if len(value) != len(set(value)):
+            raise ValueError("planning axes must contain unique values")
+        return value
+
+    @field_validator("temperatures")
+    @classmethod
+    def temperatures_are_valid(cls, value: list[float]) -> list[float]:
+        if any(item <= 0.0 or item > 5.0 for item in value):
+            raise ValueError("temperatures must be in (0, 5]")
+        return value
+
+    @field_validator("seeds")
+    @classmethod
+    def seeds_are_valid(cls, value: list[int]) -> list[int]:
+        if any(item < 0 or item > 2**32 - 1 for item in value):
+            raise ValueError("seeds must be between 0 and 2**32 - 1")
+        return value
+
+
+class CandidateGenerationRequest(StrictModel):
+    request_id: str = Field(min_length=1)
+    plan_id: str = Field(min_length=1)
+    plan_fingerprint: str = Field(min_length=64, max_length=64)
+    candidate_index: int = Field(ge=0, le=7)
+    passage_id: str = Field(min_length=1)
+    passage_cluster_id: str = Field(min_length=1)
+    passage: str = Field(min_length=1)
+    source_pair_ids: list[str] = Field(min_length=1)
+    split: Literal["train", "dev"]
+    prompt: str = Field(min_length=1)
+    control: QueryControl
+    temperature: float = Field(gt=0.0, le=5.0)
+    top_p: float = Field(gt=0.0, le=1.0)
+    max_new_tokens: int = Field(ge=1, le=96)
+    seed: int = Field(ge=0, le=2**32 - 1)
+
+    @field_validator("source_pair_ids")
+    @classmethod
+    def source_pairs_are_unique(cls, value: list[str]) -> list[str]:
+        if value != sorted(set(value)):
+            raise ValueError("source_pair_ids must be unique and sorted")
+        return value

@@ -10,8 +10,19 @@ Zaimplementowano niezależny od wyniku Task 05 fundament: ścisłe kontrakty
 scored-candidate/preference z pełnymi składowymi i provenance,
 deterministyczną selekcję `top-vs-near-miss`/`top-vs-bottom`, kontrolę leakage
 passage i near-duplicate cluster, eksport TRL wraz z obowiązkowym zbiorem
-continued-SFT oraz eksport/import ślepego audytu A/B. Testy modułu, CLI i
-konfiguracji: 28 passed; Ruff, format i ukierunkowany mypy są czyste.
+continued-SFT oraz eksport/import ślepego audytu A/B.
+
+Gotowy jest również quality-blind planner przyszłej generacji. Konsoliduje
+wiele naturalnych par jednego dokumentu, dziedziczy split i cluster z dedup
+mapy, konstrukcyjnie odrzuca test oraz leakage klastra, a następnie wybiera
+K=4–8 requestów metodą coverage-first po osiach form/intent/focus,
+temperature i seed. Każdy request ma stabilne ID, pełny prompt i fingerprint
+planu; atomowy manifest jawnie zapisuje `planned_not_generated`,
+`generation_started=false`, `scoring_started=false` i `final_tests_used=[]`.
+Szablon pozostaje planning-only i nie autoryzuje modelu ani runu.
+
+Testy modułów, CLI i konfiguracji: 32 passed; Ruff, format i ukierunkowany
+mypy są czyste.
 
 Nie uruchomiono generacji, scoringu modeli, materializacji właściwych
 preferencji ani audytu człowieka. `generate_candidates.py` i

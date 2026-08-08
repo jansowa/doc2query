@@ -1,0 +1,12 @@
+# Planning-only template. It does not authorize model loading or generation.
+plan_id: task06-candidate-plan-template-v1
+plan_seed: 42
+target_candidates_per_passage: 8
+forms: [full_question, keyword_query]
+intents: [fact_lookup, definition, entity_lookup, procedure, comparison]
+focus_modes: [bucket, marked_sentence]
+temperatures: [0.3, 0.7, 1.0]
+seeds: [42, 43]
+top_p: 0.95
+max_new_tokens: 64
+allowed_splits: [train, dev]
