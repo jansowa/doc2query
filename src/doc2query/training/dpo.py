@@ -316,6 +316,8 @@ class DPOPlanManifest(StrictModel):
 
     @model_validator(mode="after")
     def budgets_are_matched(self) -> DPOPlanManifest:
+        if self.reference_model != self.start_model:
+            raise ValueError("reference model must exactly match the starting SFT model stack")
         if set(self.arms) != set(DPOArm):
             raise ValueError("all three mandatory arms must be present")
         values = list(self.arms.values())
@@ -335,6 +337,8 @@ class DPOPlanManifest(StrictModel):
         }
         if len(matched) != 1:
             raise ValueError("three-arm cohort, seeds or budgets are not matched")
+        if any(item.cohort_fingerprint != self.cohort_fingerprint for item in values):
+            raise ValueError("arm cohort fingerprint differs from plan cohort fingerprint")
         return self
 
 
@@ -420,12 +424,16 @@ def _validate_control_rows(
     controls: Sequence[ContinuedSFTRecord],
     label: str,
 ) -> None:
+    expected_order = [row.preference_id for row in preferences]
+    actual_order = [row.preference_id for row in controls]
     preference_by_id = _unique_by_id(preferences, "preference_id", f"{label} preferences")
     control_by_id = _unique_by_id(controls, "preference_id", label)
     missing = sorted(set(preference_by_id) - set(control_by_id))
     orphan = sorted(set(control_by_id) - set(preference_by_id))
     if missing or orphan:
         raise ValueError(f"{label} coverage mismatch: missing={missing}, orphan={orphan}")
+    if actual_order != expected_order:
+        raise ValueError(f"{label} preference_id order differs from preference data")
     for preference_id, preference in preference_by_id.items():
         control = control_by_id[preference_id]
         expected = (
@@ -552,7 +560,7 @@ def _load_structured(path: Path) -> dict[str, Any]:
     return value
 
 
-def _validate_token_lengths(
+def validate_token_length_evidence(
     manifest_path: Path,
     records_path: Path,
     dataset: ValidatedDPODataset,
@@ -593,7 +601,7 @@ def plan_dpo_controls(
     if output_path.exists():
         raise FileExistsError(f"plan output already exists: {output_path}")
     config = DPOPlanConfig.model_validate(_load_structured(config_path))
-    token_manifest, lengths = _validate_token_lengths(
+    token_manifest, lengths = validate_token_length_evidence(
         token_length_manifest_path, token_length_records_path, dataset, config.start_model.tokenizer
     )
     train_lengths = [row for row in lengths if row.split == "train"]
@@ -665,6 +673,15 @@ def plan_dpo_controls(
     return manifest
 
 
+def validate_dpo_plan(plan_path: Path) -> DPOPlanManifest:
+    """Validate a frozen model-free plan and its self-fingerprint."""
+    raw_plan = _load_json(plan_path)
+    plan = DPOPlanManifest.model_validate(raw_plan)
+    if plan.plan_fingerprint != _manifest_payload_fingerprint(raw_plan, "plan_fingerprint"):
+        raise ValueError("plan fingerprint mismatch")
+    return plan
+
+
 def validate_reference_logprobs(
     *,
     records_path: Path,
@@ -673,10 +690,7 @@ def validate_reference_logprobs(
     dataset: ValidatedDPODataset,
 ) -> list[ReferenceLogprobRecord]:
     """Validate precomputed values and restart identity; never compute logprobs."""
-    raw_plan = _load_json(plan_path)
-    plan = DPOPlanManifest.model_validate(raw_plan)
-    if plan.plan_fingerprint != _manifest_payload_fingerprint(raw_plan, "plan_fingerprint"):
-        raise ValueError("plan fingerprint mismatch")
+    plan = validate_dpo_plan(plan_path)
     raw_manifest = _load_json(manifest_path)
     manifest = ReferenceLogprobManifest.model_validate(raw_manifest)
     expected_artifact_fp = _manifest_payload_fingerprint(raw_manifest, "artifact_fingerprint")

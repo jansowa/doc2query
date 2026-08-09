@@ -24,12 +24,35 @@ datasetu/selekcji/polityki wag i przed atomową publikacją sprawdza wynik przez
 istniejący `validate_dpo_dataset`. Istniejący output nie jest nadpisywany, a
 przerwany staging jest usuwany.
 
-Nowy handoff ma 23 przechodzące syntetyczne testy CPU; razem z 24 testami
-istniejącego fundamentu DPO ukierunkowana kontrola ma wynik 47 passed. Nie
-uruchomiono pełnego pytest ani żadnego procesu modelowego, aby nie konkurować
-z aktywnym runem Task 05.
+Dodano również model-free launch preflight `scripts/prepare_task07_launch.py`.
+Konsumuje wyłącznie manifest i sześć artefaktów handoffu, zamrożony plan oraz
+wcześniej policzone manifesty i rekordy token lengths i reference logprobs.
+Ponownie używa walidatorów datasetu, token-length evidence, planu i logprobów;
+nie tokenizuje, nie liczy logprobów, nie wylicza wag i nie ładuje stosu
+modelowego. Fail-closed sprawdza SHA-256, liczniki, fingerprinty, dokładne
+pokrycie i kolejność `preference_id`, dataset/selection provenance, wspólną
+politykę wag, identyczny start/reference model stack z tokenizatorem,
+fingerprint planu i kohorty, seedy, matched budget oraz train/dev leakage.
+Interfejs nie przyjmuje artefaktu testowego.
 
-Nie wykonano treningów, modelowych smoke testów, tokenizacji modelem,
+Po poprawnej walidacji preflight atomowo publikuje osobny, wersjonowany
+kontrakt `task07-model-free-launch-bundle-v1` dla DPO, continued SFT i
+score-weighted continued SFT. Status to wyłącznie
+`ready_for_model_smoke_not_trained`, a manifest zapisuje hashe wszystkich 12
+wejść, liczniki rekordów i jawne flagi
+`model_loading_performed=false`, `tokenizer_loading_performed=false`,
+`reference_logprobs_computed=false`, `training_started=false`,
+`evaluation_started=false` i `final_tests_used=[]`. Output nie jest
+nadpisywany, katalog jest publikowany atomowo, a staging usuwany po błędzie.
+Bundle nie zawiera komend treningowych i nie stanowi zgody na eksperyment.
+
+Nowy preflight ma 20 przechodzących syntetycznych testów CPU; razem z testami
+handoffu i istniejącego fundamentu DPO ukierunkowana kontrola ma wynik 67
+passed. Nie uruchomiono pełnego pytest ani żadnego procesu modelowego, aby nie
+konkurować z aktywnym runem Task 05.
+
+Nie dostarczono ani nie policzono rzeczywistych token lengths i reference
+logprobs. Nie wykonano treningów, modelowych smoke testów, tokenizacji modelem,
 właściwego precompute reference logprobs, QLoRA/PEFT save-load, kalibracji ani
 wyliczenia polityki wag, wyboru beta/LR, ewaluacji, wielu seedów ani żadnej
 bramki promocji. Nie wykonano również generacji/scoringu i audytu człowieka
