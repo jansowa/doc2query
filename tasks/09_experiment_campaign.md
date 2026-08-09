@@ -6,10 +6,48 @@
 
 `BLOCKED`
 
-Zadanie oczekuje na wcześniejsze etapy w zakresie dopuszczonym przez bramki,
-przede wszystkim eksperymenty Task 05 oraz Task 06–07. Harness v1.1 P-01…P-04,
-P-05 i pełna dev-only ablacja polityki hard negative'ów z Task 04 są już
-rozstrzygnięte; nie otwarto testów finalnych.
+Gotowy jest wyłącznie deterministyczny, model-free fundament przedkampanijny.
+Wersjonowany `ExperimentEvidenceManifest` zapisuje identyfikatory eksperymentu,
+ramienia i etapu, status i seed runu, commit oraz fingerprint konfiguracji,
+dataset/split/cohort, pełne tożsamości modelu, adaptera i tokenizera,
+pięciowymiarowy budżet z niezmiennikiem Task 04, fingerprint recepty probe,
+hashe/liczniki/provenance artefaktów oraz rozdzielone metryki intrinsic,
+probe/extrinsic, human i cost z kierunkiem, CI i liczebnością. Kontrakt wymaga
+`final_tests_used=[]`.
+
+`CampaignEvidenceRegistry` konsumuje wyłącznie jawnie przekazane manifesty.
+Weryfikuje SHA-256, record counts, fingerprinty konfiguracji, budżetu, stosu
+modelowego i deskryptorów artefaktów oraz ich provenance. Odrzuca duplikat
+`experiment_id/arm_id/seed`, raportuje brakujące seedy, metryki, CI,
+liczebności, human evidence i wymagane role artefaktów. Seedy agreguje tylko
+przy zgodnym configu z wyłączeniem pola seed, dataset/split/cohort, budżecie,
+probe recipe, stosie modelowym i definicjach metryk. Między ramionami fail-closed
+wykrywa drift datasetu, splitu, kohorty, budżetu, probe recipe, commitu i
+definicji metryk; nie uśrednia ani nie szereguje nieporównywalnych danych.
+
+Czysta funkcja Pareto respektuje kierunki `min`/`max`, nie scalarizuje metryk,
+nie wybiera zwycięzcy i przy niepełnym lub nieporównywalnym evidence zwraca
+`evidence_incomplete_not_ranked`. Cienki skrypt
+`scripts/build_task09_evidence_registry.py` nie generuje komend treningowych
+ani ewaluacyjnych. Bundle ma osobny wersjonowany manifest, deterministyczny
+payload, odmawia nadpisania i jest publikowany atomowo przez staging oraz
+`os.replace`; staging jest usuwany po błędzie. Maksymalny status to
+`registry_ready_for_future_stage_review_no_selection`, a flagi kampanii,
+ładowania modelu, treningu, ewaluacji i selekcji pozostają `false`.
+
+Interfejs nie przyjmuje ścieżki finalnego testu. Jawnie zakazane ścieżki
+final-test są odrzucane przed jakimkolwiek odczytem; nie otwarto i nie użyto
+testów finalnych. Syntetyczne testy CPU obejmują integralność, porównywalność,
+drifty, kompletność evidence, Pareto min/max, brak scalar winnera, atomową
+publikację oraz brak zależności modelowych.
+
+Task nadal oczekuje na wcześniejsze etapy w zakresie dopuszczonym przez bramki,
+przede wszystkim aktywny `dev_confirm` Task 05 oraz rzeczywiste Task 06–07.
+Nie dołączono żadnych rzeczywistych wyników Task 03–07, nie wykonano kampanii,
+successive halving, Pareto review, decyzji continue/stop, promocji, wyboru
+finalistów ani finalnego ADR. Harness v1.1 P-01…P-04, P-05 i pełna dev-only
+ablacja polityki hard negative'ów z Task 04 są już rozstrzygnięte; nie otwarto
+testów finalnych.
 P06-T zostało świadomie anulowane decyzją właściciela i nie jest już bramką.
 P-06 mass rescoring i warianty
 drop/weighted według lokalnego marginu są `SUPERSEDED`, nie są zależnością.
