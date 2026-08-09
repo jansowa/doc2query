@@ -32,14 +32,29 @@ primary/shadow, odrzuca test i duplikaty po normalizacji. Zapisuje kanoniczny
 `evidence_assembled_not_ranked`. Assembler nie ma pola ani logiki
 `total_score`, nie kalibruje, nie ustala wag/progów i nie wybiera par.
 
-Dla nowego przyrostu wraz z wcześniejszym plannerem i selekcją ukierunkowany
-zestaw lekkich testów CPU ma wynik 22 passed; Ruff, format, ukierunkowany mypy,
-oba `--help` i `git diff --check` są czyste. Nie uruchomiono pełnego pytest ani
-benchmarków, aby nie konkurować z aktywnym `dev_confirm` Task 05.
+Gotowy jest także wyłącznie przedeksperymentalny handoff Task 06 → Task 07.
+Deterministyczny packager konsumuje wcześniej zmaterializowane preference oraz
+continued-SFT train/dev i osobny, wcześniej policzony artefakt przypisań wag.
+Wymaga dokładnego pokrycia i kolejności `preference_id`, dodatnich skończonych
+wag, przypiętych fingerprintów datasetu, selekcji i polityki wag oraz własnych
+hashy artefaktu wag. Odrzuca duplikaty, orphan/missing ID, drift provenance,
+test oraz leakage passage/near-duplicate cluster. Zachowuje prompt,
+`chosen/rejected` i candidate IDs znak w znak, tworzy po jednym continued-SFT
+i weighted-SFT na parę, po czym atomowo publikuje manifest
+`task06-preference-data-for-task07-v1` z SHA-256, licznikami i jawnymi polami
+`automatic_thresholds_created=false`, `relabeling_performed=false` oraz
+`final_tests_used=[]`. Nie wylicza wag i nie czyta osobnego artefaktu testowego.
+
+Dla samego handoffu 23 syntetyczne testy CPU przechodzą; razem z istniejącym
+`test_dpo_foundation` ukierunkowana kontrola ma wynik 47 passed. Nie
+uruchomiono pełnego pytest ani benchmarków, aby nie konkurować z aktywnym
+`dev_confirm` Task 05.
 
 Nie uruchomiono generacji, scoringu modeli, materializacji właściwych
 preferencji ani audytu człowieka. Nadal nie wykonano kalibracji, zamrożenia wag
-i progów, rankingu ani wyboru `chosen/rejected`. `generate_candidates.py` i
+i progów, wyliczenia funkcji przypisującej wagi, rankingu ani wyboru
+`chosen/rejected`. Handoff nie autoryzuje żadnego z tych etapów.
+`generate_candidates.py` i
 `score_candidates.py` pozostają celowo niewdrożone, ponieważ ich poprawne
 kontrakty wykonawcze zależą od stabilnego checkpointu wybranego po Task 05 oraz
 prospektywnie przypiętych sędziów i progów. Nowe skrypty

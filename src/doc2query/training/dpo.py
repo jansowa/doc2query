@@ -71,7 +71,7 @@ class PreferenceRecord(StrictModel):
         normalized = " ".join(value.strip().split())
         if not normalized:
             raise ValueError("text fields must be non-empty")
-        return normalized
+        return value
 
     @field_validator("score_margin")
     @classmethod
@@ -105,7 +105,7 @@ class ContinuedSFTRecord(StrictModel):
         normalized = " ".join(value.strip().split())
         if not normalized:
             raise ValueError("text fields must be non-empty")
-        return normalized
+        return value
 
 
 class ScoreWeightedContinuedSFTRecord(ContinuedSFTRecord):

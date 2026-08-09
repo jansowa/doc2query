@@ -14,14 +14,26 @@ planner trzech obowiązkowych ramion i czystą funkcję sigmoid DPO loss.
 Manifest planu ma status `planned_not_trained`, hashe wszystkich wejść oraz
 jawne flagi potwierdzające brak ładowania modeli, liczenia logprobów i treningu.
 
-Ukierunkowany zestaw 24 lekkich testów CPU przechodzi wraz z Ruff,
-formatowaniem i ukierunkowanym mypy. Sprawdzono `--help` trzech nowych
-skryptów. Nie uruchomiono pełnego pytest ani żadnego procesu modelowego, aby
-nie konkurować z aktywnym runem Task 05.
+Dodano deterministyczny, fail-closed handoff danych z Task 06. Cienki skrypt
+`scripts/package_task07_inputs.py` przyjmuje wyłącznie zamrożone preference i
+continued-SFT train/dev oraz osobny artefakt gotowych przypisań wag. Packager
+nie przyjmuje ścieżki testowej, nie wylicza wag, nie filtruje i nie relabeluje.
+Wymaga dokładnego pokrycia 1:1, zgodności completion z `chosen`, zachowuje
+prompt i candidate IDs, wykrywa passage/cluster leakage, waliduje fingerprinty
+datasetu/selekcji/polityki wag i przed atomową publikacją sprawdza wynik przez
+istniejący `validate_dpo_dataset`. Istniejący output nie jest nadpisywany, a
+przerwany staging jest usuwany.
+
+Nowy handoff ma 23 przechodzące syntetyczne testy CPU; razem z 24 testami
+istniejącego fundamentu DPO ukierunkowana kontrola ma wynik 47 passed. Nie
+uruchomiono pełnego pytest ani żadnego procesu modelowego, aby nie konkurować
+z aktywnym runem Task 05.
 
 Nie wykonano treningów, modelowych smoke testów, tokenizacji modelem,
-właściwego precompute reference logprobs, QLoRA/PEFT save-load, kalibracji
-wag, wyboru beta/LR, ewaluacji, wielu seedów ani żadnej bramki promocji.
+właściwego precompute reference logprobs, QLoRA/PEFT save-load, kalibracji ani
+wyliczenia polityki wag, wyboru beta/LR, ewaluacji, wielu seedów ani żadnej
+bramki promocji. Nie wykonano również generacji/scoringu i audytu człowieka
+wymaganych do wytworzenia rzeczywistych wejść Task 06.
 Wszystkie testy finalne pozostają zamknięte (`final_tests_used=[]`).
 
 ## Cel
