@@ -45,14 +45,47 @@ i weighted-SFT na parę, po czym atomowo publikuje manifest
 `automatic_thresholds_created=false`, `relabeling_performed=false` oraz
 `final_tests_used=[]`. Nie wylicza wag i nie czyta osobnego artefaktu testowego.
 
-Dla samego handoffu 23 syntetyczne testy CPU przechodzą; razem z istniejącym
-`test_dpo_foundation` ukierunkowana kontrola ma wynik 47 passed. Nie
-uruchomiono pełnego pytest ani benchmarków, aby nie konkurować z aktywnym
-`dev_confirm` Task 05.
+Dodano model-free, przedselekcyjny preflight przyszłej selekcji. Wersjonowany
+`CandidateSelectionPolicyManifest` wiąże hash i fingerprint istniejącego
+`CandidateEvidenceBundle` oraz jego manifestu z dataset/split/cohort i dokładną
+listą candidate IDs. Wymaga pełnego zestawu `primary`, `shadow`,
+`corpus_retrieval`, `lexical_copy`, `focus`, `style` i `format`; dla każdej
+metryki zapisuje jawnie dostarczony kierunek, definicję normalizacji z
+parametrami, wagę, nazwane progi i fingerprint kalibracji. Osobno przypina
+minimalny margin, definicje near-miss/bottom i limity per passage. Status
+polityki to wyłącznie `policy_frozen_not_applied`.
+
+Osobne wersjonowane manifesty kalibracji komponentów zapisują artefakt z
+SHA-256, licznikiem i provenance oraz porównywalne definicje metryk.
+`HumanPreferenceCalibrationEvidenceManifest` wymaga zamrożonego ślepego panelu,
+SHA-256 i liczby rekordów, fingerprintów kohorty, protokołu anotatorów i
+kryteriów, jawnie dostarczonej liczebności, agreement oraz CI. Wszystkie
+manifesty wymagają `final_tests_used=[]`; żaden nie wylicza wartości
+eksperymentalnych.
+
+`PreferenceSelectionPreflight` konsumuje wyłącznie jawnie wskazane pliki,
+odrzuca final-test paths przed odczytem i ponownie używa kontraktów
+`CandidateEvidenceBundle`, `EvidenceArtifact` z Task 09 oraz hash helpers Task
+07. Sprawdza integralność, record counts, provenance, dokładne pokrycie
+komponentów/candidate IDs, dataset/split/cohort drift i porównywalność definicji
+metryk. Wagi i progi wyłącznie waliduje jako przypięte i skończone. Atomowy
+bundle używa stagingu, `os.replace`, cleanupu po błędzie i odmowy nadpisania;
+ma najwyżej status `ready_for_future_preference_selection_not_selected` oraz
+flagi `generation_started=false`, `scoring_started=false`,
+`calibration_computed=false`, `selection_started=false`,
+`preferences_built=false`, `model_loading_performed=false`. Payload nie zawiera
+`total_score`, rankingu ani `chosen/rejected`. Cienki skrypt
+`scripts/prepare_task06_selection_preflight.py` jedynie uruchamia tę walidację.
+
+Dla nowego preflightu przechodzi 20 syntetycznych testów CPU; cały ukierunkowany
+zestaw nowych i bezpośrednio powiązanych kontraktów Task 06/07/09 ma wynik
+132 passed. Nie uruchomiono pełnego pytest ani benchmarków, aby nie dotykać
+aktywnego `dev_confirm` Task 05.
 
 Nie uruchomiono generacji, scoringu modeli, materializacji właściwych
 preferencji ani audytu człowieka. Nadal nie wykonano kalibracji, zamrożenia wag
-i progów, wyliczenia funkcji przypisującej wagi, rankingu ani wyboru
+i progów na rzeczywistych evidence, wyliczenia funkcji przypisującej wagi,
+rankingu ani wyboru
 `chosen/rejected`. Handoff nie autoryzuje żadnego z tych etapów.
 `generate_candidates.py` i
 `score_candidates.py` pozostają celowo niewdrożone, ponieważ ich poprawne
