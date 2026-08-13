@@ -6,6 +6,14 @@
 
 `IN PROGRESS`
 
+Aktualizacja 2026-08-13 (rozszerzenie specyfikacji, decyzja właściciela):
+Task 07 jest jawnie także destylacją procedury dwumodelowej z selektorem do
+pojedynczego generatora; dla finalistów obowiązuje ewaluacja trybu
+produkcyjnego bez selektora (M-05, sekcja poniżej; definicje M-01–M-05 w
+AGENTS.md §9.2). Zakres modelowy: 4.5B jako główny finalista i opcjonalnie
+1.5B na sprzęcie lokalnym 8/16 GB; pipeline musi pozostać przenośny dla
+większych modeli na sprzęcie zewnętrznym.
+
 Aktualizacja 2026-08-12 (Task 06 execution design): legalna pula Task 06,
 macierz kandydatów i evidence zostały zaprojektowane model-free; wybory są
 rozstrzygnięte, ale preflight nadal czeka na jawną komendę operatorską. Nie
@@ -201,7 +209,23 @@ Monitoruj szczególnie:
 - czy diversity wynika z jakości, a nie losowości;
 - czy preferencje na naturalnych style’ach się utrzymują.
 
-## Memory strategy 16 GB
+## Tryb produkcyjny i destylacja selektora (M-05)
+
+Zaakceptowana procedura danych (dwa generatory + pełny scoring + safe-anchor
+selector) jest zbyt kosztowna jako docelowy sposób generowania korpusu przy
+500 tys. pasaży na lokalnym sprzęcie. Celem DPO jest między innymi
+internalizacja preferencji selektora przez jeden model. Dlatego każdy
+finalista Task 07 jest oceniany dodatkowo w trybie produkcyjnym: pojedynczy
+generator, bez scoringu i selekcji, z zaraportowanym kosztem (passage/s,
+VRAM) na 1000 pasaży. Porównanie obejmuje co najmniej: (a) pełną procedurę z
+selektorem, (b) finalistę DPO w trybie produkcyjnym, (c) continued SFT w
+trybie produkcyjnym. Jeżeli offline selekcja zachowuje zysk probe, którego
+DPO nie internalizuje, jest to jawna przesłanka bramki awansu wyników GRPO
+do selekcji finalistów (Task 08, AGENTS.md Faza E); sam run GRPO jest
+planowany po Task 07 niezależnie od tego wyniku (cel edukacyjny,
+AGENTS.md §2).
+
+## Memory strategy 8–16 GB
 
 Kolejność oszczędzania pamięci:
 

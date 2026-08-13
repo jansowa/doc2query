@@ -6,6 +6,13 @@
 
 `BLOCKED`
 
+Aktualizacja 2026-08-13 (rozszerzenie specyfikacji, decyzja właściciela):
+kampanię poprzedza obowiązkowy Etap 0 — walidacja predykcyjna probe
+(M-01/E15); probe w reżimie mieszanym (M-02) i ocena trybu produkcyjnego
+(M-05) są obowiązkowe dla finalistów. Skala: 4.5B jest głównym finalistą na
+sprzęcie lokalnym 8/16 GB; 7B+ wyłącznie na sprzęcie zewnętrznym przez
+przenośny pipeline. Definicje M-01–M-05: AGENTS.md §9.2.
+
 Aktualizacja 2026-08-12 (Task 06 execution design): powstał wyłącznie
 prospektywny, model-free projekt pilota Task 06. Właściciel rozstrzygnął 512
 pasaży, natural-dev calibration i dual-LLM audit 500 par zamiast ręcznego
@@ -99,6 +106,16 @@ pasaże i K query/pasaż oraz wersję recepty probe.
 
 ## Minimalna kolejność
 
+### Etap 0 — walidacja predykcyjna probe (M-01/E15)
+
+Przed decyzjami selekcyjnymi kampanii wykonaj jednorazowy trening średniej
+skali (rząd 50–100 tys. par syntetycznych, realistyczna receptura embeddera
+docelowego, prospektywny ADR) dla dwóch wariantów, które probe wyraźnie
+rozdzielił (np. dane W06 vs procedura hybrid). Celem jest kalibracja
+transferu rankingu probe na skalę. Wynik nie promuje wariantu; określa
+jedynie zaufanie do probe jako instrumentu selekcji i może skorygować próg
+praktyczny P-04 wyłącznie nowym prospektywnym ADR.
+
 ### Etap 1 — pipeline
 
 - E00 prompting;
@@ -133,9 +150,11 @@ pasaże i K query/pasaż oraz wersję recepty probe.
 
 ### Etap 6 — skala
 
-- pełne 500k na najlepszym 4.5B;
-- 7B standard vs 7B PL na identycznym subset;
-- finalny 7B na większych zasobach tylko, gdy przewaga uzasadnia koszt.
+- pełne 500k na najlepszym 4.5B (sprzęt lokalny 8/16 GB);
+- 7B standard vs 7B PL na identycznym subset — wyłącznie na sprzęcie
+  zewnętrznym, przez przenośny pipeline z jawnymi parametrami sprzętowymi;
+- finalny 7B na większych zasobach tylko, gdy zmierzona przewaga uzasadnia
+  koszt (wymaga wykonanego M-01 i przewagi w macierzy Pareto).
 
 ## Metryka wyboru
 
@@ -146,7 +165,8 @@ Utwórz ranking wielokryterialny, ale nie ukrywaj Pareto frontu. Priorytety:
 3. diversity/focus coverage;
 4. kopiowanie względem naturalnego rozkładu;
 5. human preference;
-6. koszt queries/s i VRAM.
+6. koszt queries/s i VRAM, w tym koszt trybu produkcyjnego bez selektora
+   (M-05).
 
 Nie sumuj bezrefleksyjnie wszystkiego do jednego score. Użyj score tylko do wstępnej selekcji, a finalną decyzję opisz w ADR.
 Główny wynik musi pochodzić z natywnego polskiego holdoutu; poprawa wyłącznie
@@ -154,8 +174,9 @@ na tłumaczonym teście nie wystarcza bez jawnego ADR.
 
 ## Eksperymenty opcjonalne po bramkach
 
-- MIX0–MIX4 (100/75/50/25/0% natural) tylko dla 1–2 finalistów i przy
-  dopasowanym budżecie;
+- MIX0–MIX4 (100/75/50/25/0% natural) — co najmniej jeden punkt mieszany
+  (M-02, np. 50/50) jest obowiązkowy dla każdego finalisty przy dopasowanym
+  budżecie; pełna siatka pozostaje opcjonalna;
 - probe recipe v2 z GPL/MarginMSE tylko jako osobna, pełna replikacja
   porównań dla 2–3 finalistów;
 - kontrfaktyczne negatywy dopiero po stabilnym corpus-mined HN;
@@ -205,6 +226,10 @@ Utwórz `docs/adr/00xx-final-training-strategy.md` zawierający:
 ## Kryteria akceptacji
 
 - każdy finalista ma probe embedder evaluation;
+- każdy finalista ma probe w reżimie mieszanym natural+synthetic (M-02);
+- każdy finalista ma zmierzony tryb produkcyjny bez selektora (M-05);
+- walidacja predykcyjna probe (M-01/E15) jest wykonana i zaraportowana przed
+  decyzjami selekcyjnymi;
 - porównania używają identycznych testów i fingerprintów;
 - co najmniej kluczowe porównania mają CI i wiele seedów;
 - istnieje jawna decyzja, czy DPO i RL były warte kosztu;

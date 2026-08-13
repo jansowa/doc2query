@@ -8,6 +8,12 @@
 
 Zadanie oczekuje na wyniki Task 09 i zatwierdzony finalny ADR.
 
+Aktualizacja 2026-08-13 (rozszerzenie specyfikacji, decyzja właściciela):
+dodano wymóg prerejestrowanej reguły decyzyjnej testów finalnych świadomej
+mocy statystycznej (M-04, sekcja poniżej) oraz wymóg przenośności pipeline'u
+treningowego dla większych modeli na sprzęcie zewnętrznym. Definicje
+M-01–M-05: AGENTS.md §9.2.
+
 ## Cel
 
 Przenieść wybraną strategię na pełne dane i ewentualnie większe zasoby, następnie przygotować niezawodny pipeline generacji oraz dokumentację modelu.
@@ -25,7 +31,8 @@ Przed treningiem:
 - sprawdź licencje;
 - potwierdź fingerprint pełnych danych;
 - potwierdź brak test leakage;
-- wykonaj 100-step rehearsal na identycznym sprzęcie;
+- wykonaj 100-step rehearsal na docelowym sprzęcie treningu (dotyczy także
+  treningów na sprzęcie zewnętrznym);
 - sprawdź save/resume;
 - oszacuj miejsce na checkpointy i cache;
 - przygotuj monitoring.
@@ -97,6 +104,35 @@ Wymagania:
   ]
 }
 ```
+
+## Reguła decyzyjna testów finalnych (M-04)
+
+`test_native_pl` ma 956 query; dla efektów rzędu +0.01 nDCG@10 półszerokość
+sparowanego 95% CI wynosi około ±0.016 (ekstrapolacja z analizy czułości dla
+n=591), więc sam test natywny nie ma mocy, aby potwierdzić efekt przechodzący
+bramki dev. Przed zamrożeniem finalistów — a najpóźniej przed jednorazowym
+otwarciem testów — prerejestruj w ADR regułę decyzyjną, która:
+
+- czerpie moc statystyczną z licznego `test_translated_msmarco_pl`
+  (16 272 query) lub `test_embedder`;
+- używa `test_native_pl` jako kontroli kierunku i spójności (np. wymaganie
+  nieujemnego efektu punktowego / braku istotnej szkody), a nie jako
+  samodzielnego progu istotności;
+- określa z góry postępowanie przy wynikach rozbieżnych między testami;
+- zachowuje zasadę jednorazowego otwarcia testów finalnych.
+
+Poprawa wyłącznie na teście tłumaczonym bez potwierdzenia kierunku na teście
+natywnym nadal nie wystarcza do release bez jawnego ADR (zgodnie z Task 09).
+
+## Przenośność pipeline'u treningowego
+
+Trening finalny większych modeli (7B+) odbywa się na sprzęcie zewnętrznym
+przez ten sam pipeline: wszystkie parametry zależne od sprzętu (batch, max
+length, kwantyzacja, offload, liczba GPU) są jawnymi polami configu, preflight
+i memory probe działają na docelowej maszynie, a rehearsal 100 kroków jest
+obowiązkowy przed pełnym runem. Artefakty i manifesty muszą być przenośne
+między maszynami: ścieżki względne oraz fingerprinty danych zamiast ścieżek
+absolutnych.
 
 ## Finalna ewaluacja
 

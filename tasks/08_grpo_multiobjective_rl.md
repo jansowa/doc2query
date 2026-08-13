@@ -4,13 +4,32 @@
 
 ## Status
 
-`OPTIONAL / BLOCKED`
+`BLOCKED`
 
-Zadanie pozostaje zablokowane do spełnienia bramki opisanej poniżej.
+Zadanie jest planowanym etapem programu, zablokowanym wyłącznie
+zależnościami (Task 07 i warunki startowe poniżej), a nie decyzją o
+opcjonalności.
+
+Aktualizacja 2026-08-13 (decyzja właściciela): projekt ma jawny cel
+edukacyjny — praktyczne opanowanie DPO i GRPO (AGENTS.md §2). GRPO przestaje
+być ścieżką warunkową „tylko gdy DPO zawiedzie": ścieżka 1.5B (R00–R05) jest
+domyślnie planowana po Task 07. Zmierzone porównanie DPO vs continued SFT vs
+offline best-of-N pozostaje obowiązkowym kontekstem interpretacyjnym, a
+twarde przesłanki (zysk offline selekcji nieinternalizowany przez DPO albo
+zmierzona wada odporna na SFT/DPO) są odtąd bramką awansu wyników GRPO do
+selekcji finalistów, nie warunkiem uruchomienia. Decyzja
+`reports/decisions/enable_grpo.md` nadal jest wymagana i może powoływać się
+na cel edukacyjny plus gotowość techniczną. Sprzęt: R00–R05 na 1.5B / 8 GB
+(RTX 3060 Ti); R06 4.5B preferencyjnie na maszynie 16 GB (RTX 5070 Ti);
+serwisy reward na mocnym CPU / 64 GB RAM tej maszyny.
 
 ## Cel
 
-Sprawdzić, czy online RL daje dodatkową korzyść, której nie osiągnięto przez SFT, kontrolki i DPO. Ten task jest opcjonalny i zaczyna się od Bielika 1.5B.
+Sprawdzić, czy online RL daje dodatkową korzyść, której nie osiągnięto przez
+SFT, kontrolki i DPO, oraz zrealizować edukacyjny cel właściciela: praktyczne
+opanowanie wielokryterialnego GRPO na lokalnym sprzęcie. Task jest planowanym
+etapem programu i zaczyna się od Bielika 1.5B; awans jego wyników do selekcji
+finalistów podlega osobnej bramce opisanej niżej.
 
 ## Zależności
 
@@ -19,10 +38,25 @@ Taski 02, 04, 05 i 07. Wymagana decyzja w `reports/decisions/enable_grpo.md` z u
 ## Warunki rozpoczęcia
 
 - rewardy mają testy adwersarialne;
-- composite score koreluje z oceną człowieka;
-- DPO zostało porównane z continued SFT;
-- znana jest konkretna wada, którą RL ma poprawić;
-- memory probe potwierdza wykonalność.
+- composite score koreluje z oceną człowieka albo — przy obowiązującym
+  waiverze — z owner-approved dual-LLM audytem (nie nazywać go human
+  evidence) oraz z wynikiem probe;
+- DPO zostało porównane z continued SFT i offline best-of-N na tych samych
+  kandydatach (obowiązkowy kontekst interpretacyjny, nie wymóg „porażki" DPO);
+- memory probe potwierdza wykonalność na docelowej karcie (1.5B: 8 GB;
+  4.5B: 16 GB).
+
+## Bramka awansu do selekcji finalistów
+
+Uruchomienie GRPO nie wymaga wykazania niewystarczalności DPO (cel
+edukacyjny, AGENTS.md §2). Awans wyników GRPO do macierzy finalistów wymaga
+natomiast co najmniej jednego z warunków Fazy E: offline selekcja daje zysk
+probe, którego DPO nie internalizuje (sygnały grupowe, np. diversity zbioru
+K query, nie wyrażają się w parach preferencji), albo GRPO poprawia
+konkretną, zmierzoną wadę odporną na SFT/DPO bez utraty probe score. Runy,
+które tej bramki nie przechodzą, są raportowane jako
+`educational/feasibility` — z pełnym rejestrem eksperymentu, ale bez claimu
+selekcyjnego.
 
 ## Implementacja
 
@@ -69,7 +103,7 @@ Efektywny batch musi spełniać wymagania implementacji GRPO względem `num_gene
 
 ## Generacja
 
-Na 16 GB:
+Na 8–16 GB:
 
 - domyślnie bez colocated vLLM;
 - benchmark zwykłego `generate()` i wspieranego continuous batching;
@@ -118,7 +152,8 @@ Dla finalnego składu usuń kolejno każdy komponent.
 
 ### R06 — 4.5B
 
-Tylko gdy 1.5B pokazuje stabilny, zewnętrznie potwierdzony efekt.
+Tylko gdy 1.5B pokazuje stabilny, zewnętrznie potwierdzony efekt;
+preferencyjnie na maszynie 16 GB.
 
 ## Reward hacking monitors
 

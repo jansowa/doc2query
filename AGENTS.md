@@ -34,9 +34,9 @@ Docelowo trzeba wytrenować model `doc2query`, który dla pasażu generuje jedno
 
 Podstawowe modele generatora:
 
-- `speakleash/Bielik-1.5B-v3` lub wariant instruct — wyłącznie do taniego prototypowania procedur;
-- `speakleash/Bielik-4.5B-v3.0-Instruct` — domyślny model rozwojowy na 16 GB VRAM;
-- `speakleash/Bielik-Minitron-7B-v3.0-Instruct` oraz, dla korpusu wyłącznie polskiego, wariant z polskim tokenizatorem `speakleash/Bielik-PL-Minitron-7B-v3.0-Instruct` — kandydaci do treningu finalnego.
+- `speakleash/Bielik-1.5B-v3` lub wariant instruct — tanie prototypowanie procedur i screeny; dopuszczalny również jako tani wariant finalny;
+- `speakleash/Bielik-4.5B-v3.0-Instruct` — domyślny model rozwojowy i główny kandydat finalny; QLoRA SFT, generacja i scoring mają potwierdzoną wykonalność na 8 GB VRAM (RTX 3060 Ti, peak 7.74 GB);
+- `speakleash/Bielik-Minitron-7B-v3.0-Instruct` oraz, dla korpusu wyłącznie polskiego, wariant z polskim tokenizatorem `speakleash/Bielik-PL-Minitron-7B-v3.0-Instruct` — warunkowi kandydaci do treningu finalnego wyłącznie na mocniejszym sprzęcie zewnętrznym; pipeline treningowy musi pozostać przenośny (patrz §12).
 
 Bielik 4.5B ma około 4.6 mld parametrów, a Bielik Minitron 7B około 7.35 mld. Repozytoria modeli mogą wymagać zaakceptowania warunków dostępu na Hugging Face. Nie omijaj tego mechanizmu i nie kopiuj wag do repozytorium.
 
@@ -53,13 +53,24 @@ Generator ma produkować zapytania, które jednocześnie:
 
 **Metryki powierzchniowe generatora są pomocnicze. Ostatecznym kryterium jest wynik embeddera wytrenowanego na danych syntetycznych.**
 
+### Cel drugorzędny: edukacyjny (decyzja właściciela 2026-08-13)
+
+Projekt służy również praktycznemu opanowaniu metod preference optimization —
+DPO i GRPO — na lokalnym sprzęcie. Dlatego DPO (Task 07) i GRPO (Task 08) są
+planowanymi etapami programu niezależnie od tego, czy tańsza metoda osiągnie
+cel jakościowy. Cel edukacyjny nie osłabia reguł dowodowych: runy tych metod
+podlegają tym samym kontraktom, kontrolom i rejestrowi eksperymentów, a ich
+wyniki wchodzą do selekcji finalistów wyłącznie po spełnieniu własnych
+bramek. Run motywowany edukacyjnie jest jawnie oznaczany w raporcie jako
+`educational/feasibility` i nie może być raportowany jako wynik selekcyjny.
+
 ---
 
 ## 3. Najważniejsze decyzje metodologiczne
 
 ### 3.1. Zacznij od QLoRA SFT, nie od RL
 
-Na pojedynczej karcie 16 GB:
+Na pojedynczej karcie 8–16 GB:
 
 - używaj 4-bitowego NF4, podwójnej kwantyzacji, LoRA, gradient checkpointingu i batch size 1;
 - akumuluj gradienty do żądanego efektywnego batcha;
@@ -349,6 +360,17 @@ Kandydaci do porównania:
 - `BAAI/bge-reranker-v2-m3` lub inny silny model wielojęzyczny jako shadow judge;
 - opcjonalnie drugi gotowy polski reranker jako dodatkowy punkt odniesienia.
 
+Dodatkowym pomocniczym zasobem inference-only jest lokalny, przypięty
+`Qwen3.6-27B` w kwantyzacji Q4 (częściowy offload do RAM na maszynie 16 GB;
+przepustowość rzędu kilku tysięcy promptów na dobę przy wspólnym prefiksie
+promptu i krótkich częściach zmiennych). Dozwolone role: ślepy audyt
+preferencji (lokalny checkpoint jest preferowany nad wariantem API tego samego
+modelu ze względu na przypięte wagi i powtarzalność), answerability judge
+rozstrzygający disagreement primary/shadow oraz jawna ablacja teachera w
+Task 06. Zakazane: masowy scoring kandydatów (poza budżetem przepustowości),
+trening lub dostrajanie tego modelu oraz używanie go jako sygnału selekcji
+bez prospektywnego ADR.
+
 Dla każdego modelu przypnij revision, sprawdź licencję, odnotuj `trust_remote_code`, długość kontekstu, truncation, koszt i throughput. Surowe logity modeli nie są bezpośrednio porównywalne.
 
 Reranker musi zwracać:
@@ -469,6 +491,33 @@ Dla każdego poważnego wariantu generatora:
 
 Nie wybieraj modelu tylko dlatego, że ma mniejszy overlap lub wyższy score rerankera.
 
+#### Rozszerzenia metodologiczne M-01–M-05 (2026-08-13)
+
+- **M-01 — walidacja predykcyjna probe.** Przed decyzjami selekcyjnymi
+  kampanii Task 09 wykonaj jednorazowy trening średniej skali (rząd 50–100
+  tys. par syntetycznych, realistyczna receptura embeddera docelowego,
+  prospektywny ADR) dla dwóch wariantów generatora, które probe wyraźnie
+  rozdzielił. Celem jest kalibracja, czy ranking probe przenosi się na skalę.
+  Bez M-01 ranking probe traktuj wyłącznie jako screening.
+- **M-02 — probe w reżimie mieszanym.** Dla finalistów probe synthetic-only
+  nie wystarcza: obowiązkowy jest co najmniej jeden punkt probe na miksie
+  natural+synthetic (np. 50/50) przy dopasowanym budżecie, bo celem projektu
+  jest wartość dodana danych syntetycznych ponad dane naturalne (wynik P-05:
+  mixed > gold przy synthetic-only < gold).
+- **M-03 — stabilność seedów.** Każdy trening probe ma guardrail zbieżności
+  (kontrola trajektorii eval loss i minimalny sanity wynik retrieval); seed,
+  który nie zbiegł, jest jawnie flagowany i nie wchodzi do agregatów bez
+  symetrycznej analizy wrażliwości w obu ramionach. Przy tanich korpusach
+  ewaluacyjnych (rząd ≤200 tys. dokumentów) domyślnie używaj 5 seedów zamiast 3.
+- **M-04 — reguła decyzyjna testów finalnych świadoma mocy.** `test_native_pl`
+  (956 query) nie ma mocy dla efektów rzędu +0.01 nDCG@10. Przed zamrożeniem
+  finalistów prerejestruj regułę decyzyjną łączącą liczny test (moc) z testem
+  natywnym (kontrola kierunku); szczegóły w Task 10.
+- **M-05 — ewaluacja trybu produkcyjnego.** Finaliści są oceniani także jako
+  pojedynczy generator bez scoringu i selektora, z zaraportowanym kosztem
+  generacji; procedura wielomodelowa z selektorem nie może być jedynym
+  mierzonym trybem. Szczegóły w Task 07/09.
+
 ### 9.3. Ewaluacja człowieka
 
 Przygotuj ślepy formularz dla co najmniej 300 przypadków w finalnej fazie. Oceniane pola:
@@ -482,6 +531,10 @@ Przygotuj ślepy formularz dla co najmniej 300 przypadków w finalnej fazie. Oce
 - fragment pasażu, którego dotyczy.
 
 Mierz zgodność oceniających, a nie tylko średnią ocenę.
+
+Ślepe audyty dual-LLM (owner waiver w Task 06) są narzędziem triage i
+kalibracji na etapach rozwojowych; nie zastępują panelu ludzkiego tej sekcji
+w fazie finalnej i nie wolno raportować ich jako human evidence.
 
 ---
 
@@ -534,7 +587,16 @@ Brama:
 
 ### Faza E — RL/GRPO
 
-Zadanie `08` tylko wtedy, gdy SFT i DPO nie osiągnęły celu.
+Zadanie `08` jest planowanym etapem programu (cel edukacyjny, §2), nie
+ścieżką awaryjną. Ścieżkę 1.5B (R00–R05) uruchamiaj po Task 07 i po
+zmierzonym porównaniu DPO vs continued SFT vs offline best-of-N; porównanie
+to jest obowiązkowym kontekstem interpretacyjnym, a nie wymogiem „porażki"
+DPO. Awans wyników GRPO do selekcji finalistów wymaga natomiast co najmniej
+jednego z: (a) offline selekcja (selector / best-of-N) daje zysk probe,
+którego DPO nie internalizuje — sygnały grupowe, np. diversity zbioru K
+query, nie wyrażają się w parach preferencji i RL z group rewards jest dla
+nich naturalnym narzędziem; (b) GRPO poprawia konkretną, zmierzoną wadę
+odporną na SFT/DPO bez utraty probe score.
 
 Brama:
 
@@ -550,6 +612,13 @@ Nie planuj GRPO 7B na 16 GB jako domyślnej ścieżki. Dla 7B przewiduj większe
 Zadania `09–10`.
 
 Wybór modelu wykonuj na macierzy Pareto: jakość końcowego embeddera, ugruntowanie/answerability, różnorodność, kopiowanie i koszt generacji.
+
+Do macierzy Pareto należy też koszt trybu produkcyjnego (M-05): finaliści są
+oceniani również jako pojedynczy generator bez selektora i scoringu. Przed
+zamrożeniem finalistów prerejestruj regułę decyzyjną testów finalnych
+uwzględniającą moc statystyczną (M-04, Task 10). Decyzje selekcyjne kampanii
+wymagają wcześniejszego wykonania M-01 (walidacja predykcyjna probe) oraz
+probe w reżimie mieszanym dla finalistów (M-02).
 
 ---
 
@@ -573,13 +642,37 @@ Każdy eksperyment ma unikalny identyfikator, config, seed, commit i raport.
 | E11 | 1.5B GRPO | 5–20k promptów | wykonalność RL |
 | E12 | 4.5B GRPO | tylko po E11 | test RL na modelu docelowym |
 | E13 | 4.5B pełne dane | 500k | finalista lokalny |
-| E14 | 7B/7B-PL pełne dane | 500k | finalista na większych zasobach |
+| E14 | 7B/7B-PL pełne dane | 500k | finalista wyłącznie na sprzęcie zewnętrznym; wymaga M-01 i przewagi w Pareto |
+| E15 | walidacja predykcyjna probe (M-01) | 50–100k par | kalibracja transferu probe → skala |
 
 Dla eksperymentów selekcyjnych stosuj 3 seedy, chyba że koszt jest nieproporcjonalny. Dla bardzo drogich finalnych treningów minimum 2 seedy lub pełna replikacja skróconego runu plus jeden pełny run.
 
 ---
 
-## 12. Budżet 16 GB VRAM
+## 12. Budżet sprzętowy: 8 GB bazowo, 16 GB rozszerzenie, sprzęt zewnętrzny dla finalistów 7B+
+
+Kontrakt sprzętowy (stan faktyczny, aktualizacja 2026-08-13):
+
+- **Maszyna bazowa: RTX 3060 Ti 8 GB.** Wszystkie dotychczasowe runy (w tym
+  W06 4.5B QLoRA SFT, peak 7.74 GB) wykonano na tej karcie i jest ona
+  domyślnym celem planowania eksperymentów: 1.5B do screenów, 4.5B do
+  confirmów i treningów głównych.
+- **Maszyna rozszerzona: RTX 5070 Ti 16 GB + 64 GB RAM + mocny CPU.** Używana
+  selektywnie: przyspieszenie kampanii 4.5B (większe batche generacji i
+  kodowania korpusu — na 8 GB batch 16 treningowy dawał OOM), DPO 4.5B z
+  większym marginesem, ewentualny GRPO 4.5B (R06) oraz inference lokalnego
+  `Qwen3.6-27B` Q4 z offloadem do RAM.
+- **Sprzęt zewnętrzny (wynajem / większe GPU):** dopuszczalny dla finalnych
+  treningów większych modeli (7B+, E14) po decyzji ADR. Pipeline (configi,
+  skrypty, preflighty) musi być przenośny: parametry zależne od sprzętu
+  (batch, max length, kwantyzacja, offload, liczba GPU) są jawnymi polami
+  configu, nie stałymi w kodzie, a każdy trening finalny wymaga 100-step
+  rehearsal na docelowej maszynie.
+
+Obserwowane wyłączenia hosta podczas długiego kodowania korpusu traktuj jako
+prawdopodobny problem zasilania/termiki, nie VRAM: przed kolejnym obniżaniem
+batcha sprawdź temperatury i rozważ limit mocy GPU (`nvidia-smi -pl`),
+dokumentując zmianę jako amendment wykonawczy.
 
 Domyślne ustawienia startowe, które agent ma traktować jako punkt wyjścia, nie dogmat:
 
@@ -629,7 +722,7 @@ Przed każdym runem wykonaj krótki memory probe. Loguj `torch.cuda.max_memory_a
 
 ---
 
-## 13. DPO na 16 GB
+## 13. DPO na 8–16 GB
 
 Domyślna procedura:
 
@@ -673,7 +766,7 @@ R = 1.00 * R_ground
 
 Wagi są tylko punktem startowym. Każdy komponent znormalizuj na zbiorze kalibracyjnym, monitoruj osobno i wykonaj ablacją „leave-one-reward-out”.
 
-Dla 16 GB:
+Dla 8 GB (1.5B) oraz 16 GB (4.5B):
 
 - zacznij od 1.5B;
 - `num_generations=4`, a nie 8;

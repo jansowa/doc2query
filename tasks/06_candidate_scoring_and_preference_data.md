@@ -6,6 +6,13 @@
 
 `IN PROGRESS`
 
+Aktualizacja 2026-08-13 (rozszerzenie specyfikacji, decyzja właściciela):
+dodano obowiązkową bramkę różnorodności same-prompt przed budową par (sekcja
+poniżej), dopuszczono prospektywną ablację teachera na lokalnym
+`Qwen3.6-27B` Q4 oraz preferencję lokalnego, przypiętego sędziego
+`qwen3.6-27b` w przyszłych audytach dual-LLM. Zamrożony kontrakt trwającego
+expansion runu 500×8 pozostaje bez zmian; bramka dotyczy dopiero budowy par.
+
 Aktualizacja 2026-08-13: pilot 512 zakończył wszystkie fazy: 4096 kandydatów,
 4096 scoringów, 512 natural diagnostics i 2048 safe-selected. Selector zmienił
 anchor w 482/512 grup i wybrał 1164 W06 + 884 D01. Audyt wykrył błędny prefiks
@@ -269,6 +276,31 @@ wyłącznie jako jawna ablacja teachera. Opcjonalny zamrożony answerability jud
 może rozstrzygać disagreement i wskazywać evidence; żadnego z sędziów nie
 wolno dostrajać na outputach generatora.
 
+## Bramka różnorodności same-prompt (obowiązkowa przed budową par)
+
+Pomiar expansion 500×8 wykazał kolaps różnorodności przy identycznym
+promptcie: `duplicate_rate` średnio 0.399 (pilot: 0.0049), self-BLEU 0.603,
+mediana max pairwise lemma Jaccard 1.0. Pary budowane z niemal identycznych
+kandydatów kodują szum sędziów, nie różnicę jakości, i uczą DPO artefaktów.
+
+Wymagania przed materializacją par z dowolnej kohorty same-prompt:
+
+- grupa wchodzi do budowy par tylko wtedy, gdy po normalizacji i deduplikacji
+  ma co najmniej 3 efektywnie różne kandydatury oraz spełnia prospektywnie
+  zamrożony próg grupowej różnorodności (duplicate_rate, self-BLEU lub
+  odpowiednik); próg ustala osobny ADR przed odczytem par;
+- dozwolone osie naprawy w ramach *tego samego* promptu: rozkład decodingu
+  (temperatury, min-p/top-p, seedy) oraz większe K z deduplikacją — kontrakt
+  DPO wymaga wspólnego promptu, nie wspólnych parametrów samplingu;
+- odsetek grup odrzuconych przez bramkę jest raportowany, nie ukrywany.
+
+Dopuszczalna jest również prospektywna ablacja teachera (osobny ADR): lokalny,
+przypięty `Qwen3.6-27B` Q4 generuje kandydatów na dokładnie te same prompty
+jako dodatkowe źródło `chosen`. Provenance teachera jest oddzielne, model
+pozostaje zamrożony, a budżet musi mieścić się w przepustowości kilku tysięcy
+promptów na dobę. Par zawierających kandydatów teachera nie może oceniać
+sędzia tożsamy z teacherem (self-preference bias); audytuje je drugi model.
+
 ## Budowa par
 
 Preferowana metoda:
@@ -307,7 +339,11 @@ Walidacja par (owner waiver 2026-08-12: dual-LLM zamiast ludzi):
 - ślepa kolejność;
 - preferencja każdego LLM i kod przyczyny;
 - zgodność automatycznego rankingu z każdym LLM i consensus obu;
-- analiza według źródła rejected.
+- analiza według źródła rejected;
+- przyszłe audyty preferują lokalny, przypięty checkpoint `qwen3.6-27b` Q4
+  zamiast wariantu API tego samego modelu (przypięte wagi, brak dryfu wersji
+  i limitów quota); dla wywołań API zapisuj wersję/datę modelu; zmiana
+  transportu sędziego wymaga własnego ADR i nie dotyczy zamrożonych kontraktów.
 
 ## Leakage i splity
 

@@ -6,6 +6,15 @@
 
 `IMPLEMENTED`
 
+Aktualizacja 2026-08-13 (rozszerzenie zakresu, M-03): harness probe otrzymuje
+obowiązkowy guardrail zbieżności treningu — run probe raportuje trajektorię
+eval loss oraz minimalny sanity wynik retrieval, a seed niezbiegnięty (jak
+W06 seed 43 w confirmie TriviaQA) jest jawnie flagowany i nie wchodzi do
+agregatów bez symetrycznej analizy wrażliwości w obu ramionach. Przy tanich
+korpusach ewaluacyjnych (rząd ≤200 tys. dokumentów) domyślna liczba seedów
+confirmu wzrasta z 3 do 5. Definicje M-01–M-05: AGENTS.md §9.2. Wymóg jest
+prospektywny i nie unieważnia zakończonych pomiarów.
+
 Generyczna optymalizacja Harnessu po pomiarze S07 jest gotowa i zmierzona:
 batchowana generacja causal/encoder-decoder, jawne umieszczanie modelu
 inferencyjnego na CUDA, niezależne urządzenia sędziów, trwała pula BM25,
