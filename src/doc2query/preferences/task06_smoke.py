@@ -230,11 +230,7 @@ def prepare_smoke_cohort(
         ]
         negative_order = {value: index for index, value in enumerate(item["negative_doc_ids"])}
         negatives = sorted(
-            (
-                value
-                for value in source["hard_negatives"]
-                if str(value["doc_id"]) in negative_order
-            ),
+            (value for value in source["hard_negatives"] if str(value["doc_id"]) in negative_order),
             key=lambda value: negative_order[str(value["doc_id"])],
         )
         if len(positives) != 1 or len(negatives) < 10:
@@ -340,9 +336,7 @@ def generate_role(
         if journal_path.exists() and journal_path.stat().st_size:
             raise ValueError("generation journal exists without identity")
         write_json(identity_path, identity)
-    expected_ids = [
-        f"{record['pair_id']}::{slot['slot']}" for slot in matrix for record in records
-    ]
+    expected_ids = [f"{record['pair_id']}::{slot['slot']}" for slot in matrix for record in records]
     completed = read_durable_jsonl_prefix(journal_path)
     if [str(row.get("evaluation_id")) for row in completed] != expected_ids[: len(completed)]:
         raise ValueError("Task 06 generation journal is not the exact expected prefix")
@@ -649,30 +643,17 @@ def select_safe_queries(
     return report
 
 
-def generate_same_prompt_expansion(config_path: Path, output_dir: Path) -> dict[str, Any]:
-    """Generate eight D01 responses for each of 500 exact, frozen prompts."""
-    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    if (
-        not isinstance(raw, dict)
-        or raw.get("contract") != "task06-same-prompt-preference-expansion-v1"
-        or raw.get("status") != "frozen_ready_for_generation"
-        or raw.get("final_tests_used") != []
-    ):
-        raise ValueError("invalid same-prompt expansion contract")
-    authorization = cast(Mapping[str, Any], raw["authorization"])
-    if authorization.get("generation_authorized") is not True:
-        raise ValueError("same-prompt expansion generation is not authorized")
-    root = config_path.resolve().parents[2]
+def _same_prompt_expansion_v1_records(
+    raw: Mapping[str, Any], root: Path, output_dir: Path
+) -> tuple[list[dict[str, Any]], Path]:
+    """Select and materialize the v1 cohort from the repaired pilot cohort."""
     source = cast(Mapping[str, Any], raw["source"])
-    generator = cast(Mapping[str, Any], raw["generator"])
     source_path = root / str(source["pilot_cohort"])
     if sha256_file(source_path) != str(source["pilot_cohort_sha256"]):
         raise ValueError("repaired pilot cohort fingerprint drifted")
     records = list(read_records(source_path))
     seed = int(source["selection_seed"])
-    records.sort(
-        key=lambda row: hashlib.sha256(f"{seed}:{row['pair_id']}".encode()).digest()
-    )
+    records.sort(key=lambda row: hashlib.sha256(f"{seed}:{row['pair_id']}".encode()).digest())
     records = records[: int(source["passage_count"])]
     if len(records) != 500 or len({row["cluster_id"] for row in records}) != 500:
         raise ValueError("same-prompt expansion requires 500 cluster-unique passages")
@@ -682,6 +663,64 @@ def generate_same_prompt_expansion(config_path: Path, output_dir: Path) -> dict[
             raise ValueError("same-prompt expansion cohort resume mismatch")
     else:
         _write_jsonl_atomic(cohort_path, records)
+    return records, cohort_path
+
+
+def _same_prompt_expansion_v2_records(
+    raw: Mapping[str, Any], config_path: Path, output_dir: Path
+) -> tuple[list[dict[str, Any]], Path]:
+    """Consume the separately frozen v2 cohort without reselecting or reordering it."""
+    cohort = cast(Mapping[str, Any], raw["cohort"])
+    cohort_path = output_dir / "cohort.records.jsonl"
+    manifest_path = output_dir / "cohort.manifest.json"
+    if not cohort_path.is_file() or not manifest_path.is_file():
+        raise ValueError("same-prompt expansion v2 requires a previously frozen cohort")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict):
+        raise ValueError("same-prompt expansion v2 cohort manifest must be a mapping")
+    if manifest.get("status") != "materialized_after_quality_blind_id_freeze":
+        raise ValueError("same-prompt expansion v2 cohort is not a frozen quality-blind cohort")
+    if manifest.get("final_tests_used") != [] or manifest.get("pairs_built") is not False:
+        raise ValueError("same-prompt expansion v2 cohort manifest is not pre-generation")
+    if manifest.get("records_sha256") != sha256_file(cohort_path):
+        raise ValueError("frozen same-prompt expansion v2 cohort drifted")
+    if manifest.get("config_sha256") != sha256_file(config_path):
+        raise ValueError("same-prompt expansion v2 config drifted from the frozen cohort")
+    records = list(read_records(cohort_path))
+    expected_count = int(cohort["passage_count"])
+    if len(records) != expected_count or len({row["cluster_id"] for row in records}) != (
+        expected_count
+    ):
+        raise ValueError(f"same-prompt expansion v2 requires {expected_count} unique clusters")
+    return records, cohort_path
+
+
+def generate_same_prompt_expansion(config_path: Path, output_dir: Path) -> dict[str, Any]:
+    """Generate eight D01 responses for each exact, frozen same-prompt cohort prompt."""
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    contracts = {
+        "task06-same-prompt-preference-expansion-v1": "frozen_ready_for_generation",
+        "task06-same-prompt-preference-expansion-v2": "frozen_ready_for_cohort_freeze",
+    }
+    contract = raw.get("contract") if isinstance(raw, dict) else None
+    if (
+        not isinstance(raw, dict)
+        or contract not in contracts
+        or raw.get("status") != contracts[str(contract)]
+        or raw.get("final_tests_used") != []
+    ):
+        raise ValueError("invalid same-prompt expansion contract")
+    authorization = cast(Mapping[str, Any], raw["authorization"])
+    if authorization.get("generation_authorized") is not True:
+        raise ValueError("same-prompt expansion generation is not authorized")
+    if authorization.get("final_tests_used") != []:
+        raise ValueError("same-prompt expansion authorization declares final-test usage")
+    root = config_path.resolve().parents[2]
+    generator = cast(Mapping[str, Any], raw["generator"])
+    if contract == "task06-same-prompt-preference-expansion-v1":
+        records, cohort_path = _same_prompt_expansion_v1_records(raw, root, output_dir)
+    else:
+        records, cohort_path = _same_prompt_expansion_v2_records(raw, config_path, output_dir)
 
     generation_config = root / str(generator["config"])
     adapter_path = root / str(generator["adapter"])
@@ -695,7 +734,7 @@ def generate_same_prompt_expansion(config_path: Path, output_dir: Path) -> dict[
     identity_path = output_path.with_suffix(output_path.suffix + ".identity.json")
     identity = {
         "schema_version": 1,
-        "contract": "task06-same-prompt-preference-expansion-v1",
+        "contract": contract,
         "config_sha256": sha256_file(config_path),
         "cohort_sha256": sha256_file(cohort_path),
         "generation_config_sha256": sha256_file(generation_config),
@@ -747,9 +786,7 @@ def generate_same_prompt_expansion(config_path: Path, output_dir: Path) -> dict[
             form=QueryForm(str(control_raw["form"])),
             intent=QueryIntent(str(control_raw["intent"])),
             focus_mode=FocusMode.BUCKET,
-            focus_bucket=cast(
-                Literal["beginning", "middle", "end"], str(control_raw["focus"])
-            ),
+            focus_bucket=cast(Literal["beginning", "middle", "end"], str(control_raw["focus"])),
             length="medium",
         )
         prompt = render_controlled_prompt(str(record["positives"][0]["text"]), control)
@@ -836,7 +873,7 @@ def generate_same_prompt_expansion(config_path: Path, output_dir: Path) -> dict[
     _write_jsonl_atomic(output_path, rows)
     summary = {
         "schema_version": 1,
-        "contract": "task06-same-prompt-preference-expansion-v1",
+        "contract": contract,
         "status": "same_prompt_generation_complete",
         "prompt_count": len(records),
         "generation_count": len(rows),

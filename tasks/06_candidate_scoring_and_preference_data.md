@@ -6,6 +6,26 @@
 
 `IN PROGRESS`
 
+Aktualizacja 2026-08-13 (decyzja o kohorcie v2, delegowana właścicielem):
+właściciel delegował wybór ścieżki naprawy deficytu par. ADR
+[`task06_same_prompt_expansion_v2_2026-08-13.md`](../reports/decisions/task06_same_prompt_expansion_v2_2026-08-13.md)
+zamraża nową kohortę 500 pasaży rozłączną klastrowo z całą dotychczasową pracą
+Task 06, z tym samym kontraktem „jeden prompt, osiem odpowiedzi”, ale szerszym
+rozkładem decodingu (temperatury 0.6–1.2, top_p 0.92/0.97, osiem nowych
+seedów). Etap 1 (CPU) jest wykonany: quality-blind ID freeze i materializacja
+500/500 unikalnych klastrów z legalnej puli 291463 par, zero nakładania z 544
+klastrami smoke/pilot i 49352 klastrami selekcji 50k SFT
+(`src/doc2query/preferences/same_prompt_cohort.py`,
+`scripts/freeze_task06_same_prompt_expansion_v2.py`, artefakt
+`artifacts/task06/same_prompt_expansion_v2`). Ścieżkę generacji v2 zweryfikowano
+na prawdziwych artefaktach do momentu ładowania modelu. Etap 2 czeka wyłącznie
+na wolne GPU: `bash scripts/run_task06_same_prompt_expansion_v2.sh` (~50 min:
+generacja, scoring, bramka o niezmienionych progach).
+`tentative_pair_build_authorized=false` — budowa par wymaga osobnego ADR
+zamrażającego politykę `chosen/rejected` i kalibrację komponentów. Raport:
+[`task06_same_prompt_expansion_v2_cohort_2026-08-13.md`](../reports/measurements/task06_same_prompt_expansion_v2_cohort_2026-08-13.md).
+Walidacja: Ruff, `mypy src`, pełny pytest `512 passed`. `final_tests_used=[]`.
+
 Aktualizacja 2026-08-13 (wynik expansion + bramka różnorodności): run
 `same_prompt_expansion_v1` jest zakończony — 4000/4000 wygenerowanych i
 4000/4000 ocenionych kandydatów dla 500 promptów × 8 odpowiedzi, bez resume,
@@ -382,6 +402,8 @@ Preference train/dev/test muszą dziedziczyć split passage. Żaden passage/near
 ## Wymagane skrypty
 
 - `scripts/apply_task06_same_prompt_diversity_gate.py`
+- `scripts/freeze_task06_same_prompt_expansion_v2.py`
+- `scripts/run_task06_same_prompt_expansion_v2.sh`
 - `scripts/generate_candidates.py`
 - `scripts/score_candidates.py`
 - `scripts/select_candidate_sets.py`

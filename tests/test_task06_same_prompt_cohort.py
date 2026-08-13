@@ -1,0 +1,401 @@
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from doc2query.preferences.same_prompt_cohort import freeze_same_prompt_expansion_cohort
+from doc2query.preferences.task06_smoke import generate_same_prompt_expansion
+from doc2query.utils.records import JsonParquetWriter, write_json
+
+PAIR_COUNT = 24
+COHORT_SIZE = 4
+
+
+def _pairs(count: int = PAIR_COUNT) -> list[dict[str, Any]]:
+    return [
+        {
+            "pair_id": f"{index}::{1000 + index}",
+            "example_id": str(index),
+            "doc_id": str(1000 + index),
+            "negative_doc_ids": [str(9000 + index * 20 + offset) for offset in range(10)],
+            "split": "train",
+        }
+        for index in range(count)
+    ]
+
+
+def _train_records(pairs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "example_id": row["example_id"],
+            "query": f"naturalne zapytanie {row['example_id']}",
+            "positives": [
+                {"doc_id": row["doc_id"], "text": f"pasaż {row['doc_id']}", "metadata": {}}
+            ],
+            "hard_negatives": [
+                {"doc_id": doc_id, "text": f"negatyw {doc_id}", "metadata": {}}
+                for doc_id in reversed(row["negative_doc_ids"])
+            ],
+            "metadata": {"split": "train", "source": "speakleash/msmarco_pl"},
+        }
+        for row in pairs
+    ]
+
+
+def _prior_ids(path: Path, clusters: list[str], *, contract: str) -> str:
+    payload: dict[str, Any] = {
+        "schema_version": 1,
+        "contract": contract,
+        "status": "ids_frozen_before_text_materialization",
+        "records": [
+            {
+                "pair_id": f"prior::{cluster}",
+                "example_id": f"prior-{cluster}",
+                "doc_id": cluster,
+                "cluster_id": cluster,
+            }
+            for cluster in clusters
+        ],
+        "quality_fields_used": [],
+        "final_tests_used": [],
+    }
+    write_json(path, payload)
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _repository(tmp_path: Path, *, prior_clusters: list[str] | None = None) -> Path:
+    root = tmp_path / "repo"
+    (root / "configs/preferences").mkdir(parents=True)
+    (root / "data/processed/v1").mkdir(parents=True)
+    (root / "artifacts/task06").mkdir(parents=True)
+    pairs = _pairs()
+    pairs_path = root / "data/processed/v1/doc2query_train.parquet"
+    with JsonParquetWriter(pairs_path) as writer:
+        for row in pairs:
+            writer.write(row)
+    dedup_path = root / "data/processed/v1/dedup_map.parquet"
+    with JsonParquetWriter(dedup_path) as writer:
+        for row in pairs:
+            writer.write({"doc_id": row["doc_id"], "cluster_id": row["doc_id"]})
+    source_path = root / "data/processed/v1/train.parquet"
+    with JsonParquetWriter(source_path) as writer:
+        for row in _train_records(pairs):
+            writer.write(row)
+    split_path = root / "data/processed/v1/split_manifest.json"
+    write_json(split_path, {"version": "v1", "positive_canonical_leakage": 0})
+
+    def digest(path: Path) -> str:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    design_path = root / "configs/preferences/task06_candidate_execution_design_v1.yaml"
+    write_json(
+        design_path,
+        {
+            "schema_version": 1,
+            "contract": "task06-candidate-execution-design-v1",
+            "final_tests_used": [],
+            "data": {
+                "source_train_pairs": "data/processed/v1/doc2query_train.parquet",
+                "dedup_map": "data/processed/v1/dedup_map.parquet",
+                "split_manifest": "data/processed/v1/split_manifest.json",
+                "sha256": {
+                    "source_train_pairs": digest(pairs_path),
+                    "dedup_map": digest(dedup_path),
+                    "split_manifest": digest(split_path),
+                },
+            },
+            "adapter_training_exclusion": {"selection_seed": 42, "max_pairs": 8},
+        },
+    )
+    prior_path = root / "artifacts/task06/prior_cohort.ids.json"
+    prior_sha = _prior_ids(
+        prior_path,
+        prior_clusters if prior_clusters is not None else ["1000", "1001"],
+        contract="task06-candidate-pilot-v1",
+    )
+    write_json(
+        root / "configs/preferences/task06_same_prompt_expansion_v2.yaml",
+        {
+            "schema_version": 1,
+            "contract": "task06-same-prompt-preference-expansion-v2",
+            "status": "frozen_ready_for_cohort_freeze",
+            "final_tests_used": [],
+            "design": {
+                "config": "configs/preferences/task06_candidate_execution_design_v1.yaml",
+                "config_sha256": digest(design_path),
+                "read_only": True,
+            },
+            "cohort": {
+                "split": "train",
+                "selection": "sha256_cluster_first_quality_blind_v2",
+                "selection_seed": 20260814,
+                "passage_count": COHORT_SIZE,
+                "min_hard_negatives": 10,
+                "source_records": "data/processed/v1/train.parquet",
+                "source_records_sha256": digest(source_path),
+                "exclude_adapter_training_clusters": True,
+                "exclude_prior_cohort_ids": [
+                    {"path": "artifacts/task06/prior_cohort.ids.json", "sha256": prior_sha}
+                ],
+            },
+            "authorization": {
+                "cohort_freeze_authorized": True,
+                "generation_authorized": True,
+                "scoring_authorized": True,
+                "tentative_pair_build_authorized": False,
+                "final_tests_used": [],
+            },
+        },
+    )
+    return root
+
+
+def _config(root: Path) -> Path:
+    return root / "configs/preferences/task06_same_prompt_expansion_v2.yaml"
+
+
+def _rewrite_config(root: Path, mutate: Any) -> None:
+    path = _config(root)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    mutate(payload)
+    write_json(path, payload)
+
+
+def test_cohort_freeze_is_quality_blind_and_disjoint(tmp_path: Path) -> None:
+    root = _repository(tmp_path)
+    output = root / "artifacts/task06/same_prompt_expansion_v2"
+    manifest = freeze_same_prompt_expansion_cohort(_config(root), output)
+    assert manifest["status"] == "materialized_after_quality_blind_id_freeze"
+    assert manifest["record_count"] == COHORT_SIZE
+    assert manifest["cluster_count"] == COHORT_SIZE
+    assert manifest["quality_fields_used_for_selection"] == []
+    assert manifest["excluded_prior_cluster_count"] == 2
+    assert manifest["excluded_adapter_training_cluster_count"] == 8
+    assert manifest["prior_cluster_overlap_count"] == 0
+    assert manifest["generation_started"] is False
+    assert manifest["scoring_started"] is False
+    assert manifest["diversity_gate_applied"] is False
+    assert manifest["pairs_built"] is False
+    assert manifest["model_loading_performed"] is False
+    assert manifest["final_tests_used"] == []
+
+    ids = json.loads((output / "cohort.ids.json").read_text(encoding="utf-8"))
+    assert ids["status"] == "ids_frozen_before_text_materialization"
+    assert len(ids["records"]) == COHORT_SIZE
+    clusters = {row["cluster_id"] for row in ids["records"]}
+    assert clusters.isdisjoint({"1000", "1001"})
+
+    records = [
+        json.loads(line)
+        for line in (output / "cohort.records.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert [row["pair_id"] for row in records] == [row["pair_id"] for row in ids["records"]]
+    assert all(row["split"] == "train" for row in records)
+    assert all(len(row["positives"]) == 1 for row in records)
+    assert all(len(row["hard_negatives"]) >= 10 for row in records)
+    assert all(row["metadata"]["task06_same_prompt_expansion_v2"] is True for row in records)
+    first = records[0]
+    expected_negatives = next(
+        row["negative_doc_ids"] for row in _pairs() if row["pair_id"] == first["pair_id"]
+    )
+    assert [value["doc_id"] for value in first["hard_negatives"]] == expected_negatives
+
+
+def test_cohort_freeze_is_deterministic_and_idempotent(tmp_path: Path) -> None:
+    root = _repository(tmp_path)
+    output = root / "artifacts/task06/same_prompt_expansion_v2"
+    first = freeze_same_prompt_expansion_cohort(_config(root), output)
+    second = freeze_same_prompt_expansion_cohort(_config(root), output)
+    assert first == second
+
+    other = _repository(tmp_path / "second")
+    repeated = freeze_same_prompt_expansion_cohort(
+        _config(other), other / "artifacts/task06/same_prompt_expansion_v2"
+    )
+    assert repeated["ids_fingerprint"] == first["ids_fingerprint"]
+    assert repeated["records_sha256"] == first["records_sha256"]
+
+
+def test_cohort_freeze_rejects_drifted_and_unauthorized_inputs(tmp_path: Path) -> None:
+    root = _repository(tmp_path)
+    output = root / "artifacts/task06/same_prompt_expansion_v2"
+    _rewrite_config(root, lambda payload: payload["design"].__setitem__("config_sha256", "a" * 64))
+    with pytest.raises(ValueError, match="execution design drifted"):
+        freeze_same_prompt_expansion_cohort(_config(root), output)
+
+    root = _repository(tmp_path / "auth")
+    _rewrite_config(
+        root,
+        lambda payload: payload["authorization"].__setitem__("cohort_freeze_authorized", False),
+    )
+    with pytest.raises(ValueError, match="not authorized"):
+        freeze_same_prompt_expansion_cohort(
+            _config(root), root / "artifacts/task06/same_prompt_expansion_v2"
+        )
+
+    root = _repository(tmp_path / "pairs")
+    _rewrite_config(
+        root,
+        lambda payload: payload["authorization"].__setitem__(
+            "tentative_pair_build_authorized", True
+        ),
+    )
+    with pytest.raises(ValueError, match="must not authorize pair building"):
+        freeze_same_prompt_expansion_cohort(
+            _config(root), root / "artifacts/task06/same_prompt_expansion_v2"
+        )
+
+    root = _repository(tmp_path / "prior")
+    _rewrite_config(
+        root,
+        lambda payload: payload["cohort"]["exclude_prior_cohort_ids"][0].__setitem__(
+            "sha256", "b" * 64
+        ),
+    )
+    with pytest.raises(ValueError, match="ID manifest drifted"):
+        freeze_same_prompt_expansion_cohort(
+            _config(root), root / "artifacts/task06/same_prompt_expansion_v2"
+        )
+
+    root = _repository(tmp_path / "records")
+    _rewrite_config(
+        root, lambda payload: payload["cohort"].__setitem__("source_records_sha256", "c" * 64)
+    )
+    with pytest.raises(ValueError, match="canonical train records drifted"):
+        freeze_same_prompt_expansion_cohort(
+            _config(root), root / "artifacts/task06/same_prompt_expansion_v2"
+        )
+
+    root = _repository(tmp_path / "exclusion")
+    _rewrite_config(
+        root,
+        lambda payload: payload["cohort"].__setitem__("exclude_adapter_training_clusters", False),
+    )
+    with pytest.raises(ValueError, match="must be excluded"):
+        freeze_same_prompt_expansion_cohort(
+            _config(root), root / "artifacts/task06/same_prompt_expansion_v2"
+        )
+
+
+def test_cohort_freeze_fails_closed_when_legal_pool_is_too_small(tmp_path: Path) -> None:
+    root = _repository(tmp_path, prior_clusters=[str(1000 + index) for index in range(20)])
+    with pytest.raises(RuntimeError, match="insufficient legal cluster-unique"):
+        freeze_same_prompt_expansion_cohort(
+            _config(root), root / "artifacts/task06/same_prompt_expansion_v2"
+        )
+
+
+def _v2_generation_config(root: Path) -> None:
+    """Complete the frozen v2 config with the generator block the runner needs."""
+    _rewrite_config(
+        root,
+        lambda payload: payload.__setitem__(
+            "generator",
+            {
+                "role": "d01_controlled",
+                "config": "configs/experiments/d01b_scale_pilot_d01_4_5b_s42.yaml",
+                "adapter": "runs/D01-4.5B-STYLE-50K-S42/adapter",
+                "prompts_per_passage": 1,
+                "candidates_per_prompt": 8,
+                "exact_same_prompt_required": True,
+                "controls": [
+                    {"form": "full_question", "intent": "fact_lookup", "focus": "beginning"}
+                ]
+                * 4,
+                "decoding": [
+                    {"slot": index, "temperature": 0.6, "top_p": 0.97, "seed": 7600 + index}
+                    for index in range(8)
+                ],
+                "max_new_tokens": 64,
+            },
+        ),
+    )
+
+
+def test_v2_generation_requires_a_previously_frozen_cohort(tmp_path: Path) -> None:
+    root = _repository(tmp_path)
+    _v2_generation_config(root)
+    output = root / "artifacts/task06/same_prompt_expansion_v2"
+    with pytest.raises(ValueError, match="requires a previously frozen cohort"):
+        generate_same_prompt_expansion(_config(root), output)
+
+
+def test_v2_generation_refuses_unauthorized_or_drifted_cohort(tmp_path: Path) -> None:
+    root = _repository(tmp_path)
+    output = root / "artifacts/task06/same_prompt_expansion_v2"
+    freeze_same_prompt_expansion_cohort(_config(root), output)
+    _v2_generation_config(root)
+    manifest_path = output / "cohort.manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    drifted = {**manifest, "records_sha256": "d" * 64}
+    write_json(manifest_path, drifted)
+    with pytest.raises(ValueError, match="cohort drifted"):
+        generate_same_prompt_expansion(_config(root), output)
+
+    write_json(manifest_path, {**manifest, "pairs_built": True})
+    with pytest.raises(ValueError, match="not pre-generation"):
+        generate_same_prompt_expansion(_config(root), output)
+
+    write_json(manifest_path, manifest)
+    _rewrite_config(
+        root,
+        lambda payload: payload["authorization"].__setitem__("generation_authorized", False),
+    )
+    with pytest.raises(ValueError, match="generation is not authorized"):
+        generate_same_prompt_expansion(_config(root), output)
+
+
+def test_v2_generation_accepts_the_frozen_cohort_and_stops_at_model_loading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repository(tmp_path)
+    output = root / "artifacts/task06/same_prompt_expansion_v2"
+    generation_config = root / "configs/experiments/d01b_scale_pilot_d01_4_5b_s42.yaml"
+    generation_config.parent.mkdir(parents=True)
+    generation_config.write_text("experiment_id: D01-TEST\n", encoding="utf-8")
+    _v2_generation_config(root)
+    freeze_same_prompt_expansion_cohort(_config(root), output)
+
+    class _Reached(RuntimeError):
+        pass
+
+    def _reached(*_args: Any, **_kwargs: Any) -> Any:
+        raise _Reached("model loading reached after validation")
+
+    monkeypatch.setattr("doc2query.preferences.task06_smoke.load_config", lambda _path: object())
+    monkeypatch.setattr("doc2query.preferences.task06_smoke.load_tokenizer", _reached)
+    monkeypatch.setattr("doc2query.preferences.task06_smoke.load_generator", _reached)
+    with pytest.raises(_Reached):
+        generate_same_prompt_expansion(_config(root), output)
+    identity = json.loads(
+        (output / "d01_controlled/generations.jsonl.identity.json").read_text(encoding="utf-8")
+    )
+    assert identity["contract"] == "task06-same-prompt-preference-expansion-v2"
+    assert identity["exact_same_prompt_required"] is True
+    assert identity["final_tests_used"] == []
+    assert len(identity["decoding"]) == 8
+    assert not (output / "d01_controlled/generations.jsonl").exists()
+
+
+def test_v2_generation_detects_config_drift_after_cohort_freeze(tmp_path: Path) -> None:
+    root = _repository(tmp_path)
+    output = root / "artifacts/task06/same_prompt_expansion_v2"
+    freeze_same_prompt_expansion_cohort(_config(root), output)
+    _v2_generation_config(root)
+    _rewrite_config(root, lambda payload: payload["cohort"].__setitem__("passage_count", 3))
+    with pytest.raises(ValueError, match="config drifted from the frozen cohort"):
+        generate_same_prompt_expansion(_config(root), output)
+
+
+def test_cohort_freeze_refuses_incomplete_prior_state(tmp_path: Path) -> None:
+    root = _repository(tmp_path)
+    output = root / "artifacts/task06/same_prompt_expansion_v2"
+    output.mkdir(parents=True)
+    (output / "cohort.records.jsonl").write_text("", encoding="utf-8")
+    with pytest.raises(FileExistsError, match="incomplete"):
+        freeze_same_prompt_expansion_cohort(_config(root), output)
