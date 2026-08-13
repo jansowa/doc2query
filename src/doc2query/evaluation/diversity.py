@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from itertools import combinations
 from statistics import fmean
 from typing import Any
@@ -42,6 +43,19 @@ def _self_bleu(tokens: list[tuple[str, ...]]) -> float | None:
         brevity = min(1.0, math.exp(1 - max(map(len, references)) / max(1, len(query))))
         scores.append(brevity * math.exp(fmean(math.log(value) for value in precisions)))
     return fmean(scores)
+
+
+def self_bleu_score(queries: Sequence[str]) -> float | None:
+    """Self-BLEU of a query group using the same definition as diversity_metrics."""
+    normalizer = SimplePolishNormalizer()
+    return _self_bleu([normalizer.analyze(query).tokens for query in queries])
+
+
+def pairwise_lemma_jaccards(queries: Sequence[str]) -> list[float]:
+    """Content-lemma Jaccard of every unordered query pair, in combination order."""
+    normalizer = SimplePolishNormalizer()
+    lemmas = [set(normalizer.analyze(query).content_lemmas) for query in queries]
+    return [_jaccard(lemmas[a], lemmas[b]) for a, b in combinations(range(len(lemmas)), 2)]
 
 
 def _entropy(values: list[str]) -> float | None:

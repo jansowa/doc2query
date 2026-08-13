@@ -6,6 +6,28 @@
 
 `IN PROGRESS`
 
+Aktualizacja 2026-08-13 (wynik expansion + bramka różnorodności): run
+`same_prompt_expansion_v1` jest zakończony — 4000/4000 wygenerowanych i
+4000/4000 ocenionych kandydatów dla 500 promptów × 8 odpowiedzi, bez resume,
+peak VRAM 3.43 GB. Prospektywny ADR
+[`task06_same_prompt_diversity_gate_v1.md`](../reports/decisions/task06_same_prompt_diversity_gate_v1.md)
+zamroził progi bramki przed odczytem jakichkolwiek par, a zaimplementowana,
+quality-blind bramka (`src/doc2query/preferences/diversity_gate.py`,
+`scripts/apply_task06_same_prompt_diversity_gate.py`, polityka w
+`configs/preferences/task06_same_prompt_diversity_gate_v1.yaml`) została
+zastosowana na CPU: **362/500 grup `eligible` (72.4%), 138 odrzuconych
+(27.6%)**; przyczyny: 133 `duplicate_rate`, 72 `insufficient_effective_candidates`,
+38 `self_bleu`, 24 `no_pairable_candidate_pair`. Bramka czyta wyłącznie
+`generations.jsonl`; manifest zapisuje `judge_scores_read=false`,
+`candidates_ranked=false`, `pairs_built=false`,
+`model_loading_performed=false`. Ta kohorta daje najwyżej 362 pary, czyli
+mniej niż wymagane 500 par rozwojowej bramki dual-LLM — uzupełnienie wymaga
+nowej generacji na GPU i osobnej decyzji właściciela (większe K z deduplikacją
+albo nowe grupy same-prompt). Par nie zbudowano, Groq nie uruchomiono, Task 07
+zamknięty. Wynik:
+[`task06_same_prompt_expansion_result_2026-08-13.md`](../reports/measurements/task06_same_prompt_expansion_result_2026-08-13.md).
+Walidacja: Ruff, `mypy src`, pełny pytest `503 passed`. `final_tests_used=[]`.
+
 Aktualizacja 2026-08-13 (rozszerzenie specyfikacji, decyzja właściciela):
 dodano obowiązkową bramkę różnorodności same-prompt przed budową par (sekcja
 poniżej), dopuszczono prospektywną ablację teachera na lokalnym
@@ -294,6 +316,14 @@ Wymagania przed materializacją par z dowolnej kohorty same-prompt:
   DPO wymaga wspólnego promptu, nie wspólnych parametrów samplingu;
 - odsetek grup odrzuconych przez bramkę jest raportowany, nie ukrywany.
 
+Stan realizacji bramki: progi są zamrożone ADR
+[`task06_same_prompt_diversity_gate_v1.md`](../reports/decisions/task06_same_prompt_diversity_gate_v1.md)
+(min. 3 efektywne kandydatury po deduplikacji near-duplicate przy lemma Jaccard
+0.90, `duplicate_rate <= 0.50`, `effective_self_bleu <= 0.75`, minimalny Jaccard
+reprezentantów `<= 0.85` spójnie z `SelectionPolicy`). Pierwsze zastosowanie na
+kohorcie `same_prompt_expansion_v1` dało 362/500 grup `eligible`; progów nie
+wolno zmieniać po zobaczeniu tego wyniku.
+
 Dopuszczalna jest również prospektywna ablacja teachera (osobny ADR): lokalny,
 przypięty `Qwen3.6-27B` Q4 generuje kandydatów na dokładnie te same prompty
 jako dodatkowe źródło `chosen`. Provenance teachera jest oddzielne, model
@@ -351,6 +381,7 @@ Preference train/dev/test muszą dziedziczyć split passage. Żaden passage/near
 
 ## Wymagane skrypty
 
+- `scripts/apply_task06_same_prompt_diversity_gate.py`
 - `scripts/generate_candidates.py`
 - `scripts/score_candidates.py`
 - `scripts/select_candidate_sets.py`

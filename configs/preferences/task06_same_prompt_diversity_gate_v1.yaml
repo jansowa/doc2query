@@ -1,0 +1,19 @@
+schema_version: 1
+contract: task06-same-prompt-diversity-gate-policy-v1
+policy_id: task06-same-prompt-diversity-gate-v1
+status: frozen_before_pair_read
+adr: reports/decisions/task06_same_prompt_diversity_gate_v1.md
+final_tests_used: []
+
+normalization:
+  exact_duplicate: task06_whitespace_casefold
+  lemma_backend: simple_pl:v1:nfkc:stopwords-v1
+  near_duplicate_lemma_jaccard: 0.90
+
+group:
+  require_exact_same_prompt: true
+  expected_candidates_per_group: 8
+  min_effective_candidates: 3
+  max_duplicate_rate: 0.50
+  max_effective_self_bleu: 0.75
+  max_min_pairwise_query_jaccard: 0.85

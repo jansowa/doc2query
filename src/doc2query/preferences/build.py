@@ -18,7 +18,8 @@ def _normalized_tokens(text: str) -> set[str]:
     return set(re.findall(r"\w+", text.casefold(), flags=re.UNICODE))
 
 
-def _jaccard(left: str, right: str) -> float:
+def normalized_query_jaccard(left: str, right: str) -> float:
+    """Pairing-contract query similarity used by SelectionPolicy thresholds."""
     left_tokens = _normalized_tokens(left)
     right_tokens = _normalized_tokens(right)
     union = left_tokens | right_tokens
@@ -89,7 +90,8 @@ def select_candidate_sets(
             if row.candidate_id != chosen.candidate_id
             and _candidate_is_rejected_eligible(row, policy)
             and chosen.scores.total_score - row.scores.total_score >= policy.min_score_margin
-            and _jaccard(chosen.query, row.query) <= policy.max_normalized_query_jaccard
+            and normalized_query_jaccard(chosen.query, row.query)
+            <= policy.max_normalized_query_jaccard
         ]
         if not rejected:
             skipped["no_eligible_rejected"] += 1
