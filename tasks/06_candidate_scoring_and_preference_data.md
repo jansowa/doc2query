@@ -20,7 +20,13 @@ klastrami smoke/pilot i 49352 klastrami selekcji 50k SFT
 `artifacts/task06/same_prompt_expansion_v2`). Ścieżkę generacji v2 zweryfikowano
 na prawdziwych artefaktach do momentu ładowania modelu. Etap 2 czeka wyłącznie
 na wolne GPU: `bash scripts/run_task06_same_prompt_expansion_v2.sh` (~50 min:
-generacja, scoring, bramka o niezmienionych progach).
+generacja, scoring, bramka o niezmienionych progach). Runner jest w pełni
+wznawialny tą samą komendą — oba kosztowne etapy mają fsyncowane journale z
+granulacją jednego batcha, a gotowa bramka nie jest nadpisywana; wznawianie po
+przerwaniu jest sprawdzone testem, nie tylko lekturą kodu. `generation_batch_size`
+i `scoring.max_batch_size` są teraz faktycznie respektowane (wcześniej kod
+używał literału 8) z walidacją 1–8; efektywny batch pozostaje 8, więc identity
+zakończonego runu v1 się nie zmienia.
 `tentative_pair_build_authorized=false` — budowa par wymaga osobnego ADR
 zamrażającego politykę `chosen/rejected` i kalibrację komponentów. Raport:
 [`task06_same_prompt_expansion_v2_cohort_2026-08-13.md`](../reports/measurements/task06_same_prompt_expansion_v2_cohort_2026-08-13.md).

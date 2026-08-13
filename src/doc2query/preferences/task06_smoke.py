@@ -496,7 +496,7 @@ def score_role(
         test_fingerprint=sha256_file(generations_path),
         experiment_id=experiment_id or f"TASK06-{stage.upper()}-{role.upper()}",
         corpus_index_path=root / "data/processed/v1/evaluation/corpus-bm25-v1",
-        scoring_batch_size=8,
+        scoring_batch_size=int(scoring.get("max_batch_size", 8)),
         bm25_workers=8,
         progress_every=16,
         minimum_hard_negatives=10,
@@ -724,11 +724,15 @@ def generate_same_prompt_expansion(config_path: Path, output_dir: Path) -> dict[
 
     generation_config = root / str(generator["config"])
     adapter_path = root / str(generator["adapter"])
-    config = load_config(generation_config)
     controls_raw = cast(Sequence[Mapping[str, Any]], generator["controls"])
     decoding = cast(Sequence[Mapping[str, Any]], generator["decoding"])
     if len(controls_raw) != 4 or len(decoding) != 8:
         raise ValueError("same-prompt expansion requires four controls and eight decodes")
+    batch_size = int(generator["generation_batch_size"])
+    if not 1 <= batch_size <= 8:
+        raise ValueError("same-prompt generation batch size must be between 1 and 8")
+    experiment_id = str(generator.get("experiment_id", "TASK06-PREFERENCE-D01-SAME-PROMPT"))
+    config = load_config(generation_config)
     output_path = output_dir / "d01_controlled/generations.jsonl"
     journal = output_path.with_suffix(output_path.suffix + ".journal.jsonl")
     identity_path = output_path.with_suffix(output_path.suffix + ".identity.json")
@@ -741,7 +745,7 @@ def generate_same_prompt_expansion(config_path: Path, output_dir: Path) -> dict[
         "adapter": str(adapter_path.relative_to(root)),
         "controls": controls_raw,
         "decoding": decoding,
-        "batch_size": 8,
+        "batch_size": batch_size,
         "exact_same_prompt_required": True,
         "final_tests_used": [],
     }
@@ -806,11 +810,11 @@ def generate_same_prompt_expansion(config_path: Path, output_dir: Path) -> dict[
     started = time.perf_counter()
     with journal.open("a", encoding="utf-8") as handle:
         for slot_index, slot in enumerate(decoding):
-            for batch_start in range(0, len(prepared), 8):
+            for batch_start in range(0, len(prepared), batch_size):
                 absolute_start = slot_index * len(prepared) + batch_start
-                if absolute_start + 8 <= len(completed):
+                if absolute_start + batch_size <= len(completed):
                     continue
-                chunk = prepared[batch_start : batch_start + 8]
+                chunk = prepared[batch_start : batch_start + batch_size]
                 seeds = [
                     int(slot["seed"]) + index * 1000
                     for index in range(batch_start, batch_start + len(chunk))
@@ -834,7 +838,7 @@ def generate_same_prompt_expansion(config_path: Path, output_dir: Path) -> dict[
                     row = {
                         "evaluation_id": expected[absolute],
                         "evaluation_group_id": f"task06-preference::{record['pair_id']}",
-                        "experiment_id": "TASK06-PREFERENCE-D01-SAME-PROMPT",
+                        "experiment_id": experiment_id,
                         "example_id": str(record["pair_id"]),
                         "source_example_id": str(record["source_example_id"]),
                         "doc_id": str(positive["doc_id"]),

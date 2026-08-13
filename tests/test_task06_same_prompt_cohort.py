@@ -297,6 +297,7 @@ def _v2_generation_config(root: Path) -> None:
             "generator",
             {
                 "role": "d01_controlled",
+                "experiment_id": "TASK06-PREFERENCE-D01-SAME-PROMPT-V2",
                 "config": "configs/experiments/d01b_scale_pilot_d01_4_5b_s42.yaml",
                 "adapter": "runs/D01-4.5B-STYLE-50K-S42/adapter",
                 "prompts_per_passage": 1,
@@ -311,6 +312,7 @@ def _v2_generation_config(root: Path) -> None:
                     for index in range(8)
                 ],
                 "max_new_tokens": 64,
+                "generation_batch_size": 8,
             },
         ),
     )
@@ -380,6 +382,124 @@ def test_v2_generation_accepts_the_frozen_cohort_and_stops_at_model_loading(
     assert identity["final_tests_used"] == []
     assert len(identity["decoding"]) == 8
     assert not (output / "d01_controlled/generations.jsonl").exists()
+
+
+def _fake_generation_backend(
+    monkeypatch: pytest.MonkeyPatch, calls: list[int], *, fail_after: int | None = None
+) -> None:
+    """Replace model loading and decoding with deterministic, CPU-only stubs."""
+
+    def fake_generate(
+        _model: Any,
+        _tokenizer: Any,
+        prompts: list[list[int]],
+        *,
+        seeds: list[int],
+        temperature: float,
+        top_p: float,
+        max_new_tokens: int,
+    ) -> list[str]:
+        calls.append(len(prompts))
+        if fail_after is not None and len(calls) > fail_after:
+            raise KeyboardInterrupt("simulated interruption")
+        return [f"zapytanie {seed} t{temperature}" for seed in seeds]
+
+    monkeypatch.setattr(
+        "doc2query.preferences.task06_smoke.generate_text_batch_seeded", fake_generate
+    )
+    training = type("T", (), {"max_length": 512, "min_prompt_tokens": 16})()
+    monkeypatch.setattr(
+        "doc2query.preferences.task06_smoke.load_config",
+        lambda _path: type("C", (), {"training": training})(),
+    )
+    monkeypatch.setattr(
+        "doc2query.preferences.task06_smoke.load_tokenizer", lambda _config: object()
+    )
+    monkeypatch.setattr(
+        "doc2query.preferences.task06_smoke.load_generator",
+        lambda _config, for_training: (
+            type("M", (), {"eval": lambda self: None})(),
+            type("P", (), {"label": "bf16"})(),
+        ),
+    )
+    monkeypatch.setattr("peft.PeftModel.from_pretrained", lambda model, *_a, **_k: model)
+    monkeypatch.setattr(
+        "doc2query.preferences.task06_smoke.render_controlled_prompt",
+        lambda passage, control: f"prompt::{passage}::{control.form.value}",
+    )
+    monkeypatch.setattr(
+        "doc2query.preferences.task06_smoke._prompt_ids", lambda *_a, **_k: [1, 2, 3]
+    )
+    monkeypatch.setattr("torch.cuda.max_memory_allocated", lambda: 0)
+    monkeypatch.setattr("torch.cuda.max_memory_reserved", lambda: 0)
+    monkeypatch.setattr(
+        "doc2query.preferences.task06_smoke.normalize_completion", lambda text: str(text)
+    )
+
+
+def test_v2_generation_resumes_after_an_interruption_without_losing_work(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repository(tmp_path)
+    output = root / "artifacts/task06/same_prompt_expansion_v2"
+    generation_config = root / "configs/experiments/d01b_scale_pilot_d01_4_5b_s42.yaml"
+    generation_config.parent.mkdir(parents=True)
+    generation_config.write_text("experiment_id: D01-TEST\n", encoding="utf-8")
+    _v2_generation_config(root)
+    _rewrite_config(
+        root, lambda payload: payload["generator"].__setitem__("generation_batch_size", 2)
+    )
+    freeze_same_prompt_expansion_cohort(_config(root), output)
+    total_rows = COHORT_SIZE * 8
+    journal = output / "d01_controlled/generations.jsonl.journal.jsonl"
+
+    interrupted: list[int] = []
+    _fake_generation_backend(monkeypatch, interrupted, fail_after=5)
+    with pytest.raises(KeyboardInterrupt):
+        generate_same_prompt_expansion(_config(root), output)
+    durable = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+    assert len(durable) == 10
+    assert not (output / "d01_controlled/generations.jsonl").exists()
+
+    resumed: list[int] = []
+    _fake_generation_backend(monkeypatch, resumed)
+    summary = generate_same_prompt_expansion(_config(root), output)
+    assert summary["status"] == "same_prompt_generation_complete"
+    assert summary["generation_count"] == total_rows
+    assert summary["resumed_generation_count"] == 10
+    assert sum(resumed) == total_rows - 10
+    rows = [
+        json.loads(line)
+        for line in (output / "d01_controlled/generations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert len(rows) == total_rows
+    assert rows[:10] == durable
+    assert all(row["experiment_id"] == "TASK06-PREFERENCE-D01-SAME-PROMPT-V2" for row in rows)
+    assert all(row["final_tests_used"] == [] for row in rows)
+    assert len({row["evaluation_id"] for row in rows}) == total_rows
+
+    repeated: list[int] = []
+    _fake_generation_backend(monkeypatch, repeated)
+    again = generate_same_prompt_expansion(_config(root), output)
+    assert again == summary
+    assert repeated == []
+
+
+def test_v2_generation_rejects_an_out_of_contract_batch_size(tmp_path: Path) -> None:
+    root = _repository(tmp_path)
+    output = root / "artifacts/task06/same_prompt_expansion_v2"
+    generation_config = root / "configs/experiments/d01b_scale_pilot_d01_4_5b_s42.yaml"
+    generation_config.parent.mkdir(parents=True)
+    generation_config.write_text("experiment_id: D01-TEST\n", encoding="utf-8")
+    _v2_generation_config(root)
+    _rewrite_config(
+        root, lambda payload: payload["generator"].__setitem__("generation_batch_size", 16)
+    )
+    freeze_same_prompt_expansion_cohort(_config(root), output)
+    with pytest.raises(ValueError, match="batch size must be between 1 and 8"):
+        generate_same_prompt_expansion(_config(root), output)
 
 
 def test_v2_generation_detects_config_drift_after_cohort_freeze(tmp_path: Path) -> None:

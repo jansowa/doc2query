@@ -26,6 +26,7 @@ cohort:
 
 generator:
   role: d01_controlled
+  experiment_id: TASK06-PREFERENCE-D01-SAME-PROMPT-V2
   config: configs/experiments/d01b_scale_pilot_d01_4_5b_s42.yaml
   adapter: runs/D01-4.5B-STYLE-50K-S42/adapter
   prompts_per_passage: 1
