@@ -38,11 +38,11 @@ uruchomiono.
 | [02](02_reranker_and_reward_proxies.md) | Zamrożone rerankery i proxy nagrody | `IMPLEMENTED` | Integracja, reward proxies i testy są gotowe; primary zmierzył pełny frozen dev, a query-macro próg Youdena `possible_false_negative` jest przypięty bez użycia testu. Bramka HN domierzyła primary/shadow na 775 wspólnych dev query z 10 negatywami; nadal pozostał pełny benchmark obu sędziów na całym dev/test i wymaganych slice'ach. |
 | [03](03_sft_qlora_baselines.md) | Baseline'y SFT/QLoRA | `IMPLEMENTED` | S07 jest kompletną, nieporównywalną budżetowo diagnostyką bez promocji. P-06 mass rescoring jest `SUPERSEDED`. Właściciel świadomie anulował ręczne P06-T i zaakceptował resztkowe ryzyko tłumaczeń na podstawie wcześniejszego udanego treningu embeddera; frozen train i próg `>=23.50` pozostają bez zmian. Nie kończyć lokalnego scoringu ani trenować drop/weighted. |
 | [04](04_evaluation_harness.md) | Harness ewaluacyjny | `IMPLEMENTED` | P-01–P-05 i pełny S07 Harness/probe są gotowe. Pełna dev-only bramka HN0–HN3 ukończyła 775 wspólnych legalnych query i utrzymała HN0+filter/drop z powodu braku zgodnej primary/shadow podstawy do promocji nowego minera; nie otwarto testów finalnych. Artefakt S07 pozostaje `comparison_eligible=false`; pozostały porównywalne probe i testy finalistów. |
-| [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `IMPLEMENTED` | Prospective D01b v3 i wszystkie 7 bramek są kompletne; copy-risk spadł z `0.07125` do `0.0465`. Equal-budget probe `dev_screen` 1.5B hybrid-vs-W05 zakończył się `rc=0` i decyzją `eligible`: dolna granica 95% CI dla `corpus_ndcg_at_10` wynosi `0.012093457847827558` przy progu `+0.01`, a wszystkie guardraile przeszły. Pierwsza próba pełnego `dev_confirm` B4 została przerwana przez wyłączenie maszyny po zakończeniu filteringu 7936/7936 i po zalogowanym kroku 100/2000, przed pierwszym checkpointem. Prospektywny restart amendment zamraża B2 / 4000 kroków / checkpoint co 100 kroków przy niezmienionym budżecie 4608000 tokenów, seedach 42/43/44 i świeżym namespace `v2_batch2`; następny krok to CPU preflight, a potem `run-all`. 4.5B oraz finalne testy pozostają zamknięte (`final_tests_used=[]`). Groq proxy ukończył 500/500 etykiet i 200/200 audytów; agreement człowieka pozostaje `NOT MEASURED`, a D00–D12 poza D01 nie są zmierzone. |
-| [06](06_candidate_scoring_and_preference_data.md) | Scoring kandydatów i dane preferencyjne | `IN PROGRESS` | Gotowe są model-free fundament, planner K=4–8, kontrakty outputu i evidence, assembler nierankingowanego evidence oraz handoff Task 06 → 07 dla wcześniej zamrożonych danych. Dodany przedselekcyjny preflight wiąże istniejący `CandidateEvidenceBundle` z zewnętrznie zamrożoną polityką normalizacji/wag/progów, siedmioma kalibracjami komponentów i ślepym human evidence; fail-closed sprawdza hashe, liczniki, fingerprinty, provenance, kontekst i candidate IDs, po czym publikuje wyłącznie status `ready_for_future_preference_selection_not_selected`. Nie wylicza score, nie rankinguje i nie buduje par. Generacja, scoring sędziami/retrieverem, rzeczywista kalibracja, wyliczenie i zamrożenie wartości polityki, audyt człowieka, selekcja oraz właściwe preference train/dev pozostają niewykonane i zamknięte. |
-| [07](07_dpo_training.md) | DPO i continued-SFT control | `IN PROGRESS` | Gotowy jest model-free fundament, deterministyczny handoff wejść oraz atomowy, fail-closed launch preflight. Preflight spina manifest i 6 artefaktów Task 06, zamrożony plan, wcześniej policzone token lengths i reference logprobs; ponownie używa istniejących walidatorów, sprawdza pełne hashe/liczniki/provenance/kolejność/leakage/tożsamości model stacku i polityki wag, po czym zapisuje trzyramienny bundle `ready_for_model_smoke_not_trained`. Nie ładowano modelu ani tokenizera i niczego nie przeliczano. Rzeczywiste token lengths i logproby, modelowe smoke testy, PEFT save/load, DPO/controls, ewaluacja, wiele seedów i bramki pozostają niewykonane i zamknięte; `final_tests_used=[]`. |
+| [05](05_controlled_diversity_and_multiquery.md) | Kontrolowany styl, focus i multi-query | `IMPLEMENTED` | TriviaQA 3-seed confirm przeszedł (`nDCG@10 +0.0478666`, 97.5% CI `[+0.0450118,+0.0508263]`); analiza 42+44 utrzymuje efekt mimo niestabilnego W06 S43. Właściciel zaakceptował W06+D01+selector jako procedurę danych Task 06 i D01 controlled jako przyszły start Task 07. Handoff preflight jest verified, ale pełne 4.5B, Task 09 i final test pozostają nieautoryzowane. |
+| [06](06_candidate_scoring_and_preference_data.md) | Scoring kandydatów i dane preferencyjne | `IN PROGRESS` | Pilot 512×8 ukończony: 4096/4096 scoringów i 2048 safe-selected (1164 W06 + 884 D01), selector zmienił 482/512 grup. Naprawiono wyłącznie błędne etykiety `smoke` w provenance i odbudowano selekcję; teksty/score’y bez zmian. Pilot nie wystarcza do DPO, bo sloty D01 mają różne prompty. Zamrożono więc same-prompt expansion: 500 promptów D01 × 8 odpowiedzi, potem scoring, tentative pairs i dual-LLM Groq. Run expansion uruchomiono odłączony; Task 07 nadal zamknięty, `final_tests_used=[]`. |
+| [07](07_dpo_training.md) | DPO i continued-SFT control | `IN PROGRESS` | D01 controlled 4.5B pozostaje jedynym przyszłym startem DPO, W06 anchor/source bez łączenia wag. Task 06 ma dopiero fail-closed execution design, nie dane ani osobną politykę chosen/rejected; `task07_training_authorized=false`, a smoke/PEFT, trzy ramiona, seedy i ewaluacja pozostają niewykonane; `final_tests_used=[]`. |
 | [08](08_grpo_multiobjective_rl.md) | Wielokryterialny GRPO/RL | `OPTIONAL / BLOCKED` | Uruchamiać wyłącznie po spełnieniu bramki i zapisaniu decyzji `reports/decisions/enable_grpo.md`. |
-| [09](09_experiment_campaign.md) | Kampania eksperymentalna | `BLOCKED` | Gotowy jest wyłącznie model-free, przedkampanijny scaffold: wersjonowany evidence manifest, fail-closed registry porównywalności, czysty Pareto bez scalar winnera oraz atomowy bundle o statusie `registry_ready_for_future_stage_review_no_selection`. Nie uruchomiono ani nie dołączono rzeczywistych runów/wyników Task 03–07. Kampanię nadal blokuje aktywny `dev_confirm` Task 05 oraz rzeczywiste Task 06–07; Pareto review, decyzje continue/stop, finaliści i finalne testy pozostają niewykonane i zamknięte. |
+| [09](09_experiment_campaign.md) | Kampania eksperymentalna | `BLOCKED` | Model-free scaffold i fail-closed projekt pilota Task 06 są gotowe, lecz brakuje decyzji właściciela oraz rzeczywistych wyników Task 06–07, Pareto review i decyzji finalistów. Task 09 i finalne testy pozostają zamknięte. |
 | [10](10_final_scaleup_inference_release.md) | Finalny trening, inference i release | `BLOCKED` | Wymaga wyników Task 09 i zatwierdzonego finalnego ADR. |
 | [11](11_judge_robustness_audit.md) | Audyt odporności sędziego i fallbacki | `OPTIONAL` | Późny eksperyment badawczy; nie obejmuje treningu ani dostrajania rerankera. |
 
@@ -73,7 +73,8 @@ backlogiem. Zakres P-xx został przeniesiony do wskazanych plików zadań.
    Nie zmieniać progu P-04 po obejrzeniu wyników.
    Testy finalne wolno otworzyć raz dopiero po zamrożeniu rzeczywistych
    finalistów. W06 pozostaje eksploracyjnym dowodem wykonalności 4.5B/8 GB,
-   a nie zgodą na dalszą kampanię skali.
+   a nie ogólną zgodą na kampanię skali; jedynym wyjątkiem jest ograniczony,
+   prospektywny pilot interakcji D01b 4.5B opisany w punkcie 4.
 3. **Pełna bramka HN ukończona:** na wspólnej kohorcie 775/1000 query HN1
    nie odróżniło się od HN0+filter według primary, HN2 było łatwiejsze także
    według shadow, a HN3 miało konstrukcyjnie perfect primary przy przeciwnym
@@ -90,9 +91,32 @@ backlogiem. Zakres P-xx został przeniesiony do wskazanych plików zadań.
    `dev_screen` 1.5B hybrid-vs-W05. Run zakończył się `rc=0`; hybrid uzyskał
    status `eligible`, z dolną granicą 95% CI dla `corpus_ndcg_at_10`
    `0.012093457847827558` przy wymaganym minimum `+0.01`, a wszystkie
-   prerejestrowane guardraile non-inferiority przeszły. Osobny ADR
-   `task05-d01b-probe-dev-confirm-v1` dopuszcza teraz wyłącznie pełnobudżetowy
-   `dev_confirm` na seedach 42/43/44. Nie otwiera 4.5B ani finalnych testów.
+   prerejestrowane guardraile non-inferiority przeszły. Pełnobudżetowy
+   `dev_confirm` na seedach 42/43/44 zakończył się następnie `rc=0`, lecz
+   decyzją `non_inferior_only`: dolna granica CI `0.006927431152133765` nie
+   osiągnęła wymaganego `+0.01`. Hybryda nie jest zachowana jako finalista.
+   Ten zakończony eksperyment nie otworzył 4.5B ani finalnych testów.
+   Późniejsza osobna decyzja właściciela dopuściła wyłącznie jednoseedowy,
+   development-only pilot interakcji ze skalą: W06 4.5B vs D01b 4.5B na
+   nowych rozłącznych kohortach 1000/2000. Pilot zakończył się `rc=0` i
+   screeningowym `eligible`: różnica `corpus_ndcg_at_10` to
+   `+0.02073792007878962`, a 95% CI
+   `[0.011055484860771694, 0.03017264616376007]`; wszystkie guardraile
+   przeszły. Pełny ID-only audyt znalazł tylko 591 legalnych nieoglądanych
+   rekordów. Planowany 97.5% CI nie ma wystarczającej czułości wobec
+   niezmiennego progu `+0.01`, także przy optymistycznym założeniu
+   niezależności trzech seedów. Właściciel dostarczył następnie nowy,
+   nieoglądany TriviaQA dev. Prospektywnie zamrożono 8000 query i corpus 139782
+   dokumentów; leakage względem treningu wynosi zero. Trzyseedowy confirm
+   zakończył się `rc=0`. Hybrid-minus-W06 `corpus_ndcg_at_10` wynosi
+   `+0.04786661287844578`, a 97.5% CI
+   `[0.045011840373656756, 0.05082630534799233]`; wszystkie guardraile
+   przeszły. W06 seed 43 nie zbiegł i jest jawnym caveatem stabilności, ale
+   symetryczna post-hoc analiza seedów 42+44 nadal daje `+0.0206102`, CI
+   `[+0.0174116,+0.0237756]`. Hybrid jest zachowany do finalist-freeze review.
+   Właściciel zaakceptował następnie W06+D01+selector jako procedurę danych i
+   D01 jako przyszły start Task 07; model-free handoff preflight przeszedł.
+   Execution ADR, pełna kampania 4.5B i finalne testy pozostają zamknięte.
    Pozostałe D00–D12 nadal wymagają własnych pomiarów i bramek.
 5. **Po Task 05:** P-08 w Task 06 i Task 07.
 6. **Kampania:** Task 09 dopiero po wcześniejszych etapach; Task 10 dopiero po
@@ -106,18 +130,13 @@ Końcowy `run-all` zakończył się `rc=0`, zapisał `dev_screen_complete`,
 `0.012093457847827558` przy progu `+0.01`, a wszystkie guardraile przeszły.
 Nie uruchamiać ponownie dev-screen.
 
-Osobny prospektywny ADR `task05-d01b-probe-dev-confirm-v1` zamroził pełny
-`dev_confirm`. Pierwsza próba B4 została przerwana sprzętowo po filteringu
-7936/7936 i kroku 100/2000, przed pierwszym checkpointem i przed jakimkolwiek
-wynikiem dev-confirm. Amendment
-`task05_d01b_probe_dev_confirm_batch2_amendment_2026-08-07.md` wymaga świeżego
-restartu: pełne 7936 par / 1984 dokumenty / K=4, batch 2, 4000 kroków,
-checkpoint co 100 kroków, seedy 42/43/44, ten sam budżet 4608000 tokenów,
-ten sam frozen dev i ten sam P-04. Najbliższy punkt wejścia to:
-`bash scripts/run_task05_d01b_probe_dev_confirm.sh preflight`, a po poprawnym
-preflight:
-`bash scripts/run_task05_d01b_probe_dev_confirm.sh run-all`.
-4.5B i wszystkie finalne testy pozostają zamknięte.
+Pełny D01b `dev_confirm` jest ukończony dla 7936 par / 1984 dokumentów / K=4,
+batch 2, 4000 kroków i seedów 42/43/44. Końcowy `run-all` zakończył się
+`rc=0`; decyzja `non_inferior_only` zatrzymała promocję, ponieważ dolna granica
+95% CI głównej metryki wyniosła `0.006927431152133765` przy progu `+0.01`.
+Nie uruchamiać ponownie 1.5B dev-screen ani dev-confirm. Spośród nowych runów
+4.5B dopuszczony jest tylko prospektywny scale-interaction pilot wskazany w
+tabeli; pełna kampania 4.5B i wszystkie finalne testy pozostają zamknięte.
 Nie uruchamiać pełnego
 `scripts/score_train_margins.py`, nie ustalać lokalnego progu i nie trenować
 ordinary/drop/weighted bez nowego prospektywnego ADR opartego na ręcznie
@@ -128,7 +147,7 @@ decyzje są kompletne. I02/I04/I05 pozostają odroczone, S00 jest zmierzone,
 S07 diagnostycznie kompletne, P-06 mass rescoring zamknięte jako
 `SUPERSEDED`, ręczne P06-T świadomie anulowano, a
 niewykonane D00–D12, Task 06 i wszystkie testy finalne pozostają zamknięte.
-D01 `dev_confirm` jest dopuszczony wyłącznie na train/dev.
+D01 `dev_confirm` został zakończony wyłącznie na train/dev bez użycia final test.
 
 ## Kolejność bazowa
 

@@ -6,6 +6,198 @@
 
 `IMPLEMENTED`
 
+Aktualizacja 2026-08-12 (owner finalist-freeze handoff decision): właściciel
+zaakceptował potwierdzoną procedurę W06+D01+safe-anchor selector jako przyszłe
+źródło danych Task 06 oraz D01 controlled 4.5B jako pojedynczy adapter startowy
+Task 07. Decyzja nie łączy wag obu generatorów i nie twierdzi, że probe wybrał
+najlepszy checkpoint DPO. Osobny model-free preflight handoffu jest
+`verified_ready_for_task06_execution_design_not_generation`; generacja,
+scoring, DPO, Task 09, pełne 4.5B i finalne testy pozostają nieautoryzowane.
+ADR: [`task06_d01b_hybrid_handoff_v1.md`](../reports/decisions/task06_d01b_hybrid_handoff_v1.md).
+
+Aktualizacja 2026-08-11 (TriviaQA 4.5B dev-confirm complete): wznowiony
+`run-all` zakończył się o 23:25:57 z `rc=0`. Wszystkie kombinacje W06/Hybrid ×
+seedy 42/43/44 mają kompletne 8000 paired-query rows. Prerejestrowana różnica
+Hybrid-minus-W06 dla `corpus_ndcg_at_10` wyniosła `+0.04786661287844578`, a
+dwustronny 97.5% CI `[0.045011840373656756, 0.05082630534799233]`; dolna
+granica przekroczyła niezmienny próg `+0.01`. Guardraile Recall@10, MRR@10 i
+MAP przeszły z dodatnimi dolnymi granicami.
+
+W06 seed 43 był kompletny i miał prawidłową tożsamość, lecz trening nie zbiegł
+(loss `1.3431→1.3889`) i retrieval niemal się załamał. Zamrożona analiza
+pozostaje wiążąca, ale jawnie raportuje dużą dyspersję seedów. Post-hoc
+diagnostyka po symetrycznym wyłączeniu seedu 43 z obu ramion nadal daje
+`nDCG@10 +0.0206102`, 97.5% CI `[0.0174116, 0.0237756]`; nie jest to nowa
+bramka. Wynik ma `eligible_for_finalist_freeze_review`,
+`retained_for_finalist_freeze=true` i selection claim ograniczony do
+potwierdzonego external dev. Nadal
+`task06_or_task09_promotion_authorized=false`,
+`four_point_five_b_full_authorized=false` i `final_tests_used=[]`. Wymagana
+decyzja właściciela o handoffie została następnie podjęta 2026-08-12 i jest
+opisana w aktualizacji powyżej. Raport wyniku:
+[`task05_d01b_scale_interaction_4_5b_trivia_dev_confirm_result_2026-08-11.md`](../reports/measurements/task05_d01b_scale_interaction_4_5b_trivia_dev_confirm_result_2026-08-11.md).
+Po zamknięciu raportu pełny pytest ma wynik `466 passed`; Ruff, mypy i
+`git diff --check` przeszły.
+
+Aktualizacja 2026-08-11 (TriviaQA confirm batch-8 safety amendment): pierwszy
+`run-all` zakończył się zewnętrznie bez tracebacku podczas kodowania korpusu
+W06 seed 43 przy batch 32, po atomowym zapisaniu 88/100 shardów. Restart
+poprawnie wykorzystał cache i domknął wynik W06 seed 43. Na polecenie
+właściciela proces zatrzymano następnie przez `Ctrl-C` (`rc=1`) podczas
+filtrowania negatywów Hybrid seed 43, przed rozpoczęciem jego treningu.
+Kompletne wyniki istnieją dla W06 seed 42, Hybrid seed 42 i W06 seed 43.
+
+Execution-only amendment zmniejsza `evaluation_encode_batch_size` z 32 do 8;
+nie zmienia treningu batch 2, danych, modeli, seedów, metryk, 97.5% CI, progu
+ani guardraili. Cache embeddingów pozostaje związany z modelem, recipe i
+korpusem, a nie z wewnętrznym microbatchem, więc kompletne artefakty są
+zachowane. Config, runner i fail-closed preflight wymagają teraz batch 8;
+rzeczywisty preflight ma `status=verified`. Decyzja:
+[`task05_d01b_trivia_confirm_encode_batch8_amendment_2026-08-11.md`](../reports/decisions/task05_d01b_trivia_confirm_encode_batch8_amendment_2026-08-11.md).
+Następny krok to wznowienie tej samej komendy operatorskiej. Do kompletnego
+porównania promocja Task 06/09 i finalne testy pozostają zamknięte.
+
+Aktualizacja 2026-08-10 (external TriviaQA dev-confirm prepared): prospektywna
+kohorta została zmaterializowana i zweryfikowana bez ewaluacji modeli. Z 60413
+rekordów odrzucono 116 brakujących tłumaczeń i 11980 query bez pozytywu o
+`pos_scores_stronger_reranker > 23.50`; zostało 48317 eligible query i 440476
+przechodzących pozytywów. Deterministycznie zamrożono 8000 query oraz globalny
+corpus 139782 dokumentów. Exact i 5-gram Jaccard >=0.85 leakage pozytywów
+przeciw 768 pasażom treningowym pilota wynosi zero. Manifest przeszedł loader
+frozen-set.
+
+Osobny ADR i config przypinają W06 4.5B vs D01b hybrid 4.5B, istniejące
+matched inputs 3072 par / 768 pasaży / K=4 / 1179648 tokenów, seedy 42/43/44,
+dwustronny 97.5% paired-query CI i niezmienny próg `+0.01`. Modele seed 42
+zostały zweryfikowane i staged wyłącznie przez symlink/metadane; nie były
+ponownie trenowane ani oceniane. Nowego treningu wymagają tylko seedy 43/44.
+Rzeczywisty CPU preflight ma `status=verified`; 463 testy CPU, Ruff, mypy dla
+całego `src` i zmienionych plików oraz składnia shell przeszły. Raport:
+[`task05_d01b_scale_interaction_4_5b_trivia_dev_confirm_preparation_2026-08-10.md`](../reports/measurements/task05_d01b_scale_interaction_4_5b_trivia_dev_confirm_preparation_2026-08-10.md).
+
+Kosztownego runu nie uruchomiono. Jedyna komenda operatorska to
+`bash scripts/run_task05_d01b_scale_interaction_4_5b_trivia_dev_confirm.sh run-all`.
+Do jej zakończenia `selection_claim=null`,
+`retained_for_finalist_freeze=false`, `four_point_five_b_full_authorized=false`,
+`final_tests_used=[]`, a promocja do Task 06/09 pozostaje zamknięta.
+
+Aktualizacja 2026-08-10 (external TriviaQA cohort authorized): właściciel
+dostarczył pełny `mining-negatives/trivia-mined-negatives`; polski plik ma
+60413 query, 10 negatywów/query i 48411 query z co najmniej jednym pozytywem
+o źródłowym `pos_scores_stronger_reranker > 23.50`. Task 05 wznowiono jako
+`IN PROGRESS`. Przed odczytem wyników modeli zamrożono metadata/ID-only policy:
+jednostka=query, ścisły próg `>23.50`, wszystkie przechodzące pozytywy,
+wszystkie 10 negatywów, deterministyczne 8000 query według seed `20260810`,
+globalny zewnętrzny corpus oraz leakage audit przeciw wejściom treningowym
+pilota. ADR:
+[`task05_d01b_trivia_external_dev_cohort_policy_v1.md`](../reports/decisions/task05_d01b_trivia_external_dev_cohort_policy_v1.md).
+Na tym etapie nie uruchomiono treningu ani ewaluacji, seed 42 nie będzie
+trenowany ponownie, `selection_claim=null`,
+`retained_for_finalist_freeze=false`, `four_point_five_b_full_authorized=false`
+i `final_tests_used=[]`.
+
+Aktualizacja 2026-08-10 (4.5B dev-confirm feasibility, fail-closed): pełny
+audyt ID-only wszystkich legalnych, dotąd nieoglądanych rekordów development
+potwierdził dokładnie 591 eligible rekordów, z zerowym przecięciem z
+`dev_intrinsic_rank10`, kohortami prospective v1/v2/v3 oraz kohortami
+generation/evaluation pilota. Nie wyemitowano surowych ID ani pól tekstowych;
+nie otwarto manifestu, rekordu ani metryki final testu. Fingerprinty rezerwy i
+wynik audytu zapisano w
+[`d01b_scale_interaction_4_5b_dev_confirm_feasibility_v1.json`](../reports/measurements/task05/d01b_scale_interaction_4_5b_dev_confirm_feasibility_v1.json).
+
+Wynik pilota wykorzystano wyłącznie do jawnego planowania czułości. Dla n=591
+dwustronny 97.5% CI ma estymowaną półszerokość `0.020108814663528603`, a przy
+punkcie pilota dolną granicę `0.0006291054152610179`, poniżej niezmiennego
+progu `+0.01`. Nawet nierealistycznie optymistyczna niezależność trzech seedów
+daje dolną granicę `0.009128090519717087`. Orientacyjnie potrzeba 3922 query
+dla 80% lub 5121 dla 90% mocy; jednoseedowy pilot nie estymuje wariancji
+między seedami. Legalna kohorta jest więc niewystarczająca. Nie utworzono
+configu confirmu, runnera ani komendy kosztownego runu. Task 05 jest
+`BLOCKED` do decyzji właściciela: zatrzymać promocję albo dostarczyć nową,
+rzeczywiście nieoglądaną kohortę development i zaakceptować nowy prospektywny
+ADR. Zmiana progu lub analiza 591 rekordów może być tylko nowym screenem bez
+promocji. Pilot nie będzie ponawiany; `selection_claim=null`,
+`retained_for_finalist_freeze=false`, `four_point_five_b_full_authorized=false`
+i `final_tests_used=[]`. ADR:
+[`task05_d01b_scale_interaction_4_5b_dev_confirm_feasibility_v1.md`](../reports/decisions/task05_d01b_scale_interaction_4_5b_dev_confirm_feasibility_v1.md).
+Pełny CPU pytest zakończył się `447 passed`; Ruff, mypy dla `src` i wszystkich
+zmienionych plików oraz `git diff --check` przeszły. Pełny `mypy src tests`
+został uruchomiony i zachowuje 19 wcześniejszych błędów typowania w sześciu
+niezmienianych plikach testowych.
+
+Aktualizacja 2026-08-10 (4.5B scale-interaction pilot complete): wznowiony
+`bash scripts/run_task05_d01b_scale_interaction_4_5b_pilot.sh run-all`
+zakończył się `rc=0`. Oba matched-budget probe wykorzystały po 3072 par,
+768 pasaży, K=4, 1179648 tokenów i seed 42, a ocena objęła 2000
+zamrożonych naturalnych query dev. Hybryda 4.5B poprawiła
+`corpus_ndcg_at_10` z `0.05953475490686684` do `0.08027267498565646`;
+różnica wyniosła `+0.02073792007878962`, a dwustronny 95% paired-query CI
+`[0.011055484860771694, 0.03017264616376007]`. Dolna granica przekroczyła
+screeningowe minimum `+0.01`, wszystkie guardraile intrinsic i probe przeszły,
+a decyzja ma status `eligible` i `dev_confirm_authorized=true`.
+
+Jest to wyłącznie jednoseedowy screen utworzonej po wyniku 1.5B hipotezy.
+Nie ma selection claim, `retained_for_finalist_freeze=false`,
+`four_point_five_b_full_authorized=false` i `final_tests_used=[]`. Nie uruchamiać
+ponownie pilota ani nie promować hybrydy do Task 06/09. Następny dozwolony
+krok to osobny, prospektywny development confirm dla seedów 42/43/44 z
+matched budgets i co najmniej dwustronnym 97.5% paired-query CI. Przed jego
+prerejestracją trzeba wykazać legalną, nieoglądaną kohortę dev; zamrożonej
+rezerwy tego pilota pozostało tylko 591 rekordów i nie wolno jej po wyniku
+samowolnie rozszerzać ani otwierać final test. Raport:
+[`task05_d01b_scale_interaction_4_5b_pilot_complete_2026-08-10.md`](../reports/measurements/task05_d01b_scale_interaction_4_5b_pilot_complete_2026-08-10.md).
+
+Aktualizacja 2026-08-10 (4.5B pilot scoring-validator repair): pierwszy
+autoryzowany `run-all` zatrzymał się `rc=1` po ukończeniu generacji i scoringu
+obu ramion po 4000/4000 wierszy, ale przed selekcją. Przyczyną był historyczny
+domyślny wymóg 8000 wierszy w walidatorze scoringu; pilot ma zamrożone
+1000 pasaży × K=4 = 4000. Walidator wyprowadza teraz oczekiwaną liczbę z
+kontraktu, analogicznie do exact-K. Oba rzeczywiste summary przeszły poprawioną
+kontrolę; nie zmieniono żadnych danych, score'ów, metryk, progów ani selektora.
+Istniejące artefakty są kompletne i wznawialne. Raport:
+[`task05_d01b_scale_interaction_4_5b_scoring_validator_2026-08-10.md`](../reports/measurements/task05_d01b_scale_interaction_4_5b_scoring_validator_2026-08-10.md).
+Następny krok to ponowienie niezmienionej komendy `run-all`; finalnych testów
+nie otwarto, `four_point_five_b_full_authorized=false`, `final_tests_used=[]`.
+
+Aktualizacja 2026-08-09 (D01b 4.5B scale-interaction pilot przygotowany):
+właściciel dopuścił nową, prospektywną hipotezę interakcji metody ze skalą po
+obejrzeniu wyniku 1.5B; wynik `non_inferior_only` i jego progi pozostają bez
+zmian. Audyt wyłącznie dev/metadata znalazł 3591 legalnych rekordów poza
+`dev_intrinsic_rank10` i kohortami v1/v2/v3. Zamrożono 1000 rozłącznych
+pasaży do generacji oraz kolejne 2000 naturalnych query do oceny; finalnych
+testów nie otwarto. ADR
+[`task05_d01b_scale_interaction_4_5b_pilot_v1.md`](../reports/decisions/task05_d01b_scale_interaction_4_5b_pilot_v1.md)
+przypina W06 4.5B baseline vs 4.5B safe-anchor hybrid, wspólny checkpoint
+Bielika/revision, niezmieniony selektor `2164822`, seed/K/decoding i matched
+probe 3072 par / 768 pasaży / K=4 / 1179648 tokenów. Shadow pozostaje poza
+selekcją. Stare wyniki W06/D01 4.5B są wyłącznie diagnostyczne i nie mogą
+promować nowego pilota. Pilot jest screenem bez claimu; przejście wymaga P-04,
+wszystkich intrinsic guardraili i osobnego multiplicity-adjusted 3-seed ADR.
+Crash-safe runner, config i testy CPU są gotowe. Preflight wykrywa fail-closed
+także skoordynowany drift kohorty, selektora, modelu/adapterów, decodingu,
+budżetu, seedów, metryk, guardraili, P-04, multiplicity i final-test boundary.
+Rzeczywisty preflight przeszedł `rc=0`; pełny pytest `443 passed`, Ruff i
+ukierunkowany mypy przeszły.
+Kosztownego pilota nie uruchomiono; `four_point_five_b_full_authorized=false`,
+`final_tests_used=[]`. Raport przygotowania:
+[`task05_d01b_scale_interaction_4_5b_pilot_preparation_2026-08-09.md`](../reports/measurements/task05_d01b_scale_interaction_4_5b_pilot_preparation_2026-08-09.md).
+Następny krok to jedna komenda operatorska
+`bash scripts/run_task05_d01b_scale_interaction_4_5b_pilot.sh run-all`.
+
+Aktualizacja 2026-08-09 (dev-confirm complete): końcowy
+`bash scripts/run_task05_d01b_probe_dev_confirm.sh run-all` zakończył się
+`rc=0`. Oba ramiona i wszystkie seedy 42/43/44 ukończyły po 4000 kroków na
+7936 parach i budżecie 4608000 tokenów; ewaluacja objęła 6598 naturalnych
+query z zamrożonego `dev_intrinsic_rank10`. Hybryda uzyskała średnią poprawę
+`corpus_ndcg_at_10=+0.011187611748928645`, ale dolna granica 95% CI wyniosła
+`0.006927431152133765`, poniżej prospektywnego minimum `+0.01`. Pozostałe trzy
+guardraile przeszły. Decyzja to `non_inferior_only`, więc zgodnie z ADR
+`retained_for_finalist_freeze=false`, nie ma selection claim i promocja tego
+wariantu zostaje zatrzymana. 4.5B oraz finalne testy pozostają zamknięte,
+`final_tests_used=[]`. Nie uruchamiać ponownie D01b dev-screen/dev-confirm.
+Raport:
+[`task05_d01b_probe_dev_confirm_2026-08-09.md`](../reports/measurements/task05_d01b_probe_dev_confirm_2026-08-09.md).
+
 Aktualizacja 2026-08-07 (dev-confirm batch-2 restart amendment): pierwsza
 próba pełnego D01b `dev_confirm` B4 zakończyła filter_negatives 7936/7936 w
 693.5 s, załadowała model treningowy i doszła do zalogowanego kroku 100/2000,
@@ -366,8 +558,8 @@ proxy 500/500 etykiet oraz 200/200 audytów koncepcji; agregacje mają status
 `complete`, ale nie zastępują oceny człowieka. Plan, wyniki, hashe i komendy:
 [`task05_natural_audits_2026-07-26.md`](../reports/plans/task05_natural_audits_2026-07-26.md).
 
-Do statusu `DONE` pozostają: materializacja, osobno autoryzowane porównawcze
-probe embeddera z CI, eksperymenty D00–D12 poza D01 na wspólnych kandydatach i
+Do statusu `DONE` pozostają: pozostałe osobno autoryzowane porównawcze probe
+embeddera z CI, eksperymenty D00–D12 poza D01 na wspólnych kandydatach i
 budżetach, ewentualne rzeczywiste ręczne oceny zmaterializowanych audytów 500
 etykiet i 200 ekstrakcji koncepcji oraz human check. Prospektywna walidacja
 D01b v3 jest ukończona. Opisowa kalibracja naturalnych query jest

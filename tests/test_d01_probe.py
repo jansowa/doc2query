@@ -310,14 +310,13 @@ def _dev_confirm_fixture(tmp_path: Path) -> Path:
     config["training"].pop("train_prefix_unique_passages", None)
     config["evaluation"]["bootstrap_samples"] = 10000
     config["evaluation"]["bootstrap_seed"] = 20260721
-    config["evaluation"]["fixed_seed_aggregation"] = (
-        "per_query_mean_before_query_resampling"
-    )
+    config["evaluation"]["fixed_seed_aggregation"] = "per_query_mean_before_query_resampling"
     config["outputs"] = {
         "run_root": "runs/task05_d01b_probe_dev_confirm_v2_batch2",
         "measurement_root": "reports/measurements/task05/d01b_probe_dev_confirm_v2_batch2",
-        "log_root": "logs/task05_d01b_probe_dev_confirm_v2_batch2",
+        "log_root": "logs/task05/d01b_probe_dev_confirm_v2_batch2",
     }
+    config["execution"]["evaluation_encode_batch_size"] = 8
     config["authorization"] = {
         "dev_screen_training": False,
         "dev_confirm_training": True,

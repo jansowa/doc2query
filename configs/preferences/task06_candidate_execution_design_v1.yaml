@@ -1,0 +1,249 @@
+schema_version: 1
+contract: task06-candidate-execution-design-v1
+status: owner_approved_design_pending_operator_command
+final_tests_used: []
+
+handoff_config: configs/preferences/d01b_hybrid_task06_handoff_v1.yaml
+
+data:
+  source_train_pairs: data/processed/v1/doc2query_train.parquet
+  dedup_map: data/processed/v1/dedup_map.parquet
+  split_manifest: data/processed/v1/split_manifest.json
+  source_split: train
+  selection_unit: passage_cluster
+  selection_policy: sha256_cluster_first_quality_blind_v1
+  selection_seed: 20260812
+  triviaqa_training_forbidden: true
+  test_paths_allowed: false
+  quality_fields_allowed_during_audit: []
+  sha256:
+    source_train_pairs: e431df17ba767e9215e5fe3be166ccd6dcd3ceb7c213ebd57ddf1144884bd218
+    dedup_map: c45460ca927d306ec0e5a79c1440983cdbcb07c30a43c03916485c4186ac9448
+    split_manifest: 24a95ebf83943131839e8a9b1c07ba7d64c5bbbf4a0c88a43a2f788fc472d406
+
+adapter_training_exclusion:
+  rationale: exclude every cluster represented in the shared 50k SFT selection
+  selection_seed: 42
+  max_pairs: 50000
+  quality_blind_hash_cap: true
+  w06_and_d01_share_source_selection: true
+
+generation_matrix:
+  - slot: w06-0
+    role: w06_anchor
+    form: uncontrolled
+    intent: uncontrolled
+    focus: uncontrolled
+    temperature: 0.3
+    top_p: 0.95
+    max_new_tokens: 64
+    seed: 6101
+    uses_shadow_for_selection: false
+  - slot: w06-1
+    role: w06_anchor
+    form: uncontrolled
+    intent: uncontrolled
+    focus: uncontrolled
+    temperature: 0.7
+    top_p: 0.95
+    max_new_tokens: 64
+    seed: 6102
+    uses_shadow_for_selection: false
+  - slot: w06-2
+    role: w06_anchor
+    form: uncontrolled
+    intent: uncontrolled
+    focus: uncontrolled
+    temperature: 1.0
+    top_p: 0.90
+    max_new_tokens: 64
+    seed: 6101
+    uses_shadow_for_selection: false
+  - slot: w06-3
+    role: w06_anchor
+    form: uncontrolled
+    intent: uncontrolled
+    focus: uncontrolled
+    temperature: 0.7
+    top_p: 0.90
+    max_new_tokens: 64
+    seed: 6102
+    uses_shadow_for_selection: false
+  - slot: d01-0
+    role: d01_controlled
+    form: full_question
+    intent: fact_lookup
+    focus: beginning
+    temperature: 0.3
+    top_p: 0.95
+    max_new_tokens: 64
+    seed: 6101
+    uses_shadow_for_selection: false
+  - slot: d01-1
+    role: d01_controlled
+    form: keyword_query
+    intent: definition
+    focus: middle
+    temperature: 0.7
+    top_p: 0.95
+    max_new_tokens: 64
+    seed: 6102
+    uses_shadow_for_selection: false
+  - slot: d01-2
+    role: d01_controlled
+    form: full_question
+    intent: procedure
+    focus: end
+    temperature: 0.7
+    top_p: 0.90
+    max_new_tokens: 64
+    seed: 6101
+    uses_shadow_for_selection: false
+  - slot: d01-3
+    role: d01_controlled
+    form: keyword_query
+    intent: entity_lookup
+    focus: middle
+    temperature: 1.0
+    top_p: 0.90
+    max_new_tokens: 64
+    seed: 6102
+    uses_shadow_for_selection: false
+
+safe_anchor_selector:
+  purpose: choose_four_safe_queries_from_w06_plus_d01_pool
+  implementation: src/doc2query/evaluation/d01_usefulness.py
+  implementation_sha256: f8bb6ccd491a6e4f3fd721ca6368bcc75a450455082f5d0f6aa94a96e29c764c
+  contract: configs/evaluation/d01b_usefulness_hybrid_v1.yaml
+  contract_sha256: 0ba63995648c57c5d68ec23c6b0c54008036c914d8d75f241f5a07db8c84abd5
+  selected_per_passage: 4
+  requires_all_four_w06_as_anchor: true
+  shadow_allowed: false
+  mutable: false
+
+dpo_pair_selector:
+  purpose: later_chosen_rejected_construction
+  same_as_safe_anchor_selector: false
+  status: not_frozen_not_authorized
+  prerequisites:
+    - component_calibration
+    - frozen_weights_and_thresholds
+    - blind_dual_llm_evidence
+    - separate_selection_preflight
+
+scoring:
+  max_batch_size: 8
+  corpus_encode_batch_size: 8
+  primary:
+    config: configs/reranker/primary_polish_roberta_v3.yaml
+    config_sha256: e57d49f84f645a87b125f106a72a29d55658b8182a60a1c30ccac9fc027e45f3
+    name_or_path: sdadas/polish-reranker-roberta-v3
+    revision: e6471da541f4e7be33845b6d57248a8d8bde27e8
+  shadow:
+    config: configs/reranker/shadow_bge_v2_m3.yaml
+    config_sha256: 7d2d79877d441cbf558b9acac6326b8c44931ae8e20aef2743f224a5b8a44ac2
+    name_or_path: BAAI/bge-reranker-v2-m3
+    revision: 953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e
+  shadow_role: independent_control_not_selection_signal
+  corpus_retrieval:
+    backend: frozen_bm25
+    manifest: data/processed/v1/evaluation/corpus-bm25-v1/manifest.json
+    manifest_sha256: fc83c925a7670b946e2dec8fcf4dd5fa12e5267e59c56735561f16379e1fa492
+  required_components:
+    - primary_grounding_and_margin
+    - shadow_grounding_and_margin
+    - corpus_round_trip
+    - lexical_and_copy
+    - focus
+    - style
+    - format
+  provenance:
+    token_logprobs: capture_if_transformers_backend_supports_exact_generated_tokens
+    sequence_logprob: capture_if_supported
+    decoding_and_seed: required
+    checkpoint_and_adapter_fingerprints: required
+    crash_journal_identity: required
+
+llm_pair_audit:
+  config: configs/preferences/task06_groq_preference_audit_v1.json
+  config_sha256: a25d078f22126f672c865e994778d49672cacb16321ad23408f230ad0e412e3e
+  models: [openai/gpt-oss-120b, qwen/qwen3.6-27b]
+  ratings_per_pair: 2
+  pair_count: 500
+  human_evidence_claimed: false
+  safe_anchor_selection_signal: false
+  disagreement_policy: exclude_from_automatic_acceptance
+  minimum_seconds_between_requests_global: 4.0
+  parallel_groq_requests: false
+  quota_exhaustion: retry_then_switch_model_then_stop_resumably
+
+stages:
+  smoke:
+    passages: 32
+    candidates: 256
+    selected_safe_queries_max: 128
+    max_completion_tokens: 16384
+    estimated_gpu_wall_time: 0.3-0.8h
+    estimated_incremental_disk: 0.2-1GB
+    dual_llm_audit_pairs: 32
+    purpose: schema_resume_scoring_and_blind_export_smoke_only
+  recommended_pilot:
+    passages: 512
+    candidates: 4096
+    selected_safe_queries_max: 2048
+    max_completion_tokens: 262144
+    estimated_prompt_tokens: 1.6M-2.4M
+    estimated_gpu_wall_time: 2-5h
+    estimated_incremental_disk: 1-5GB
+    dual_llm_audit_pairs: 500
+    purpose: pipeline_calibration_and_first_credible_pair_quality_gate
+  later_preference_run:
+    passages: 5000
+    candidates: 40000
+    selected_safe_queries_max: 20000
+    max_completion_tokens: 2560000
+    estimated_prompt_tokens: 16M-24M
+    estimated_gpu_wall_time: 12-30h
+    estimated_incremental_disk: 8-20GB
+    dual_llm_audit_pairs: 1000
+    purpose: only_after_pilot_gate_and_new_owner_authorization
+
+owner_decisions:
+  cohort_size:
+    selected: pilot_512
+    recommended: pilot_512
+    options:
+      pilot_256: 256
+      pilot_512: 512
+      pilot_1024: 1024
+  pair_audit_budget:
+    selected: dual_llm_review_500
+    recommended: dual_llm_review_500
+    options:
+      dual_llm_review_500: 500
+  calibration_policy:
+    selected: frozen_natural_dev_component_calibration
+    recommended: frozen_natural_dev_component_calibration
+    options:
+      frozen_natural_dev_component_calibration: freeze IDs before candidate scoring; no test data
+      task06_train_holdout_component_calibration: reserve disjoint eligible train clusters
+
+authorization:
+  smoke_authorized: true
+  smoke_authorized_by: owner_command_2026-08-12_prepare_and_run_task06_smoke
+  smoke_passages_authorized: 32
+  pilot_authorized: true
+  pilot_authorized_by: owner_command_2026-08-12_work_on_next_stage
+  pilot_passages_authorized: 512
+  generation_authorized: false
+  scoring_authorized: false
+  preference_selection_authorized: false
+  operator_command_authorized: false
+  task07_training_authorized: false
+  task09_authorized: false
+  final_tests_used: []
+
+operator_commands:
+  preflight: bash scripts/run_task06_candidate_pilot.sh preflight
+  future_smoke_after_owner_approval: bash scripts/run_task06_candidate_pilot.sh run-smoke
+  future_pilot_after_smoke_gate: bash scripts/run_task06_candidate_pilot.sh run-pilot

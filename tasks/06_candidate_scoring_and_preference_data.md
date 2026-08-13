@@ -6,6 +6,82 @@
 
 `IN PROGRESS`
 
+Aktualizacja 2026-08-13: pilot 512 zakończył wszystkie fazy: 4096 kandydatów,
+4096 scoringów, 512 natural diagnostics i 2048 safe-selected. Selector zmienił
+anchor w 482/512 grup i wybrał 1164 W06 + 884 D01. Audyt wykrył błędny prefiks
+`task06-smoke` w provenance pilota. Wykonano udokumentowaną, mechaniczną
+migrację pełnego łańcucha fingerprintów i odbudowano selekcję; teksty, score'y
+i kolejność nie zmieniły się. Aktywne artefakty nie zawierają starej etykiety.
+
+Nie zbudowano par z istniejącej macierzy: W06 i cztery kontrolowane sloty D01
+nie mają tego samego promptu, więc takie pary naruszałyby kontrakt DPO. Nowy ADR
+zamraża poprawny etap: quality-blind 500 passage'y, jedna zbalansowana kontrolka
+D01 na passage i osiem odpowiedzi na dokładnie ten sam prompt. Przygotowano
+resumowalny runner generacji/scoringu i uruchomiono go w odłączonej sesji.
+Pary, Groq i Task 07 pozostają niewykonane do zakończenia tego runu.
+Walidacja: Ruff, `mypy src`, `git diff --check` i pełny pytest `483 passed`.
+`final_tests_used=[]`.
+
+Aktualizacja 2026-08-12 (autoryzowany smoke): właściciel polecił przygotować i
+uruchomić wyłącznie smoke Task 06. Dodano wykonawczy, fail-closed i resumowalny
+runner dla 32 pasaży × 8 kandydatów (4 W06 + 4 D01), scoringu
+primary/shadow/corpus, małej diagnostyki naturalnego marginu oraz zastosowania
+niezmienionego safe-anchor selectora. Wszystkie GPU batch oraz semantic encode
+mają cap 8; shadow nie jest sygnałem selekcji, a pilot 512 nadal jest jawnie
+zablokowany. Prospektywnie zamrożono ID i dopiero potem zmaterializowano 32
+rekordy train z 32 różnych legalnych klastrów; wybór nie użył pól jakości.
+
+Pierwsza próba w sandboxie zatrzymała się bezpiecznie przed modelami z powodu
+braku urządzeń GPU. Po informacji właściciela runner uruchomiono poza
+sandboxem, wskazując istniejący projektowy cache Hugging Face. Smoke zakończył
+się pełnym sukcesem technicznym: wygenerowano i oceniono 256/256 kandydatów,
+primary/shadow/corpus scoring ukończył oba ramiona, diagnostyka naturalnych
+marginów objęła 32/32 rekordy, a safe-anchor selector wybrał 128/128 zapytań.
+W 29/32 grup selekcja różniła się od czystego W06; wybrano 73 W06 i 55 D01.
+Nie zbudowano jeszcze par `chosen/rejected` i nie wykonano Groq. Wynik oraz
+artefakty opisuje
+[`task06_candidate_smoke_preparation_2026-08-12.md`](../reports/measurements/task06_candidate_smoke_preparation_2026-08-12.md).
+`final_tests_used=[]`.
+Końcowa walidacja po runie: Ruff, `mypy src`, `git diff --check` oraz pełny
+pytest (`482 passed`, 16 ostrzeżeń zależności) przeszły.
+
+Aktualizacja 2026-08-12 (prospektywny execution design, fail-closed): wykonano
+ID-only audyt wyłącznie frozen train, bez odczytu pól jakości, emisji surowych
+ID, otwierania testów lub TriviaQA. Z 356856 unikalnych pasaży train
+wykluczono klastrowo 49367 pasaży reprezentowanych we wspólnej 50k selekcji
+SFT W06/D01; legalna pula ma 307309 pasaży w 306903 klastrach. Zamrożony
+config projektuje K=8 (4×W06 + 4×D01), dwa seedy, jawne kontrolki D01,
+decoding, primary/shadow/corpus evidence, batch cap 8 i rozdział safe-anchor
+od przyszłego selektora chosen/rejected. Preflight ma status
+`verified_design_pending_explicit_operator_command`: właściciel wybrał 512
+pasaży i kalibrację na prospektywnie zamrożonym natural dev. Ręczne 500 par
+zostało świadomie zastąpione ślepym audytem dwóch modeli Groq:
+`openai/gpt-oss-120b` i `qwen/qwen3.6-27b`, po 500 ocen każdego. To nie jest
+human evidence. Kontrakt wymaga globalnej przerwy ≥4 s między requestami bez
+równoległych wywołań, limitów minutowych i dziennych, retry, przełączenia na
+drugi model oraz czystego resumable stopu po
+wyczerpaniu obu. Runner nadal czeka na osobną komendę operatorską; modeli,
+generacji, scoringu, Groq ani selekcji nie uruchomiono, `final_tests_used=[]`.
+ADR:
+[`task06_candidate_generation_and_scoring_design_v1.md`](../reports/decisions/task06_candidate_generation_and_scoring_design_v1.md).
+Pełny CPU pytest zakończył się `480 passed`; Ruff, `mypy src`, ukierunkowany
+mypy nowych plików i `git diff --check` przeszły. Rozszerzony
+`mypy src tests scripts` zachowuje 19 wcześniejszych błędów w sześciu
+niezmienianych plikach testowych.
+
+Aktualizacja 2026-08-12: właściciel zatwierdził handoff potwierdzonego D01b
+Hybrid. Zamrożono dwumodelową procedurę danych W06+D01+safe-anchor selector i
+osobno D01 controlled 4.5B jako pojedynczy start przyszłego Task 07. Config
+przypina base revision, oba adaptery i manifesty, selektor oraz pozytywny
+confirm. Rzeczywisty model-free preflight zwrócił
+`verified_ready_for_task06_execution_design_not_generation`, bez ładowania
+modelu. Nie wybrano jeszcze kohorty Task 06, K/request matrix, seedów, budżetu,
+kalibracji ani human panelu; dlatego generacja, scoring i selekcja nadal są
+`false`. Raport:
+[`task06_d01b_hybrid_handoff_2026-08-12.md`](../reports/measurements/task06_d01b_hybrid_handoff_2026-08-12.md).
+Po zmianie pełny pytest ma wynik `475 passed`; Ruff, mypy i
+`git diff --check` przeszły.
+
 Zaimplementowano niezależny od wyniku Task 05 fundament: ścisłe kontrakty
 scored-candidate/preference z pełnymi składowymi i provenance,
 deterministyczną selekcję `top-vs-near-miss`/`top-vs-bottom`, kontrolę leakage
@@ -79,8 +155,12 @@ flagi `generation_started=false`, `scoring_started=false`,
 
 Dla nowego preflightu przechodzi 20 syntetycznych testów CPU; cały ukierunkowany
 zestaw nowych i bezpośrednio powiązanych kontraktów Task 06/07/09 ma wynik
-132 passed. Nie uruchomiono pełnego pytest ani benchmarków, aby nie dotykać
-aktywnego `dev_confirm` Task 05.
+132 passed. Pełny pytest był wówczas odłożony, aby nie dotykać aktywnego
+`dev_confirm` Task 05; po jego zakończeniu kontrola repozytorium uzyskała
+`425 passed`. Zsynchronizowano wyłącznie ścieżkę logów i execution batch w
+preflight fixture Task 05 z zamrożonym configiem; kontrakty Task 06 pozostały
+bez zmian. Po domknięciu pilota pełna kontrola repozytorium została ponowiona
+i uzyskała `444 passed`.
 
 Nie uruchomiono generacji, scoringu modeli, materializacji właściwych
 preferencji ani audytu człowieka. Nadal nie wykonano kalibracji, zamrożenia wag
@@ -88,12 +168,36 @@ i progów na rzeczywistych evidence, wyliczenia funkcji przypisującej wagi,
 rankingu ani wyboru
 `chosen/rejected`. Handoff nie autoryzuje żadnego z tych etapów.
 `generate_candidates.py` i
-`score_candidates.py` pozostają celowo niewdrożone, ponieważ ich poprawne
-kontrakty wykonawcze zależą od stabilnego checkpointu wybranego po Task 05 oraz
-prospektywnie przypiętych sędziów i progów. Nowe skrypty
+`score_candidates.py` pozostają celowo niewdrożone do czasu decyzji
+właściciela zapisanych przez nowy execution design; checkpointy i sędziowie są
+już przypięci, ale kohorta, kalibracja oraz budżet nie są autoryzowane. Nowe skrypty
 `validate_generated_candidates.py` i `assemble_candidate_evidence.py` jedynie
 walidują lub składają wcześniej policzone rekordy. Nie należy uruchamiać
 kampanii przed osobną konfiguracją.
+
+D01b `dev_confirm` zakończył się `non_inferior_only` i nie wypromował hybrydy
+do finalist freeze. Task 06 nie może zatem domniemywać jej jako generatora;
+rzeczywista generacja nadal wymaga osobnej decyzji przypinającej stabilny
+checkpoint wejściowy. Późniejszy jednoseedowy 4.5B scale-interaction screen
+ma status `eligible`, ale jawnie nie ma selection claim. ID-only audyt znalazł
+tylko 591 legalnych nieoglądanych rekordów dev, niewystarczających dla
+prospektywnego 97.5% confirmu wobec niezmiennego progu `+0.01`. Confirm i
+promocja są fail-closed `BLOCKED` do decyzji właściciela oraz ewentualnego
+dostarczenia nowej nietestowej kohorty. Nie odblokowuje to Task 06.
+
+Zewnętrzny TriviaQA dev-confirm na 8000 query zakończył się `rc=0` i przeszedł
+prerejestrowaną bramkę: Hybrid-minus-W06 `corpus_ndcg_at_10` wynosi
+`+0.04786661287844578`, 97.5% CI
+`[0.045011840373656756, 0.05082630534799233]`, a wszystkie guardraile
+przeszły. Artefakt zachowuje Hybrid do finalist-freeze review, ale zgodnie z
+ADR nadal zapisuje `task06_or_task09_promotion_authorized=false`. W06 seed 43
+nie zbiegł, jednak post-hoc wynik seedów 42+44 pozostaje dodatni ponad próg;
+jest to caveat stabilności, nie zastępcza bramka. Właściciel następnie
+zaakceptował dwumodelową procedurę W06+D01+selector dla danych oraz D01 jako
+pojedynczy adapter startowy przyszłego Task 07. Potwierdzony probe ocenia
+wartość wybranych danych, a wybór startu DPO jest osobno zapisaną decyzją.
+Generacja i scoring nadal wymagają prospektywnego execution ADR i nie zostały
+autoryzowane ani uruchomione; `final_tests_used=[]`.
 
 ## Cel
 
@@ -196,13 +300,13 @@ Automatycznie odrzuć:
 - konflikt między reranker margin a answerability checks;
 - wysoce niepewny focus.
 
-Ręczna walidacja:
+Walidacja par (owner waiver 2026-08-12: dual-LLM zamiast ludzi):
 
-- min. 500 par na etapie rozwoju;
-- min. 1000 par przed finalnym DPO;
+- min. 500 par na etapie rozwoju, każda oceniona przez oba przypięte LLM;
+- min. 1000 par przed finalnym DPO, jeśli właściciel nie zmieni osobno tej bramki;
 - ślepa kolejność;
-- preferencja człowieka i przyczyna;
-- zgodność automatycznego rankingu z człowiekiem;
+- preferencja każdego LLM i kod przyczyny;
+- zgodność automatycznego rankingu z każdym LLM i consensus obu;
 - analiza według źródła rejected.
 
 ## Leakage i splity
@@ -231,7 +335,7 @@ Preference train/dev/test muszą dziedziczyć split passage. Żaden passage/near
 
 - format zgodny z TRL DPO: prompt/chosen/rejected;
 - każdy rekord ma wszystkie składowe score i provenance;
-- zgodność automatu z człowiekiem jest raportowana;
+- zgodność automatu z oboma LLM i ich wzajemna zgodność są raportowane;
 - rejected nie są wyłącznie nonsensowne;
 - score margin i typ rejected są zbalansowane;
 - preference test jest zamrożony;

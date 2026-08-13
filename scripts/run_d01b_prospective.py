@@ -7,6 +7,8 @@ import argparse
 import json
 from pathlib import Path
 
+import yaml
+
 from doc2query.evaluation.d01_prospective import (
     assert_exact_k_summary,
     assert_scoring_summary,
@@ -62,11 +64,32 @@ def main() -> int:
     elif args.command == "validate-exact-k":
         if args.summary is None:
             parser.error("validate-exact-k requires --summary")
-        result = assert_exact_k_summary(args.summary)
+        contract = yaml.safe_load(args.contract.read_text(encoding="utf-8"))
+        if not isinstance(contract, dict):
+            raise ValueError("prospective contract must be a mapping")
+        cohort = contract.get("cohort")
+        selector = contract.get("selector")
+        if not isinstance(cohort, dict) or not isinstance(selector, dict):
+            raise ValueError("prospective contract lacks cohort/selector")
+        result = assert_exact_k_summary(
+            args.summary,
+            groups=int(cohort["selected_count"]),
+            k=int(selector["selected_count"]),
+        )
     elif args.command == "validate-scoring":
         if args.summary is None:
             parser.error("validate-scoring requires --summary")
-        result = assert_scoring_summary(args.summary)
+        contract = yaml.safe_load(args.contract.read_text(encoding="utf-8"))
+        if not isinstance(contract, dict):
+            raise ValueError("prospective contract must be a mapping")
+        cohort = contract.get("cohort")
+        selector = contract.get("selector")
+        if not isinstance(cohort, dict) or not isinstance(selector, dict):
+            raise ValueError("prospective contract lacks cohort/selector")
+        result = assert_scoring_summary(
+            args.summary,
+            rows=int(cohort["selected_count"]) * int(selector["selected_count"]),
+        )
     elif args.command == "select-compare":
         required = {
             "cohort_manifest": args.cohort_manifest,

@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "contract": "task06-groq-dual-llm-preference-audit-v1",
+  "status": "frozen_not_executed_waiting_for_blind_pairs",
+  "pair_count": 500,
+  "assignment": "every_pair_reviewed_by_both_models",
+  "prompt_version": "task06-blind-pairwise-polish-v1",
+  "blind_order_policy": "deterministic_counterbalanced_orientation_committed_before_review",
+  "models": [
+    {
+      "model_id": "openai/gpt-oss-120b",
+      "reviewer_id": "groq-gpt-oss-120b-task06-v1",
+      "reasoning_effort": "low",
+      "completion_token_overhead": 320
+    },
+    {
+      "model_id": "qwen/qwen3.6-27b",
+      "reviewer_id": "groq-qwen3.6-27b-task06-v1",
+      "reasoning_effort": "none",
+      "completion_token_overhead": 0
+    }
+  ],
+  "batch_size": 2,
+  "api": {
+    "url": "https://api.groq.com/openai/v1/chat/completions",
+    "temperature": 0.0,
+    "response_format": "json_object",
+    "include_reasoning": false,
+    "max_completion_tokens_per_pair": 180,
+    "timeout_seconds": 120
+  },
+  "limits_per_model": {
+    "minimum_seconds_between_requests": 4.0,
+    "requests_per_minute": 30,
+    "tokens_per_minute": 8000,
+    "requests_per_day": 1000,
+    "tokens_per_day": 200000,
+    "safety_requests_per_minute": 14,
+    "safety_tokens_per_minute": 7600,
+    "safety_requests_per_day": 950,
+    "safety_tokens_per_day": 185000
+  },
+  "retry": {
+    "max_rate_limit_retries_per_request": 8,
+    "default_retry_after_seconds": 10.0,
+    "maximum_retry_after_seconds": 65.0,
+    "transient_backoff_initial_seconds": 5.0,
+    "transient_backoff_maximum_seconds": 60.0
+  },
+  "quota_scheduler": {
+    "global_request_serialization": true,
+    "on_model_quota_exhausted": "defer_model_and_switch_to_other",
+    "when_both_models_deferred": "stop_cleanly_incomplete_quota_deferred",
+    "resume_on_next_operator_run": true,
+    "automatic_next_day_wakeup": false,
+    "persist_not_before_timestamp": true,
+    "respect_retry_after_header": true
+  },
+  "resume_policy": {
+    "durable_per_model_ledger": true,
+    "ambiguous_transport_resend_requires_operator": true,
+    "rate_limit_and_daily_token_caps_required": true,
+    "reuse_task05_groq_transport_safety_contract": true
+  },
+  "required_outputs": [
+    "per_model_ratings",
+    "pairwise_consensus",
+    "model_agreement_with_ci",
+    "automatic_selector_agreement_with_ci",
+    "disagreement_slices",
+    "position_balance"
+  ],
+  "disagreement_policy": "exclude_from_automatic_acceptance",
+  "role": "audit_and_calibration_evidence_not_safe_anchor_selection_signal",
+  "human_evidence_claimed": false,
+  "owner_waiver": "manual_500_pair_review_replaced_by_dual_llm_audit_2026-08-12",
+  "final_tests_used": []
+}

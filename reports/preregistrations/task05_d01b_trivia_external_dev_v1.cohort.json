@@ -1,0 +1,64 @@
+{
+  "audit": {
+    "eligible_after_exact_training_overlap_exclusion": 48317,
+    "exact_positive_training_overlap_excluded_queries": 0,
+    "ineligible_no_strong_positive": 11980,
+    "pilot_training_passage_count": 768,
+    "raw_ids_reported": false,
+    "retained_positive_count_in_eligible_population": 440476,
+    "selected_positive_near_duplicate_training_count": 0,
+    "source_count": 60413,
+    "text_manually_inspected": false,
+    "translation_missing_excluded": 116
+  },
+  "authorization": {
+    "final_tests": false,
+    "model_evaluation": false,
+    "probe_training": false
+  },
+  "documents": {
+    "count": 139782,
+    "path": "data/processed/task05/d01b_trivia_external_dev_v1/documents.parquet",
+    "sha256": "32af7d61ef0496175a7244ec73ad99bd00c5dd23d5bdd6015d850b2bd9aab845"
+  },
+  "final_tests_used": [],
+  "four_point_five_b_full_authorized": false,
+  "retained_for_finalist_freeze": false,
+  "schema_version": 1,
+  "seed": 20260810,
+  "selected_id_list_sha256_selection_order": "74add992bb0d000bbe8f19a1bf4d9cd2eeab7b6794ad992d9224137008185b80",
+  "selection_claim": null,
+  "selection_policy": {
+    "order": "sha256(\"20260810:<query_id>\"), query_id",
+    "positive_filter": "pos_scores_stronger_reranker > 23.50",
+    "quality_outcomes_used": [],
+    "selected_count": 8000,
+    "split_mutation": false,
+    "unit": "query_id"
+  },
+  "sets": {
+    "dev_d01b_trivia_external_v1": {
+      "excluded_count": 40317,
+      "exclusion_reason": "prospective deterministic external-dev cohort",
+      "id_count": 8000,
+      "id_field": "example_id",
+      "id_list_sha256": "c6bcc41aa5ab54b726806c9814e2936faee1fbaec2864c2e7eae12ec2cb37546",
+      "id_path": "data/processed/task05/d01b_trivia_external_dev_v1/dev.ids.jsonl",
+      "name": "dev_d01b_trivia_external_v1",
+      "population_count": 48317,
+      "records_sha256": "0909d5a104ebe24891bfe84b71b165fd58bf2367dd37576d87a57cc41f45ec65",
+      "source_path": "data/processed/task05/d01b_trivia_external_dev_v1/dev.jsonl",
+      "source_sha256": "1fe173097cf6b9b0deb734c05d57be3aa4fa7b0d4e6f2688a01fa464f473de7c"
+    }
+  },
+  "source": {
+    "dataset_card": "data/raw/trivia-mined-negatives/README.md",
+    "dataset_card_sha256": "bb88a54c3e3b24f377d06f8665a75e0d4e4ea5bd120eec419204b3e6a50a5f3b",
+    "path": "data/raw/trivia-mined-negatives/train_pl.jsonl",
+    "policy": "reports/decisions/task05_d01b_trivia_external_dev_cohort_policy_v1.md",
+    "policy_sha256": "9d9db257b8c3b1a4322a92d355c9b04b0a9a2f89576a5fdb3d4ee51674e606fb",
+    "sha256": "2ed9f62ae99b3c8e66274e70e9af975e10feaf31b1f154c7976ab24dccda10ac"
+  },
+  "status": "materialized_before_model_evaluation",
+  "version": "task05-d01b-trivia-external-dev-cohort-v1"
+}

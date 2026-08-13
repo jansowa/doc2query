@@ -1,0 +1,255 @@
+schema_version: 1
+contract: task05-d01b-scale-interaction-4.5b-pilot-v1
+status: preregistered_before_pilot
+hypothesis_formed_after_1_5b_result: true
+final_tests_used: []
+
+adr:
+  path: reports/decisions/task05_d01b_scale_interaction_4_5b_pilot_v1.md
+  sha256: a3eaea2f7772d642e7125f5822ca5bedf022fd4eb49ef05b98bf178c4baf017d
+
+source_1_5b_decision:
+  path: reports/measurements/task05/d01b_probe_dev_confirm_v2_batch2/summary.json
+  status: dev_confirm_complete
+  decision: non_inferior_only
+  mean_difference: 0.011187611748928645
+  ci95: [0.006927431152133765, 0.015391286067850935]
+  minimum_practical_effect: 0.01
+  retained_for_finalist_freeze: false
+  four_point_five_b_authorized: false
+  final_tests_used: []
+
+selector:
+  frozen_commit: "2164822"
+  implementation:
+    path: src/doc2query/evaluation/d01_usefulness.py
+    sha256: f8bb6ccd491a6e4f3fd721ca6368bcc75a450455082f5d0f6aa94a96e29c764c
+  retrospective_contract:
+    path: configs/evaluation/d01b_usefulness_hybrid_v1.yaml
+    sha256: 0ba63995648c57c5d68ec23c6b0c54008036c914d8d75f241f5a07db8c84abd5
+  candidate_count: 8
+  selected_count: 4
+  anchor: all_four_observed_uncontrolled_slots
+  duplicate_candidate_text_allowed: true
+  enumerate_all_subsets: true
+  feasibility_not_below_anchor:
+    - pool_recall_at_1
+    - corpus_round_trip_at_20
+    - sentence_level_source_hit
+    - format_valid
+  copy_risk_count_not_above_anchor: true
+  objective_weights:
+    natural_margin_alignment: 0.35
+    semantic_diversity: 0.30
+    lexical_diversity: 0.10
+    corpus_specificity: 0.15
+    low_copy_density: 0.10
+  natural_margin_scale: cohort_iqr_with_floor_1e-6
+  deterministic_tie_break: lexicographic_candidate_identity
+  shadow_reserved_from_selection: true
+
+cohort:
+  manifest: reports/preregistrations/task05_d01b_scale_interaction_4_5b_pilot_v1.cohort.json
+  manifest_sha256: f0b16d021371df62ed5f12a35254b64e244b8b111390ef8003db28db27e05231
+  source_frozen_manifest: data/processed/v1/evaluation/task04-v1/manifest.json
+  source_subset: dev_intrinsic
+  exclude_subset: dev_intrinsic_rank10
+  prior_cohort_exclusions:
+    - manifest: reports/preregistrations/task05_d01b_prospective_1_5b_v1.cohort.json
+      manifest_sha256: 864cd7de6143fa4649738f6199e41749a86bec750d9c569ceee6500f2a9ca966
+      selection_seed: 20260802
+      selected_count: 2000
+      selected_id_list_sha256: b540e24cf04dbc3638921173f116e80d7a7714523a597eb5cc1dea408ebfbc57
+    - manifest: reports/preregistrations/task05_d01b_prospective_1_5b_v2.cohort.json
+      manifest_sha256: a3588adafd95faf682e9d795671374932515c8eef9751d05c108a9c30944c2cb
+      selection_seed: 20260803
+      selected_count: 2000
+      selected_id_list_sha256: 819141f6c236a371797eb3272de50e59f00f7d678e66433f233f645a66b6d80d
+    - manifest: reports/preregistrations/task05_d01b_prospective_1_5b_v3.cohort.json
+      manifest_sha256: a26594a4cf7ac5c2e26a7a1ebfd3475e68898421e88b61dc90c6f5c0a9473082
+      selection_seed: 20260804
+      selected_count: 2000
+      selected_id_list_sha256: 070bee90616e135daaa974cf041d5a47462868de860859f8a8eec21287ff023d
+  source_records: data/processed/v1/dev.parquet
+  source_records_sha256: 12b86da10c73707a58a8793111afcca0424981d738667a04c228014780a02a1d
+  minimum_hard_negatives: 5
+  available_after_exclusions: 3674
+  eligible_count: 3591
+  selected_count: 1000
+  selection_seed: 20260809
+  selection_hash: 'sha256("20260809:<example_id>")'
+  selected_id_list_sha256: 931777e0fd51fa7cc12213ae4fd59e54791817cc9fe1212806f90d680e1f1cf9
+  selected_records_sha256: a8b9255210633f2632c7744e38e72bbbe1a360a6fd879fbbc89ed2fc694e9fd6
+  intersection_with_excluded_subset: 0
+  intersection_with_prior_cohorts: 0
+  evaluation_offset: 1000
+  evaluation_count: 2000
+  evaluation_id_list_sha256: 52d7a8ec9e63d68d902c306957a4d7d08530d81ade3b82185a70c7415499cd38
+  evaluation_records_sha256: b26523ad105fcfe09706aeff364fc59aea138ef145f44f7238118fc458627daa
+  materialized_generation_manifest: artifacts/task05/d01b_scale_interaction_4_5b_pilot_v1/cohort.materialized.json
+  materialized_evaluation_manifest: artifacts/task05/d01b_scale_interaction_4_5b_pilot_v1/evaluation/manifest.json
+  evaluation_subset: dev_d01b_scale_pilot_v1
+
+natural_primary_scores:
+  path: artifacts/task02/pfn_dev_v1/primary_scores.jsonl
+  sha256: 7a1f9f5949a26d3c09780ba30689fb259c1d20cd401a1e8860b8292461eef115
+  schema: possible_false_negative_dev_scores_v1
+  same_positive_and_intersecting_negatives: true
+
+arms:
+  baseline:
+    id: W06-4.5B-INSTRUCT-50K-8GB-BS8-L512
+    generation_experiment_id: D01B-SCALE-PILOT-W06-4.5B-S42
+    generation_config: configs/experiments/d01b_scale_pilot_w06_4_5b_s42.yaml
+    generation_config_sha256: 0e6539e535a1a51a382753cb69069452c1ab227f4714bcb53ec81c9a6aa0b53d
+    adapter: runs/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/adapter
+    adapter_sha256: 9253810026385c8749bfbb4de9b3520e1b0a73fd16020c98e728d8ff405d73e2
+    training_manifest: runs/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/run_manifest.json
+    training_manifest_sha256: 4a97904a62060a3bd376ad6dfe91963bf75c798d090f191dadc80dfd16912c5b
+    preserve_duplicate_slots: true
+  controlled:
+    id: D01-4.5B-STYLE-50K-S42
+    generation_experiment_id: D01B-SCALE-PILOT-D01-4.5B-S42
+    generation_config: configs/experiments/d01b_scale_pilot_d01_4_5b_s42.yaml
+    generation_config_sha256: ae1be0d5b7b4ae5ccbdbaceb7b86693c23e24c4525f90f699294301ac10d83b6
+    adapter: runs/D01-4.5B-STYLE-50K-S42/adapter
+    adapter_sha256: 71937228ea977d9d6a89613fe6f802fc3711dba9499a8e23c6c1e4e21e77a867
+    training_manifest: runs/D01-4.5B-STYLE-50K-S42/run_manifest.json
+    training_manifest_sha256: 0c0d466babe0cab0e4c8e67ae30948cf727cc95a221234ba3b8a32c1e3f6452c
+    preserve_duplicate_slots: false
+  shared_model:
+    name_or_path: speakleash/Bielik-4.5B-v3.0-Instruct
+    revision: 4b1220a9d745bdd874c44347075ef25484ef322b
+    trust_remote_code: false
+  decoding:
+    seed: 42
+    do_sample: true
+    temperature: 0.8
+    top_p: 0.95
+    max_new_tokens: 64
+    max_attempts_per_query: 16
+    queries_per_arm_per_passage: 4
+    exact_k_required: true
+    generation_batch_size: 8
+    passages_per_arm: 1000
+    candidate_queries_per_arm: 4000
+    maximum_new_token_budget_per_arm: 256000
+
+scoring:
+  primary:
+    config: configs/reranker/primary_polish_roberta_v3_cuda.yaml
+    name_or_path: sdadas/polish-reranker-roberta-v3
+    revision: e6471da541f4e7be33845b6d57248a8d8bde27e8
+    trust_remote_code: false
+  shadow:
+    config: configs/reranker/shadow_bge_v2_m3.yaml
+    name_or_path: BAAI/bge-reranker-v2-m3
+    revision: 953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e
+    trust_remote_code: false
+    reserved_from_selection: true
+  corpus_index:
+    path: data/processed/v1/evaluation/corpus-bm25-v1
+    fingerprint: 159af07f3b987fe492f9ff89f494521587a4d023fcb4fc62b69d7295d2a57258
+  semantic_model:
+    name_or_path: OPI-PIB/PolDense-150M
+    revision: b94ea7f951cc480369a85fa9021694eef80c3a00
+    trust_remote_code: false
+    similarity_prefix: "[sts]: "
+    normalize_embeddings: true
+    batch_size: 128
+
+copy_risk:
+  minimum_query_words: 4
+  copy_density: 0.6
+  normalized_lcs: 0.8
+  longest_copied_ngram: 3.0
+  query_to_passage_length_ratio: 0.3838827838827845
+
+evaluation:
+  comparison: hybrid_minus_observed_4_5b_baseline_anchor
+  resampling_unit: passage_query_group
+  bootstrap_samples: 10000
+  bootstrap_seed: 20260721
+  interval: paired_percentile_95
+  duplicate_rate_definition: one_minus_unique_normalized_query_count_over_k
+  required_metrics:
+    - pool_recall_at_1
+    - shadow_pool_recall_at_1
+    - corpus_round_trip_at_20
+    - sentence_level_source_hit
+    - format_valid_rate
+    - copy_risk_rate
+    - semantic_diversity
+    - duplicate_rate
+  gates:
+    pool_recall_at_1: {direction: higher, noninferiority_margin: 0.02}
+    corpus_round_trip_at_20: {direction: higher, noninferiority_margin: 0.02}
+    sentence_level_source_hit: {direction: higher, noninferiority_margin: 0.02}
+    format_valid_rate: {direction: higher, noninferiority_margin: 0.005}
+    shadow_pool_recall_at_1: {direction: higher, noninferiority_margin: 0.02}
+    copy_risk_rate: {direction: lower, maximum_upper_ci: 0.0}
+    semantic_diversity: {direction: higher, noninferiority_margin: 0.0}
+    duplicate_rate: {direction: lower, maximum_upper_ci: 0.0}
+  primary_bm25_improvement_may_be_construction_induced: true
+  all_gates_required_for_probe_authorization: true
+  final_tests_forbidden: true
+
+probe:
+  recipe: configs/evaluation/probe_v1.yaml
+  recipe_sha256: 3ba6114ef37652d2fa49bb788e61a7ff26d6af59ecad50f9697715d53dc1f00b
+  comparison_contract: configs/evaluation/comparison_contract_v1.yaml
+  comparison_contract_sha256: 75c2060d8a48b1ceaa554d97b4ec9af607b4b07634dffe29717d35d77c3f5b5c
+  primary_judge: configs/reranker/primary_polish_roberta_v3_p03_gpu_batch4.yaml
+  primary_judge_sha256: 7c305ea90d186c4977549f309522db1fe4c4f50b419b6fac39fd23a2b3722008
+  model_name_or_path: sdadas/polish-reranker-base-ranknet
+  model_revision: a7c66d41a8097ca02e75616d0951c941d94ff6a1
+  seed: 42
+  input_passages: 768
+  input_pairs: 3072
+  queries_per_passage: 4
+  max_steps: 1024
+  batch_size: 2
+  max_length: 192
+  token_count: 1179648
+  checkpoint_interval_steps: 64
+  evaluation_queries: 2000
+  corpus: data/processed/v1/documents.parquet
+  corpus_sha256: 78f9f2be82ba6e42b80e80b4f77c4ff050c3ec783f1fc422f5b21313381deca7
+  evaluation_encode_batch_size: 8
+  retrieval_query_batch_size: 512
+  retrieval_device: cuda
+  bootstrap_samples: 10000
+  bootstrap_seed: 20260721
+  p04_thresholds:
+    corpus_ndcg_at_10: 0.01
+    corpus_round_trip_at_20: -0.02
+    sentence_level_source_hit: -0.02
+    format_valid_rate: -0.005
+
+multiplicity:
+  family: D01b_method_by_generator_scale
+  pilot_claim: screen_only_no_confirmatory_claim
+  one_point_five_b_result_unchanged: true
+  dev_confirm_required_seeds: [42, 43, 44]
+  dev_confirm_primary_interval_minimum: paired_percentile_two_sided_97_5
+
+authorization:
+  pilot_generation: true
+  pilot_scoring: true
+  pilot_probe_training: true
+  dev_confirm: false
+  retained_for_finalist_freeze: false
+  four_point_five_b_full_authorized: false
+  final_tests: false
+
+outputs:
+  root: artifacts/task05/d01b_scale_interaction_4_5b_pilot_v1
+  measurements: reports/measurements/task05/d01b_scale_interaction_4_5b_pilot_v1
+  logs: logs/task05/d01b_scale_interaction_4_5b_pilot_v1
+  probe_runs: runs/task05_d01b_scale_interaction_4_5b_pilot_v1
+
+resources:
+  minimum_free_disk_bytes: 18000000000
+  expected_peak_vram_gib: 7.5
+  expected_incremental_disk_gib: 17
+  eta_hours: [10, 14]

@@ -1,0 +1,20 @@
+{
+  "candidate_pool": {
+    "d01_controlled": 4,
+    "selected": 4,
+    "w06": 4
+  },
+  "config_sha256": "a79de88732e8bf6e01be73e1a5a5165a06842a7fc93878f216ba5fa4db410009",
+  "confirm_summary_sha256": "037f611322b39f261c04fa41eed10814f108cb3632c17f30a63f472c9ca0edf6",
+  "contract": "task06-d01b-hybrid-handoff-v1",
+  "final_tests_used": [],
+  "four_point_five_b_full_authorized": false,
+  "model_loading_performed": false,
+  "schema_version": 1,
+  "status": "verified_ready_for_task06_execution_design_not_generation",
+  "task06_generation_authorized": false,
+  "task06_scoring_authorized": false,
+  "task07_start_adapter_role": "d01_controlled",
+  "task07_training_authorized": false,
+  "task09_promotion_authorized": false
+}

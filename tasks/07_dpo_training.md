@@ -6,6 +6,23 @@
 
 `IN PROGRESS`
 
+Aktualizacja 2026-08-12 (Task 06 execution design): legalna pula Task 06,
+macierz kandydatów i evidence zostały zaprojektowane model-free; wybory są
+rozstrzygnięte, ale preflight nadal czeka na jawną komendę operatorską. Nie
+istnieją jeszcze rzeczywiste pary `chosen/rejected`, zamrożona polityka ich
+budowy, kalibracja ani dual-LLM evidence. Właściciel zastąpił ręczny panel 500
+par audytem `gpt-oss-120b` + `qwen3.6-27b`; nie wolno nazywać go human evidence.
+D01 controlled 4.5B pozostaje jedynym przyszłym startem, W06 wyłącznie anchor
+i source; `task07_training_authorized=false`, `final_tests_used=[]`.
+
+Aktualizacja 2026-08-12: decyzja właściciela po pozytywnym Task 05 confirmie
+przypina adapter `D01-4.5B-STYLE-50K-S42` jako przyszły pojedynczy start DPO.
+W06 pozostaje safety anchor i źródłem kandydatów procedury Task 06; jego wag
+nie łączy się z D01. Handoff preflight zweryfikował tożsamości i nadal zapisuje
+`task07_training_authorized=false`. Continued-SFT oraz score-weighted
+continued-SFT pozostają obowiązkowymi kontrolami. Rzeczywisty Task 07 czeka na
+dane i bramki Task 06 oraz osobną autoryzację wykonania; `final_tests_used=[]`.
+
 Gotowy jest wyłącznie model-free, przedeksperymentalny fundament. Obejmuje
 ścisłe kontrakty preference/continued-SFT/weighted-SFT, provenance Task 06,
 tożsamości modelu, adaptera i tokenizera, wcześniej policzone długości oraz
@@ -46,10 +63,45 @@ wejść, liczniki rekordów i jawne flagi
 nadpisywany, katalog jest publikowany atomowo, a staging usuwany po błędzie.
 Bundle nie zawiera komend treningowych i nie stanowi zgody na eksperyment.
 
-Nowy preflight ma 20 przechodzących syntetycznych testów CPU; razem z testami
-handoffu i istniejącego fundamentu DPO ukierunkowana kontrola ma wynik 67
-passed. Nie uruchomiono pełnego pytest ani żadnego procesu modelowego, aby nie
-konkurować z aktywnym runem Task 05.
+Dodano także wyłącznie model-free, post-run evidence/comparison preflight.
+Wersjonowany `Task07ComparisonProtocolManifest` ma status
+`protocol_frozen_not_applied`, dokładnie trzy obowiązkowe ramiona i co
+najmniej dwa jawnie przypięte seedy. Wiąże SHA-256 i fingerprinty handoffu
+Task 06, selection preflightu Task 06 i launch bundle Task 07 oraz przypina
+dataset, selection/weight policy, kohortę, plan, model stack, tokenizer,
+matched-budget definitions, wymagane metryki z kierunkami i definicjami,
+definicje CI, minimalne liczebności, role artefaktów i jawnie dostarczone
+guardraile. Preflight nie wylicza progów ani ich nie stosuje.
+
+Wersjonowany `Task07ArmOutcomeEvidenceManifest` opisuje jedno ramię i seed,
+status runu i fingerprint configu, pełne tożsamości porównania oraz osobne
+sekcje intrinsic primary, niezależnego shadow, probe/extrinsic, human i cost.
+Każdy artefakt ma SHA-256, record count i provenance; każda metryka ma jawnie
+dostarczone CI i sample size. Manifest nie dopuszcza final-test paths i wymaga
+`final_tests_used=[]`.
+
+`Task07ComparisonPreflight` ponownie używa walidatora handoffu Task 06,
+kontraktów launch Task 07, deskryptorów evidence Task 09 oraz wspólnych hash
+helpers. Przed odczytem odrzuca final-test paths, sprawdza integralność
+wszystkich wejść, dokładne pokrycie arm × seed i drift datasetu, kohorty,
+planu, polityk, stosu modelowego, tokenizera, budżetu, configu, provenance i
+definicji metryk. Brak CI, liczebności albo wymaganych human/shadow/probe
+evidence zamyka preflight. Kod nie agreguje ani nie porównuje wartości
+eksperymentalnych i nie tworzy rankingu, winnera, decyzji continue/stop ani
+promocji.
+
+Cienki skrypt `scripts/prepare_task07_comparison_preflight.py` publikuje
+deterministyczny bundle przez staging i `os.replace`, odmawia nadpisania i
+sprząta staging po błędzie. Maksymalny status to
+`ready_for_future_task07_comparison_not_compared`; flagi
+`comparison_started`, `selection_performed`, `promotion_performed`,
+`model_loading_performed`, `training_started` i `evaluation_started` są
+zawsze `false`, a `final_tests_used=[]`.
+
+Nowy comparison preflight ma 30 przechodzących syntetycznych testów CPU.
+Po zakończeniu runu Task 05 ukierunkowany mypy dla nowych plików i pełny CPU
+pytest (`444 passed`) również przeszły. Nie uruchomiono żadnego procesu
+modelowego.
 
 Nie dostarczono ani nie policzono rzeczywistych token lengths i reference
 logprobs. Nie wykonano treningów, modelowych smoke testów, tokenizacji modelem,
@@ -57,6 +109,11 @@ właściwego precompute reference logprobs, QLoRA/PEFT save-load, kalibracji ani
 wyliczenia polityki wag, wyboru beta/LR, ewaluacji, wielu seedów ani żadnej
 bramki promocji. Nie wykonano również generacji/scoringu i audytu człowieka
 wymaganych do wytworzenia rzeczywistych wejść Task 06.
+Nie zmaterializowano rzeczywistych manifestów outcome, nie zebrano evidence
+intrinsic primary, shadow, probe/extrinsic, human ani cost, nie uruchomiono
+comparison preflightu na rzeczywistych runach i nie wykonano porównania
+ramion. Nie wybrano zwycięzcy i nie wykonano decyzji continue/stop ani
+promocji.
 Wszystkie testy finalne pozostają zamknięte (`final_tests_used=[]`).
 
 ## Cel
@@ -175,4 +232,4 @@ DPO przechodzi do finalnej macierzy tylko, jeżeli:
 - poprawa nie jest ograniczona do score modelu użytego do tworzenia preferencji;
 - probe embedder potwierdza brak szkody lub poprawę;
 - efekt utrzymuje się w co najmniej dwóch seedach redukowanego runu;
-- ręczna ocena potwierdza kierunek zmiany.
+- owner-approved dual-LLM audit potwierdza kierunek zmiany; nie jest to human evidence.

@@ -1,0 +1,27 @@
+# @package _global_
+# Prospective D01b 4.5B scale-interaction baseline on a new dev cohort.
+defaults:
+  - w06_4_5b_50k_8gb_bs8
+  - _self_
+
+run:
+  experiment_id: D01B-SCALE-PILOT-W06-4.5B-S42
+  seed: 42
+  output_dir: runs/D01B-SCALE-PILOT-W06-4.5B-S42
+
+data:
+  input_path: data/input.jsonl
+  input_format: jsonl
+  eval_path: null
+  max_train_examples: null
+  max_eval_examples: null
+
+generation:
+  controlled: false
+  target_query_count: 4
+  do_sample: true
+  temperature: 0.8
+  top_p: 0.95
+  max_new_tokens: 64
+  max_attempts_per_query: 16
+  preserve_duplicate_slots: true

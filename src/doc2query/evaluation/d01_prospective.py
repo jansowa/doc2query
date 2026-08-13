@@ -39,6 +39,7 @@ PROSPECTIVE_CONTRACTS = frozenset(
         "task05-d01b-prospective-1.5b-v1",
         "task05-d01b-prospective-1.5b-v2",
         "task05-d01b-prospective-1.5b-v3",
+        "task05-d01b-scale-interaction-4.5b-pilot-v1",
     }
 )
 PREREGISTERED_COHORT_CONTRACTS = frozenset(
@@ -46,6 +47,7 @@ PREREGISTERED_COHORT_CONTRACTS = frozenset(
         "task05-d01b-prospective-cohort-v1",
         "task05-d01b-prospective-cohort-v2",
         "task05-d01b-prospective-cohort-v3",
+        "task05-d01b-prospective-cohort-v4-scale-pilot",
     }
 )
 PROSPECTIVE_PROBE_INPUT_CONTRACT = "task05-d01b-prospective-probe-inputs-v1"
@@ -113,7 +115,8 @@ def load_prospective_contract(path: Path) -> tuple[dict[str, Any], Path, str]:
     if (
         payload.get("schema_version") != 1
         or payload.get("contract") not in PROSPECTIVE_CONTRACTS
-        or payload.get("status") != "preregistered_before_generation"
+        or payload.get("status")
+        not in {"preregistered_before_generation", "preregistered_before_pilot"}
         or payload.get("final_tests_used") != []
     ):
         raise ValueError("invalid prospective D01b contract")
@@ -716,8 +719,13 @@ def select_compare_prospective(
         "final_tests_used": [],
     }
     _atomic_json(output_json, report)
+    heading = (
+        "# Prospective D01b 4.5B scale-interaction pilot"
+        if str(payload["contract"]) == "task05-d01b-scale-interaction-4.5b-pilot-v1"
+        else "# Prospective D01b 1.5B validation"
+    )
     lines = [
-        "# Prospective D01b 1.5B validation",
+        heading,
         "",
         f"- Status: `{report['status']}`",
         f"- Decision: `{report['decision']}`",
@@ -766,8 +774,14 @@ def materialize_prospective_probe_inputs(
 ) -> dict[str, Any]:
     """Materialize the authorized equal-budget pair inputs without starting training."""
     contract, _root, contract_sha = load_prospective_contract(contract_path)
-    if str(contract["contract"]) != "task05-d01b-prospective-1.5b-v3":
-        raise ValueError("probe inputs require the successful prospective v3 contract")
+    contract_name = str(contract["contract"])
+    supported = {
+        "task05-d01b-prospective-1.5b-v3",
+        "task05-d01b-scale-interaction-4.5b-pilot-v1",
+    }
+    if contract_name not in supported:
+        raise ValueError("probe inputs require an authorized prospective D01b contract")
+    scale_pilot = contract_name == "task05-d01b-scale-interaction-4.5b-pilot-v1"
     report = json.loads(report_path.read_text(encoding="utf-8"))
     required_report = {
         "contract": contract["contract"],
@@ -775,11 +789,12 @@ def materialize_prospective_probe_inputs(
         "decision": "authorize_equal_budget_probe_inputs",
         "all_preregistered_gates_passed": True,
         "probe_materialization_authorized": True,
-        "four_point_five_b_authorized": False,
         "final_tests_used": [],
     }
     if any(report.get(key) != value for key, value in required_report.items()):
         raise ValueError("prospective report does not authorize probe input materialization")
+    if report.get("four_point_five_b_authorized") is not False:
+        raise ValueError("prospective report must keep full 4.5B authorization closed")
     identity = cast(Mapping[str, Any], report.get("identity", {}))
     if identity.get("contract_sha256") != contract_sha:
         raise ValueError("prospective report contract identity drifted")
@@ -903,7 +918,11 @@ def materialize_prospective_probe_inputs(
     )
     hybrid_materialized, hybrid_ineligible = materialize(
         [scored[key] for key in selected_ids],
-        "D01B-PROSPECTIVE-V3-HYBRID-1.5B-S42",
+        (
+            "D01B-SCALE-PILOT-HYBRID-4.5B-S42"
+            if scale_pilot
+            else "D01B-PROSPECTIVE-V3-HYBRID-1.5B-S42"
+        ),
     )
     ineligible_groups = baseline_ineligible | hybrid_ineligible
     group_to_passage: dict[str, str] = {}
@@ -924,6 +943,18 @@ def materialize_prospective_probe_inputs(
         else:
             seen_passages.add(passage_id)
     excluded_groups = ineligible_groups | duplicate_passage_groups
+    target_groups = int(
+        cast(Mapping[str, Any], contract.get("probe", {})).get(
+            "input_passages", len(group_to_passage) - len(excluded_groups)
+        )
+    )
+    eligible_group_ids = [
+        group_id for group_id in sorted(group_to_passage) if group_id not in excluded_groups
+    ]
+    if len(eligible_group_ids) < target_groups:
+        raise ValueError("prospective probe cohort is smaller than the frozen passage budget")
+    selected_group_ids = set(eligible_group_ids[:target_groups])
+    excluded_groups |= set(group_to_passage) - selected_group_ids
     baseline_materialized = [
         row
         for row in baseline_materialized
@@ -955,12 +986,13 @@ def materialize_prospective_probe_inputs(
             passage_counts[str(row["source_passage_id"])] += 1
         if len(passage_counts) != group_count or set(passage_counts.values()) != {4}:
             raise ValueError("probe input has duplicate passages or non-uniform K")
+    probe_section = cast(Mapping[str, Any], contract.get("probe", {}))
+    budget_steps = int(probe_section.get("max_steps", recipe.max_steps))
+    budget_batch = int(probe_section.get("batch_size", recipe.batch_size))
+    budget_length = int(probe_section.get("max_length", recipe.max_length))
     training_budget = build_budget_manifest(
         token_count=(
-            recipe.max_steps
-            * recipe.batch_size
-            * recipe.max_length
-            * (2 + recipe.negatives_per_example)
+            budget_steps * budget_batch * budget_length * (2 + recipe.negatives_per_example)
         ),
         pair_count=pair_count,
         unique_passage_count=group_count,
@@ -975,7 +1007,7 @@ def materialize_prospective_probe_inputs(
         "source_report": str(report_path),
         "source_report_sha256": _file_sha256(report_path),
         "selection_identity_sha256": expected_selection_identity,
-        "selection_policy": "frozen_best_four_of_eight_hybrid_vs_all_four_observed_w05",
+        "selection_policy": "frozen_best_four_of_eight_hybrid_vs_all_four_observed_anchor",
         "negative_recipe": recipe.negative_recipe.manifest(calibration),
         "probe_recipe": asdict(recipe),
         "probe_recipe_fingerprint": recipe.fingerprint,
@@ -1008,8 +1040,9 @@ def materialize_prospective_probe_inputs(
             },
         },
         "training_started": False,
-        "training_authorized": False,
+        "training_authorized": scale_pilot,
         "four_point_five_b_authorized": False,
+        "four_point_five_b_full_authorized": False,
         "final_tests_used": [],
     }
     _atomic_json(manifest_output, manifest)

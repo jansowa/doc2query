@@ -6,6 +6,20 @@
 
 `BLOCKED`
 
+Aktualizacja 2026-08-12 (Task 06 execution design): powstał wyłącznie
+prospektywny, model-free projekt pilota Task 06. Właściciel rozstrzygnął 512
+pasaży, natural-dev calibration i dual-LLM audit 500 par zamiast ręcznego
+panelu; Groq ma przypięte limity i resumable quota stop. Preflight czeka na
+osobną komendę operatorską; nie wykonano generacji, scoringu, preferencji ani
+Task 07. Task 09 nadal jest `BLOCKED`, bez otwierania finalnych testów
+(`final_tests_used=[]`).
+
+Aktualizacja 2026-08-12: właściciel zatwierdził handoff D01b Hybrid do
+projektowania Task 06 i D01 controlled 4.5B jako przyszły start Task 07.
+Model-free preflight przeszedł, ale jawnie nie autoryzuje generacji, scoringu,
+DPO ani Task 09. Kampania pozostaje `BLOCKED` do rzeczywistych wyników Task
+06–07 i późniejszego Pareto review; finalne testy pozostają zamknięte.
+
 Gotowy jest wyłącznie deterministyczny, model-free fundament przedkampanijny.
 Wersjonowany `ExperimentEvidenceManifest` zapisuje identyfikatory eksperymentu,
 ramienia i etapu, status i seed runu, commit oraz fingerprint konfiguracji,
@@ -41,8 +55,17 @@ testów finalnych. Syntetyczne testy CPU obejmują integralność, porównywalno
 drifty, kompletność evidence, Pareto min/max, brak scalar winnera, atomową
 publikację oraz brak zależności modelowych.
 
-Task nadal oczekuje na wcześniejsze etapy w zakresie dopuszczonym przez bramki,
-przede wszystkim aktywny `dev_confirm` Task 05 oraz rzeczywiste Task 06–07.
+Task nadal oczekuje na wcześniejsze etapy w zakresie dopuszczonym przez bramki.
+Wcześniejszy 1.5B `dev_confirm` zakończył się `non_inferior_only`, lecz osobny
+4.5B scale-interaction screen oraz zewnętrzny TriviaQA confirm rozstrzygnęły
+interakcję ze skalą. Confirm na 8000 query i seedach 42/43/44 zakończył się
+`rc=0`: Hybrid-minus-W06 `corpus_ndcg_at_10` wynosi `+0.0478666`, 97.5% CI
+`[+0.0450118, +0.0508263]`, a wszystkie guardraile przeszły. Hybrid ma status
+`eligible_for_finalist_freeze_review` i jest zachowany do review. W06 seed 43
+nie zbiegł; analiza seedów 42+44 nadal utrzymuje kierunek i próg, ale pozostaje
+post-hoc caveatem stabilności. Sam confirm nie autoryzuje Task 09. Właściciel
+zaakceptował później handoff do projektowania Task 06; nadal brakuje
+prospektywnego execution ADR oraz rzeczywistych wyników Task 06–07.
 Nie dołączono żadnych rzeczywistych wyników Task 03–07, nie wykonano kampanii,
 successive halving, Pareto review, decyzji continue/stop, promocji, wyboru
 finalistów ani finalnego ADR. Harness v1.1 P-01…P-04, P-05 i pełna dev-only

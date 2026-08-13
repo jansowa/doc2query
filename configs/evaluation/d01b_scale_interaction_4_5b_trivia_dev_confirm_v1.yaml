@@ -1,0 +1,142 @@
+schema_version: 1
+contract: task05-d01b-scale-interaction-4.5b-trivia-dev-confirm-v1
+status: preregistered_before_external_model_evaluation
+final_tests_used: []
+
+adr:
+  path: reports/decisions/task05_d01b_scale_interaction_4_5b_trivia_dev_confirm_v1.md
+  sha256: 82406b780d4ecb0aa5de1893276f4240a16fbbccfede4ae12876c024528c8912
+
+execution_amendment:
+  path: reports/decisions/task05_d01b_trivia_confirm_encode_batch8_amendment_2026-08-11.md
+  sha256: bc68c54f11e39f7605775589b1b669d2b4c17d73a6d780aed4329016cf65e592
+  reason: host_poweroff_risk_during_sustained_corpus_encoding
+  prior_evaluation_encode_batch_size: 32
+
+source_pilot:
+  config: configs/evaluation/d01b_scale_interaction_4_5b_pilot_v1.yaml
+  config_sha256: 76d593deffd2c9f943169f3f4040cb9c38c3dbf8d5af526e03ab9a0f73b436dc
+  summary: reports/measurements/task05/d01b_scale_interaction_4_5b_pilot_v1/summary.json
+  summary_sha256: 3394a006d6b87edaa1ffd560bef86c22781d730e22913ec0a17a89efce65447d
+  required_status: pilot_complete
+  required_decision_status: eligible
+  required_dev_confirm_authorized: true
+  selection_claim: null
+  retained_for_finalist_freeze: false
+  four_point_five_b_full_authorized: false
+  final_tests_used: []
+
+external_development:
+  policy: reports/decisions/task05_d01b_trivia_external_dev_cohort_policy_v1.md
+  policy_sha256: 9d9db257b8c3b1a4322a92d355c9b04b0a9a2f89576a5fdb3d4ee51674e606fb
+  cohort_snapshot: reports/preregistrations/task05_d01b_trivia_external_dev_v1.cohort.json
+  cohort_snapshot_sha256: 505f4bf7c4c260fd366fab19490396a1d296c53db7130c7c231bada0cf87fabc
+  manifest: data/processed/task05/d01b_trivia_external_dev_v1/manifest.json
+  manifest_sha256: 505f4bf7c4c260fd366fab19490396a1d296c53db7130c7c231bada0cf87fabc
+  subset: dev_d01b_trivia_external_v1
+  query_count: 8000
+  query_id_list_sha256: c6bcc41aa5ab54b726806c9814e2936faee1fbaec2864c2e7eae12ec2cb37546
+  records_sha256: 0909d5a104ebe24891bfe84b71b165fd58bf2367dd37576d87a57cc41f45ec65
+  positive_filter: pos_scores_stronger_reranker > 23.50
+  bootstrap_unit: query_id
+  corpus: data/processed/task05/d01b_trivia_external_dev_v1/documents.parquet
+  corpus_sha256: 32af7d61ef0496175a7244ec73ad99bd00c5dd23d5bdd6015d850b2bd9aab845
+  corpus_document_count: 139782
+  license_status: absent_from_downloaded_dataset_card_internal_evaluation_only
+
+arms:
+  control:
+    role: W06_4_5B
+    generator_id: W06-4.5B-INSTRUCT-50K-8GB-BS8-L512
+    train_input: artifacts/task05/d01b_scale_interaction_4_5b_pilot_v1/probe_inputs/baseline.jsonl
+    train_input_sha256: 169dbceeb55dc7d2b3deef3f7231b680c8eae1cb0855a55c42eb47b1e6bc46cd
+    runs:
+      "42": D01B-TRIVIA-CONFIRM-W06-4.5B-S42
+      "43": D01B-TRIVIA-CONFIRM-W06-4.5B-S43
+      "44": D01B-TRIVIA-CONFIRM-W06-4.5B-S44
+    reused_seed42:
+      source_run: runs/task05_d01b_scale_interaction_4_5b_pilot_v1/D01B-SCALE-PILOT-W06-PROBE-S42
+      train_summary_sha256: a68d65b85799516f57243f76e6b5efdad6bc66cae973edb6e5aaaa61ff68841c
+      model_fingerprint: a5d6b49ebea42e49b1e4fb55c76f21713116415ccadee2d2ea2ac3db9b48abc8
+  variant:
+    role: D01b_hybrid_4_5B
+    generator_id: D01B-SCALE-PILOT-HYBRID-4.5B-S42
+    train_input: artifacts/task05/d01b_scale_interaction_4_5b_pilot_v1/probe_inputs/hybrid.jsonl
+    train_input_sha256: 8c615208a3a3a8dce500f809c40238058e4d26d4a7359d4b477077b98271d813
+    runs:
+      "42": D01B-TRIVIA-CONFIRM-HYBRID-4.5B-S42
+      "43": D01B-TRIVIA-CONFIRM-HYBRID-4.5B-S43
+      "44": D01B-TRIVIA-CONFIRM-HYBRID-4.5B-S44
+    reused_seed42:
+      source_run: runs/task05_d01b_scale_interaction_4_5b_pilot_v1/D01B-SCALE-PILOT-HYBRID-PROBE-S42
+      train_summary_sha256: 616cc97067c119fa4f777d27f35ffe09fe9e7701e1cd86b0cc691f727b1bd4a2
+      model_fingerprint: 613be433dde923c30ad43156487fe1cc651315dc7a2803b0a4c21eed54127859
+
+training:
+  seeds: [42, 43, 44]
+  reused_without_retraining: [42]
+  newly_trained: [43, 44]
+  pair_count: 3072
+  unique_passage_count: 768
+  queries_per_passage: 4
+  max_steps: 1024
+  batch_size: 2
+  max_length: 192
+  negatives_per_example: 1
+  token_count: 1179648
+  probe_recipe: configs/evaluation/probe_v1.yaml
+  probe_recipe_sha256: 3ba6114ef37652d2fa49bb788e61a7ff26d6af59ecad50f9697715d53dc1f00b
+  comparison_contract: configs/evaluation/comparison_contract_v1.yaml
+  comparison_contract_sha256: 75c2060d8a48b1ceaa554d97b4ec9af607b4b07634dffe29717d35d77c3f5b5c
+  primary_judge: configs/reranker/primary_polish_roberta_v3_p03_gpu_batch4.yaml
+  primary_judge_sha256: 7c305ea90d186c4977549f309522db1fe4c4f50b419b6fac39fd23a2b3722008
+  checkpoint_interval_steps: 64
+
+evaluation:
+  primary_metric: corpus_ndcg_at_10
+  practical_effect_threshold: 0.01
+  interval: paired_query_percentile_two_sided_97_5
+  interval_quantiles: [0.0125, 0.9875]
+  bootstrap_samples: 10000
+  bootstrap_seed: 20260721
+  rng: numpy.random.PCG64
+  fixed_seed_aggregation: per_query_mean_before_query_resampling
+  resample_training_seeds: false
+  required_metrics:
+    - corpus_ndcg_at_10
+    - corpus_recall_at_1
+    - corpus_recall_at_5
+    - corpus_recall_at_10
+    - corpus_recall_at_100
+    - corpus_mrr_at_10
+    - corpus_map
+  guardrails:
+    corpus_recall_at_10: {lower_bound_minimum: -0.02}
+    corpus_mrr_at_10: {lower_bound_minimum: -0.02}
+    corpus_map: {lower_bound_minimum: -0.02}
+  all_gates_required: true
+  final_tests_forbidden: true
+
+execution:
+  evaluation_encode_batch_size: 8
+  retrieval_query_batch_size: 512
+  retrieval_device: cuda
+  output_root: runs/task05_d01b_scale_interaction_4_5b_trivia_dev_confirm_v1
+  measurement_root: reports/measurements/task05/d01b_scale_interaction_4_5b_trivia_dev_confirm_v1
+  log_root: logs/task05/d01b_scale_interaction_4_5b_trivia_dev_confirm_v1
+  operator_command: bash scripts/run_task05_d01b_scale_interaction_4_5b_trivia_dev_confirm.sh run-all
+
+resources:
+  minimum_free_disk_bytes: 30000000000
+  expected_peak_vram_gib: 7.5
+
+authorization:
+  cohort_preparation: true
+  cpu_preflight: true
+  protocol_preregistered: true
+  expensive_run_requires_explicit_operator_command: true
+  expensive_run_started: false
+  pilot_retraining: false
+  task06_or_task09_promotion: false
+  four_point_five_b_full_authorized: false
+  final_tests: false

@@ -1,0 +1,82 @@
+schema_version: 1
+contract: task06-d01b-hybrid-handoff-v1
+status: owner_approved_pending_task06_execution_design
+final_tests_used: []
+
+adr:
+  path: reports/decisions/task06_d01b_hybrid_handoff_v1.md
+  sha256: a033438d8d9f71b235a82db3400287c0c0ba2345fe07c4d586b526cd60834fc9
+
+confirm:
+  summary: reports/measurements/task05/d01b_scale_interaction_4_5b_trivia_dev_confirm_v1/summary.json
+  summary_sha256: 037f611322b39f261c04fa41eed10814f108cb3632c17f30a63f472c9ca0edf6
+  result_report: reports/measurements/task05_d01b_scale_interaction_4_5b_trivia_dev_confirm_result_2026-08-11.md
+  result_report_sha256: 36d57fc5377d7d836483a86d36f48d80062b9cc8689000e0b227eefb6a83bf6c
+  required_status: external_dev_confirm_complete
+  required_decision: eligible_for_finalist_freeze_review
+  required_selection_claim: external_dev_confirm_passed_pending_finalist_freeze_review
+  retained_for_finalist_freeze: true
+  task06_or_task09_promotion_authorized: false
+  four_point_five_b_full_authorized: false
+  final_tests_used: []
+
+source_procedure:
+  pilot_config: configs/evaluation/d01b_scale_interaction_4_5b_pilot_v1.yaml
+  pilot_config_sha256: 76d593deffd2c9f943169f3f4040cb9c38c3dbf8d5af526e03ab9a0f73b436dc
+  base_model:
+    name_or_path: speakleash/Bielik-4.5B-v3.0-Instruct
+    revision: 4b1220a9d745bdd874c44347075ef25484ef322b
+    trust_remote_code: false
+  candidate_count: 8
+  selected_count: 4
+  shadow_reserved_from_selection: true
+  w06_anchor:
+    id: W06-4.5B-INSTRUCT-50K-8GB-BS8-L512
+    role: uncontrolled_safety_anchor_and_candidate_source
+    adapter: runs/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/adapter
+    adapter_fingerprint: 9253810026385c8749bfbb4de9b3520e1b0a73fd16020c98e728d8ff405d73e2
+    training_manifest: runs/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/run_manifest.json
+    training_manifest_sha256: 4a97904a62060a3bd376ad6dfe91963bf75c798d090f191dadc80dfd16912c5b
+  d01_controlled:
+    id: D01-4.5B-STYLE-50K-S42
+    role: controlled_candidate_source_and_task07_start
+    adapter: runs/D01-4.5B-STYLE-50K-S42/adapter
+    adapter_fingerprint: 71937228ea977d9d6a89613fe6f802fc3711dba9499a8e23c6c1e4e21e77a867
+    training_manifest: runs/D01-4.5B-STYLE-50K-S42/run_manifest.json
+    training_manifest_sha256: 0c0d466babe0cab0e4c8e67ae30948cf727cc95a221234ba3b8a32c1e3f6452c
+  selector:
+    frozen_commit: "2164822"
+    implementation: src/doc2query/evaluation/d01_usefulness.py
+    implementation_sha256: f8bb6ccd491a6e4f3fd721ca6368bcc75a450455082f5d0f6aa94a96e29c764c
+    contract: configs/evaluation/d01b_usefulness_hybrid_v1.yaml
+    contract_sha256: 0ba63995648c57c5d68ec23c6b0c54008036c914d8d75f241f5a07db8c84abd5
+    anchor: all_four_uncontrolled_queries
+    enumerate_all_subsets: true
+    deterministic_tie_break: lexicographic_candidate_identity
+
+task07_start:
+  adapter_role: d01_controlled
+  comparison_controls_required:
+    - continued_sft
+    - score_weighted_continued_sft
+  dpo_checkpoint_comparison_claim: not_established_by_task05_probe
+
+authorization:
+  task06_handoff_approved: true
+  task06_generation_authorized: false
+  task06_scoring_authorized: false
+  task06_preference_selection_authorized: false
+  task07_training_authorized: false
+  task09_promotion_authorized: false
+  four_point_five_b_full_authorized: false
+  final_tests_used: []
+
+next_stage_requirements:
+  prospective_task06_execution_adr: true
+  non_test_cohort_and_leakage_policy: true
+  generation_request_matrix_k_4_to_8: true
+  minimum_generation_seeds: 2
+  frozen_primary_and_shadow: true
+  frozen_component_calibration_and_human_evidence: true
+  crash_safe_runner_and_single_operator_command: true
+  triviaqa_training_forbidden: true
