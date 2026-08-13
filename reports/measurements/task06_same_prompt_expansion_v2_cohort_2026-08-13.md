@@ -99,8 +99,46 @@ bash scripts/run_task06_same_prompt_expansion_v2.sh
 Skrypt kolejno generuje 4000 kandydatów, ocenia je primary/shadow/corpus i
 stosuje **niezmienioną** politykę bramki różnorodności
 (`sha256=ddbd9c8334e397611da4a639508689089b96ddeacf001cd7966dc5ec96d9f2c7`).
-Szacowany koszt na podstawie v1: ~25 min generacji + ~22 min scoringu, peak
-VRAM ok. 3.4 GB; wyższe temperatury v2 mogą ten czas nieco wydłużyć.
+
+### Zmierzony czas v1 i szacunek dla v2
+
+Wall clock v1 z czasów modyfikacji artefaktów (`run.lock` 18:27:02 →
+`generations.jsonl` 18:53:07 → `scoring/summary.json` 19:15:41):
+
+| etap | v1 (wall clock) | szacunek v2 |
+|---|---|---|
+| generacja 4000 kandydatów (z ładowaniem 4.5B, ~35 s) | 26 min 05 s | 29–34 min |
+| scoring primary/shadow/corpus | 22 min 34 s | 23–26 min |
+| bramka różnorodności (CPU) | 0.7 s | ~1 s |
+| **razem** | **48 min 39 s** | **52–60 min** |
+
+Narzut v2 wynika z wyższych temperatur: rzadsze wczesne EOS oznacza dłuższe
+sekwencje, a przy tym samym batchu 8 wprost przekłada się to na czas generacji.
+Peak VRAM nie powinien się zmienić (~3.4 GB allocated), bo `max_new_tokens=64`
+i batch pozostają te same. Rozsądny margines na nieprzewidziane to 75–90 min.
+
+### Uruchomienie bez nadzoru z automatycznym wyłączeniem
+
+Wyłączenie musi nastąpić także wtedy, gdy run padnie, więc etapy łączy się
+średnikiem, nie `&&`, a uprawnienia roota bierze się raz na starcie (inaczej
+`sudo` po godzinie poprosi o hasło do pustego terminala):
+
+```bash
+sudo bash -c 'sudo -H -u "$SUDO_USER" bash scripts/run_task06_same_prompt_expansion_v2.sh; systemctl poweroff'
+```
+
+Wariant z siatką bezpieczeństwa, gdy wolimy twardy limit czasu:
+
+```bash
+sudo shutdown -h +90        # gwarantowane wyłączenie; anulowanie: sudo shutdown -c
+bash scripts/run_task06_same_prompt_expansion_v2.sh
+```
+
+Wyłączenie w trakcie runu jest tanie: dzięki journalom traci się najwyżej jeden
+batch, a ponowne uruchomienie tej samej komendy wznawia pracę. Logi etapów
+zostają w `artifacts/task06/same_prompt_expansion_v2/logs/`, więc po restarcie
+widać, czy run doszedł do końca; kompletność potwierdzają
+`d01_controlled/scoring/summary.json` i `diversity_gate/manifest.json`.
 
 Uwaga operacyjna: `config_sha256` jest przypięty w manifeście kohorty, więc
 każda późniejsza edycja configu v2 wymaga świadomego ponownego zamrożenia
