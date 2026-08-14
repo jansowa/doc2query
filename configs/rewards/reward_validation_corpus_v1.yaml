@@ -1,0 +1,108 @@
+schema_version: 1
+contract: task06-reward-validation-corpus-v1
+status: frozen_before_measurement
+adr: reports/decisions/task06_reward_validation_corpus_v1.md
+final_tests_used: []
+
+corpus:
+  passages: artifacts/task06/reward_validation_corpus_v1/passages.slim.jsonl
+  passages_manifest: artifacts/task06/reward_validation_corpus_v1/passages.slim.jsonl.manifest.json
+  passage_count: 180
+  queries_per_passage: 8
+  expected_record_count: 1440
+  shard_dir: artifacts/task06/reward_validation_corpus_v1/shards
+  shard_size: 30
+  merged: artifacts/task06/reward_validation_corpus_v1/corpus.jsonl
+
+author:
+  role: labels_by_construction
+  model_family: claude
+  model_id: claude-opus-5[1m]
+  pinned_weights: false
+  session_date: 2026-08-14
+  human_evidence_claimed: false
+  may_judge_own_labels: false
+
+# Ścieżki, których autor korpusu nie czyta przed zamknięciem korpusu.
+forbidden_inputs:
+  - artifacts/task06/candidate_pilot_v1/d01_controlled/scoring
+  - artifacts/task06/candidate_pilot_v1/w06_anchor/scoring
+  - artifacts/task06/candidate_pilot_v1/selection
+  - artifacts/task06/candidate_pilot_v1/natural_primary.jsonl
+  - data/processed/v1/dev.parquet
+  - data/processed/v1/test.parquet
+  - data/processed/v1/doc2query_dev.parquet
+  - data/processed/v1/doc2query_test.parquet
+
+slots:
+  - {slot: 0, label: good_specific, declared_form: full_question}
+  - {slot: 1, label: good_alternative, declared_form: keyword_query}
+  - {slot: 2, label: near_duplicate_of_good, declared_form: full_question}
+  - {slot: 3, label: too_general, declared_form: full_question}
+  - {slot: 4, label: ungrounded, declared_form: full_question}
+  - {slot: 5, label: copy_verbatim, declared_form: unconstrained}
+  - {slot: 6, label: wrong_focus, declared_form: full_question}
+  - {slot: 7, label: wrong_form, declared_form: unconstrained}
+
+# Deterministyczne reguły, żeby shardy pisane przez różne podsesje były spójne.
+declaration_rules:
+  focus:
+    slot_0: first_bucket          # focus_buckets[0]
+    slot_1: last_bucket           # focus_buckets[-1]
+    slot_2: same_as_slot_0
+    slot_6: first_bucket_declared_but_query_targets_middle_sentence_or_last_if_fewer_than_three
+    degenerate_single_sentence: declared_focus_bucket_null
+    other_slots: null
+  ungrounded_subtype:
+    even_order_index: hallucinated_fact
+    odd_order_index: unanswerable
+  near_duplicate_target_lemma_jaccard_min: 0.90
+
+record_schema:
+  required:
+    - cluster_id
+    - example_id
+    - order_index
+    - slot
+    - label
+    - declared_form
+    - declared_focus_bucket
+    - query
+    - construction_note
+    - author_model
+  optional:
+    - sublabel
+  query_constraints:
+    single_line: true
+    non_empty: true
+    max_characters: 320
+
+predictions:
+  cpu_only: [P1, P2, P3, P4, P5, P6, P7]
+  gpu_deferred: [P8]
+  thresholds:
+    P1_copy_density_argmax_group_rate_min: 0.90
+    P2_too_general_below_good_group_rate_min: 0.80
+    P3_wrong_focus_mismatch_rate_min: 0.70
+    P3_good_specific_match_rate_min: 0.70
+    P4_wrong_form_invalid_rate_min: 0.80
+    P4_good_valid_rate_exact: 1.00
+    P5_declared_form_agreement_rate_min: 0.80
+    P6_near_duplicate_collapse_rate_min: 0.70
+    P7_group_gate_pass_rate_min: 0.95
+
+prohibitions:
+  recalibrate_frozen_thresholds: false
+  enter_frozen_train: false
+  enter_preference_pairs: false
+  train_any_model: false
+  open_final_tests: false
+
+authorization:
+  generation_authorized: true
+  generation_authorized_by: owner_command_2026-08-14_unattended_token_window
+  cpu_measurement_authorized: true
+  gpu_measurement_authorized: false
+  task07_training_authorized: false
+  task09_authorized: false
+  grpo_authorized: false

@@ -57,6 +57,40 @@ minut oraz wznowienie 3 minuty po restarcie systemu. Oba są opakowane w `flock`
 więc gdy kolejka działa, wznowienie jest no-opem (zweryfikowane: rc=3), a
 znaczniki `done/<job>` gwarantują, że restart nie powtarza ukończonej pracy.
 
+### Wyłączenie maszyny po wyczerpaniu kolejki
+
+Właściciel może wrócić dopiero po dwóch tygodniach, więc po zakończeniu obliczeń
+maszyna ma się wyłączyć. Realizuje to **osobny** skrypt
+`scripts/poweroff_when_queue_drained.sh` uruchamiany z crona w minutach 5/25/45
+(przesuniętych wobec wznawiania `*/20`, aby strażnik nigdy nie trafiał na moment
+brania blokady przez nadzorcę). Świadomie nie dopisano tego do nadzorcy: bash
+czyta skrypt przyrostowo, więc edycja działającego pliku groziłaby rozsypaniem
+trwającego runu.
+
+Skrypt jest celowo paranoiczny — pomyłkowe wyłączenie kosztowałoby dni pracy.
+Odmawia, gdy: blokada kolejki jest zajęta, istnieje jakikolwiek proces obliczeń
+GPU, GPU nie daje się odpytać, jakiekolwiek zadanie jest jeszcze do wykonania
+(zadanie uznaje za porzucone dopiero po 6 nieudanych próbach w historii
+zdarzeń), żadne zadanie nie zostało ukończone, albo istnieje plik
+`no_poweroff` w katalogu kolejki. Dodatkowo wymaga, by stan „wyczerpana”
+utrzymał się przez godzinę, więc wznowienie w toku zawsze wygrywa. Decyzję wraz
+z dowodami zapisuje do `poweroff.log` przed wyłączeniem.
+
+Samo wyłączenie wymaga uprawnień, których cron użytkownika nie ma. Właściciel
+instaluje jednorazowo wąską regułę:
+
+```bash
+echo 'jsowa ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff' \
+  | sudo tee /etc/sudoers.d/doc2query-poweroff >/dev/null
+sudo chmod 440 /etc/sudoers.d/doc2query-poweroff && sudo visudo -c
+```
+
+Bez tej reguły tryb awaryjny jest bezpieczny: strażnik loguje odmowę i maszyna
+zostaje włączona. Przetestowano sześć scenariuszy z podstawionym `nvidia-smi` i
+w trybie dry-run: praca w toku, zadanie porzucone po 6 awariach, świeże okno
+potwierdzenia, wyłączenie po upływie okna, wstrzymanie plikiem `no_poweroff`
+oraz zajęte GPU.
+
 ## Czego świadomie nie uruchamiam
 
 - **Budowy par `chosen/rejected`** — wymaga zamrożenia polityki wag, progów i

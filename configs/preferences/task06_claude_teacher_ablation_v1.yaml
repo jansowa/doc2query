@@ -1,0 +1,116 @@
+schema_version: 1
+contract: task06-claude-teacher-ablation-v1
+status: frozen_before_generation
+adr: reports/decisions/task06_claude_teacher_ablation_v1.md
+final_tests_used: []
+
+design:
+  config: configs/preferences/task06_candidate_execution_design_v1.yaml
+  config_sha256: e332793388a376b461c1469e0f8bbc012433e54d8781fb4adc992ee3100f6f23
+  read_only: true
+
+cohort:
+  split: train
+  source_cohort: artifacts/task06/same_prompt_expansion_v3/cohort.records.jsonl
+  source_cohort_manifest: artifacts/task06/same_prompt_expansion_v3/cohort.manifest.json
+  selection: sha256_cluster_first_quality_blind_v2_prefix
+  passage_count: 600
+  passages: artifacts/task06/teacher_claude_v1/passages.slim.jsonl
+  passages_manifest: artifacts/task06/teacher_claude_v1/passages.slim.jsonl.manifest.json
+  inherits_exclusions:
+    - adapter_training_clusters_50k_sft
+    - candidate_smoke_v1
+    - candidate_pilot_v1
+    - same_prompt_expansion_v2
+  natural_query_visible_to_teacher: false
+  hard_negatives_visible_to_teacher: false
+  quality_fields_visible_to_teacher: []
+
+teacher:
+  role: teacher_ablation_extra_chosen_source
+  author_model: claude-opus-5[1m]
+  author_session_date: 2026-08-14
+  transport: api
+  pinned_weights: false
+  bit_exact_reproducible: false
+  inference_only: true
+  finetuned_on_generator_outputs: false
+  may_judge_own_candidates: false
+  human_evidence_claimed: false
+
+prompt:
+  equivalent_to: src/doc2query/models/templates.py::render_controlled_prompt
+  focus_mode: bucket
+  length: medium
+  intent_applicable: unset
+  max_characters_per_query: 320
+  single_line: true
+
+controls:
+  - {control_id: c0, form: full_question, intent: fact_lookup, focus_bucket: beginning}
+  - {control_id: c1, form: keyword_query, intent: definition, focus_bucket: middle}
+  - {control_id: c2, form: full_question, intent: procedure, focus_bucket: end}
+  - {control_id: c3, form: keyword_query, intent: entity_lookup, focus_bucket: middle}
+
+generation:
+  controls_per_passage: 4
+  candidates_per_control: 4
+  expected_record_count: 9600
+  shard_dir: artifacts/task06/teacher_claude_v1/shards
+  shard_size: 25
+  shard_count: 24
+  merged: artifacts/task06/teacher_claude_v1/candidates.jsonl
+  decoding: not_applicable_api_teacher
+  temperature: not_applicable_api_teacher
+  top_p: not_applicable_api_teacher
+  seed: not_applicable_api_teacher
+  token_logprobs: not_applicable_api_teacher
+  sequence_logprob: not_applicable_api_teacher
+  diversity_by: authored_intent_not_sampling
+
+record_schema:
+  required:
+    - cluster_id
+    - example_id
+    - order_index
+    - control_id
+    - form
+    - intent
+    - focus_bucket
+    - candidate_index
+    - query
+    - author_model
+  query_constraints:
+    single_line: true
+    non_empty: true
+    max_characters: 320
+    distinct_within_control: true
+
+diversity_gate:
+  applies_to_teacher: false
+  rationale: gate measures sampling collapse, teacher candidates are authored to differ
+
+scoring:
+  inherit: configs/preferences/task06_candidate_execution_design_v1.yaml
+  primary_builder: true
+  shadow_veto_only: true
+  corpus_required: true
+  batch_size: 8
+  status: deferred_until_gpu_queue_finishes
+
+prohibitions:
+  enter_frozen_train: false
+  modify_v3_v4_v5_artifacts: false
+  build_pairs: false
+  train_any_model: false
+  judge_own_candidates: false
+  open_final_tests: false
+  replace_student_groups: false
+
+authorization:
+  generation_authorized: true
+  generation_authorized_by: owner_command_2026-08-14_unattended_token_window
+  scoring_authorized: false
+  pair_build_authorized: false
+  task07_training_authorized: false
+  task09_authorized: false
