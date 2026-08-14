@@ -17,7 +17,7 @@ szerszego rozkładu decodingu przy niezmienionych progach. Razem obie kohorty da
 kontraktów i wymaga zgodności summary z identity (test regresji dodany).
 Na okno bezobsługowe 2–3 dób (ADR
 [`task06_unattended_compute_window_2026-08-14.md`](../reports/decisions/task06_unattended_compute_window_2026-08-14.md))
-zamrożono trzy rozłączne klastrowo kohorty v3/v4/v5 po 3000 pasaży (nowe,
+zamrożono dziewięć rozłącznych klastrowo kohort v3-v11 po 3000 pasaży (27000 pasaży, 216000 kandydatów) (nowe,
 opcjonalne `cohort.partition`; brak partycji jest bajtowo identyczny z
 dotychczasowym zachowaniem, co potwierdzono na zamrożonej kohorcie v2) i
 uruchomiono nadzorowaną kolejkę `scripts/run_unattended_queue.sh`. Budowa par

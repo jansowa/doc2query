@@ -30,9 +30,32 @@ Kolejka `configs/unattended_queue_2026-08-14.tsv`, nadzorowana przez
    kolizji między wszystkimi sześcioma kohortami Task 06, a sumy pul
    (96994 + 96900 + 97018) odtwarzają legalną pulę pomniejszoną o v2.
 
-Razem ~17,5 h GPU, czyli z zapasem wewnątrz okna. Po wyczerpaniu kolejki maszyna
-stoi bezczynnie — świadomie nie dopisuję zadań, które wymagałyby decyzji
-badawczych podjętych bez właściciela.
+3. **Sweep budżetu probe** (12 treningów, ~2,8 h) — diagnostyka do M-01 i M-03:
+   te same dwa ramiona TriviaQA przy `--train-prefix-limit` 1024 i 2048 (pliki
+   wejściowe mają dokładnie 3072 wiersze, więc mniejsze budżety są gwarantowane)
+   na seedach 42/43/44. Odpowiada na pytanie, czy kierunek Hybrid–W06 utrzymuje
+   się przy mniejszym budżecie danych probe, co jest wprost przesłanką dla M-01
+   (predyktywność probe) i M-03 (stabilność seedów). Wyniki lądują w osobnym
+   katalogu `runs/task05_probe_budget_sensitivity_v1` i **nie dotykają**
+   artefaktów zakończonego confirmu ani jego agregatu.
+4. **Kohorty v6–v11, po 3000 pasaży** (~33 h) — wypełnienie okna tą samą,
+   sprawdzoną ścieżką. Łącznie z v3–v5 daje to 27000 nowych pasaży (216000
+   kandydatów), rozłącznych klastrowo od wszystkiego wcześniejszego;
+   zweryfikowano to na rzeczywistych danych dla wszystkich dwunastu kohort
+   Task 06.
+
+Razem ~53 h GPU, czyli okno 2–3 dób jest wypełnione, a nie tylko kilkanaście
+godzin. Nadmiar jest nieszkodliwy: zadania są niezależne i wznawialne, więc
+wcześniejszy powrót właściciela oznacza po prostu niedokończony ogon kolejki.
+Koszt dyskowy całości to ~23 GB przy 83 GB wolnego i bramce 20 GB.
+
+### Samonaprawianie (watchdog)
+
+Aby awaria samego nadzorcy (OOM, zabity proces) albo **wyłączenie się komputera**
+nie zmarnowały reszty okna, w cronie właściciela są dwa wpisy: wznowienie co 20
+minut oraz wznowienie 3 minuty po restarcie systemu. Oba są opakowane w `flock`,
+więc gdy kolejka działa, wznowienie jest no-opem (zweryfikowane: rc=3), a
+znaczniki `done/<job>` gwarantują, że restart nie powtarza ukończonej pracy.
 
 ## Czego świadomie nie uruchamiam
 

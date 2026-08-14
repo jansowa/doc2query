@@ -1,0 +1,94 @@
+schema_version: 1
+contract: task06-same-prompt-preference-expansion-v2
+status: frozen_ready_for_cohort_freeze
+adr: reports/decisions/task06_unattended_compute_window_2026-08-14.md
+final_tests_used: []
+
+design:
+  config: configs/preferences/task06_candidate_execution_design_v1.yaml
+  config_sha256: e332793388a376b461c1469e0f8bbc012433e54d8781fb4adc992ee3100f6f23
+  read_only: true
+
+cohort:
+  split: train
+  selection: sha256_cluster_first_quality_blind_v2
+  selection_seed: 20260814
+  passage_count: 3000
+  min_hard_negatives: 10
+  source_records: data/processed/v1/train.parquet
+  source_records_sha256: 154a490b471b6641bc25479d9ab0a57f68ea4e7b07d5d056cbaf94361ccb1be5
+  exclude_adapter_training_clusters: true
+  exclude_prior_cohort_ids:
+    - path: artifacts/task06/candidate_smoke_v1/cohort.ids.json
+      sha256: f2402cb4ae6cd541342700bbe76a038fe63b4211a86ef18d56cc84f33cd4293f
+    - path: artifacts/task06/candidate_pilot_v1/cohort.ids.json
+      sha256: 75f43b9ca16ed15434dc654bb949432f3b14bec3ef8ea9313d8fa46a665310c5
+    - path: artifacts/task06/same_prompt_expansion_v2/cohort.ids.json
+      sha256: f4a9f664b0de611592de5ecb88812ce38fabcaef054438741511355ce15ac632
+    - path: artifacts/task06/same_prompt_expansion_v3/cohort.ids.json
+      sha256: 48c359130a4720b3abad90bd8df072f34d58c62f4d7aa15ea265c65a5ef47af7
+    - path: artifacts/task06/same_prompt_expansion_v4/cohort.ids.json
+      sha256: 3a3d280e01cc2b0a5d6f92bb9732b221d9d67372ca9122315c2a3dd6ca7ba2a7
+    - path: artifacts/task06/same_prompt_expansion_v5/cohort.ids.json
+      sha256: 3cbc1419f474dd2fab6feca9ca413352dcd30772716de95d5818d62abb9c76cb
+    - path: artifacts/task06/same_prompt_expansion_v6/cohort.ids.json
+      sha256: 0f7aa20c25640f245559a6a5cef1ba273893e641467479a7ac20ead045856200
+    - path: artifacts/task06/same_prompt_expansion_v7/cohort.ids.json
+      sha256: 911f1d6f5478c336f5936e2ccd210a80882a52aa53b657082db0aa4edb29baeb
+    - path: artifacts/task06/same_prompt_expansion_v8/cohort.ids.json
+      sha256: 329bb93fa94ea214a093e78f4a89f426cf6e9f5529190eb3a8e385fe4cef486c
+    - path: artifacts/task06/same_prompt_expansion_v9/cohort.ids.json
+      sha256: 06f2724b33fd91f32d065a169e7d68e6bd3e8f16a776e03061e16b9c5ec72e15
+    - path: artifacts/task06/same_prompt_expansion_v10/cohort.ids.json
+      sha256: 5c6d2c883a78c88339b8bec306966b2c07d735ec810b9a377d2c2f5ef957c956
+
+generator:
+  role: d01_controlled
+  experiment_id: TASK06-PREFERENCE-D01-SAME-PROMPT-V11
+  config: configs/experiments/d01b_scale_pilot_d01_4_5b_s42.yaml
+  adapter: runs/D01-4.5B-STYLE-50K-S42/adapter
+  prompts_per_passage: 1
+  candidates_per_prompt: 8
+  exact_same_prompt_required: true
+  control_assignment: sha256_balanced_round_robin_after_quality_blind_order
+  controls:
+    - {form: full_question, intent: fact_lookup, focus: beginning}
+    - {form: keyword_query, intent: definition, focus: middle}
+    - {form: full_question, intent: procedure, focus: end}
+    - {form: keyword_query, intent: entity_lookup, focus: middle}
+  decoding:
+    - {slot: 0, temperature: 0.6, top_p: 0.97, seed: 7601}
+    - {slot: 1, temperature: 0.8, top_p: 0.97, seed: 7602}
+    - {slot: 2, temperature: 1.0, top_p: 0.97, seed: 7603}
+    - {slot: 3, temperature: 1.2, top_p: 0.92, seed: 7604}
+    - {slot: 4, temperature: 0.6, top_p: 0.92, seed: 7611}
+    - {slot: 5, temperature: 0.8, top_p: 0.92, seed: 7612}
+    - {slot: 6, temperature: 1.0, top_p: 0.92, seed: 7613}
+    - {slot: 7, temperature: 1.2, top_p: 0.97, seed: 7614}
+  max_new_tokens: 64
+  generation_batch_size: 8
+
+scoring:
+  inherit: configs/preferences/task06_candidate_execution_design_v1.yaml
+  batch_size: 8
+  primary_builder: true
+  shadow_veto_only: true
+  corpus_required: true
+
+diversity_gate:
+  policy: configs/preferences/task06_same_prompt_diversity_gate_v1.yaml
+  policy_sha256: ddbd9c8334e397611da4a639508689089b96ddeacf001cd7966dc5ec96d9f2c7
+  reuse_frozen_thresholds: true
+  recalibration_forbidden: true
+
+authorization:
+  cohort_freeze_authorized: true
+  cohort_freeze_authorized_by: owner_command_2026-08-14_unattended_compute_window
+  generation_authorized: true
+  scoring_authorized: true
+  diversity_gate_required_before_pairs: true
+  tentative_pair_build_authorized: false
+  groq_after_pairs_frozen: false
+  task07_training_authorized: false
+  task09_authorized: false
+  final_tests_used: []
