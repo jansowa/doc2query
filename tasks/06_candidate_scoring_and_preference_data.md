@@ -6,6 +6,21 @@
 
 `IN PROGRESS`
 
+Aktualizacja 2026-08-14 (przerwany run v2 i amendment): pierwszy run generacji
+v2 przerwał się po 3559/4000 kandydatach na `ValueError: query completion must
+be a single line` — w slocie 7 (temperatura 1.2) model zwrócił completion z
+znakiem nowej linii, a runner nie obsługiwał tego wyjątku. Bezobsługowe
+uruchomienie z `; systemctl poweroff` wyłączyło komputer zgodnie z projektem
+także po błędzie; journal zachował 3559 wierszy. Amendment
+[`task06_same_prompt_v2_invalid_completion_amendment_2026-08-14.md`](../reports/decisions/task06_same_prompt_v2_invalid_completion_amendment_2026-08-14.md)
+przenosi na ten etap politykę zamrożonego pipeline'u D01: niepoprawny completion
+jest resamplowany na nowym, deterministycznym seedzie (do 4 prób), a dopiero po
+ich wyczerpaniu zachowywana jest pierwsza niepusta linia z jawną flagą
+`format_repair`. Pierwsza próba zachowuje dotychczasowy seed, więc
+`identity_sha256` się nie zmienia i run wznawia się bez utraty ~23 min GPU.
+Kohorta, prompty, decoding i progi bramki pozostają nietknięte. Walidacja: Ruff,
+`mypy src`, pełny pytest `516 passed`. `final_tests_used=[]`.
+
 Aktualizacja 2026-08-13 (decyzja o kohorcie v2, delegowana właścicielem):
 właściciel delegował wybór ścieżki naprawy deficytu par. ADR
 [`task06_same_prompt_expansion_v2_2026-08-13.md`](../reports/decisions/task06_same_prompt_expansion_v2_2026-08-13.md)

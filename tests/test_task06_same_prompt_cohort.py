@@ -432,9 +432,6 @@ def _fake_generation_backend(
     )
     monkeypatch.setattr("torch.cuda.max_memory_allocated", lambda: 0)
     monkeypatch.setattr("torch.cuda.max_memory_reserved", lambda: 0)
-    monkeypatch.setattr(
-        "doc2query.preferences.task06_smoke.normalize_completion", lambda text: str(text)
-    )
 
 
 def test_v2_generation_resumes_after_an_interruption_without_losing_work(
@@ -485,6 +482,89 @@ def test_v2_generation_resumes_after_an_interruption_without_losing_work(
     again = generate_same_prompt_expansion(_config(root), output)
     assert again == summary
     assert repeated == []
+
+
+def _prepared_v2_repo(tmp_path: Path) -> tuple[Path, Path]:
+    root = _repository(tmp_path)
+    output = root / "artifacts/task06/same_prompt_expansion_v2"
+    generation_config = root / "configs/experiments/d01b_scale_pilot_d01_4_5b_s42.yaml"
+    generation_config.parent.mkdir(parents=True)
+    generation_config.write_text("experiment_id: D01-TEST\n", encoding="utf-8")
+    _v2_generation_config(root)
+    return root, output
+
+
+def test_v2_generation_retries_a_malformed_completion_on_a_new_seed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, output = _prepared_v2_repo(tmp_path)
+    freeze_same_prompt_expansion_cohort(_config(root), output)
+    calls: list[int] = []
+    _fake_generation_backend(monkeypatch, calls)
+
+    def flaky(model: Any, tokenizer: Any, prompts: list[list[int]], **kwargs: Any) -> list[str]:
+        calls.append(len(prompts))
+        return [
+            "wiersz pierwszy\nwiersz drugi"
+            if index == 0 and seed < 7_000_000
+            else f"zapytanie {seed}"
+            for index, seed in enumerate(kwargs["seeds"])
+        ]
+
+    monkeypatch.setattr("doc2query.preferences.task06_smoke.generate_text_batch_seeded", flaky)
+    summary = generate_same_prompt_expansion(_config(root), output)
+    rows = [
+        json.loads(line)
+        for line in (output / "d01_controlled/generations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    retried = [row for row in rows if row["attempt"] > 1]
+    assert retried, "the malformed first slot of every batch must be resampled"
+    assert all(row["invalid_attempts"] == 1 for row in retried)
+    assert all(row["format_repair"] == "none" for row in retried)
+    assert all("\n" not in row["generated"] and row["generated"] for row in rows)
+    assert all(row["seed"] >= 7_000_000 for row in retried)
+    assert summary["retried_row_count"] == len(retried)
+    assert summary["invalid_completion_count"] == len(retried)
+    assert summary["format_repair_counts"] == {
+        "none": len(rows),
+        "first_line": 0,
+        "empty": 0,
+    }
+    assert summary["max_attempts_per_slot"] == 4
+
+
+def test_v2_generation_repairs_only_after_exhausting_attempts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, output = _prepared_v2_repo(tmp_path)
+    freeze_same_prompt_expansion_cohort(_config(root), output)
+    attempts: list[int] = []
+    _fake_generation_backend(monkeypatch, attempts)
+
+    def always_multiline(
+        model: Any, tokenizer: Any, prompts: list[list[int]], **kwargs: Any
+    ) -> list[str]:
+        attempts.append(len(prompts))
+        return [f"  \n zapytanie {seed} \nogon do odrzucenia" for seed in kwargs["seeds"]]
+
+    monkeypatch.setattr(
+        "doc2query.preferences.task06_smoke.generate_text_batch_seeded", always_multiline
+    )
+    summary = generate_same_prompt_expansion(_config(root), output)
+    rows = [
+        json.loads(line)
+        for line in (output / "d01_controlled/generations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert summary["generation_count"] == COHORT_SIZE * 8
+    assert summary["format_repair_counts"]["first_line"] == len(rows)
+    assert all(row["attempt"] == 4 for row in rows)
+    assert all(row["invalid_attempts"] == 4 for row in rows)
+    assert all(row["generated"].startswith("zapytanie ") for row in rows)
+    assert all("ogon" not in row["generated"] for row in rows)
 
 
 def test_v2_generation_rejects_an_out_of_contract_batch_size(tmp_path: Path) -> None:

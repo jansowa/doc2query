@@ -9,7 +9,7 @@ import os
 import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, Literal, NamedTuple, cast
 
 import numpy as np
 import torch
@@ -37,6 +37,8 @@ SMOKE_CONTRACT = "task06-candidate-smoke-v1"
 SMOKE_SIZE = 32
 PILOT_CONTRACT = "task06-candidate-pilot-v1"
 PILOT_SIZE = 512
+SAME_PROMPT_MAX_ATTEMPTS = 4
+SAME_PROMPT_ATTEMPT_SEED_STRIDE = 7_000_000
 ROLE_TO_CONFIG = {
     "w06_anchor": Path("configs/experiments/d01b_scale_pilot_w06_4_5b_s42.yaml"),
     "d01_controlled": Path("configs/experiments/d01b_scale_pilot_d01_4_5b_s42.yaml"),
@@ -643,6 +645,105 @@ def select_safe_queries(
     return report
 
 
+class _ResolvedCompletion(NamedTuple):
+    """One accepted same-prompt completion with its full attempt provenance."""
+
+    text: str
+    seed: int
+    attempt: int
+    invalid_attempts: int
+    repair: str
+
+
+def _repair_malformed_completion(raw: str) -> tuple[str, str]:
+    """Keep the first non-empty line once bounded retries are exhausted."""
+    for line in str(raw).splitlines():
+        collapsed = " ".join(line.strip().split())
+        if collapsed:
+            return collapsed, "first_line"
+    return "", "empty"
+
+
+def _resolve_same_prompt_batch(
+    model: Any,
+    tokenizer: Any,
+    *,
+    chunk: Sequence[tuple[dict[str, Any], QueryControl, str, list[int]]],
+    seeds: Sequence[int],
+    temperature: float,
+    top_p: float,
+    max_new_tokens: int,
+) -> list[_ResolvedCompletion]:
+    """Retry malformed completions on new seeds instead of aborting the whole run.
+
+    This mirrors the frozen D01 pipeline policy: a completion that is not a single
+    non-empty line is counted as invalid and resampled, up to
+    ``SAME_PROMPT_MAX_ATTEMPTS`` attempts.  Only after exhausting them is the first
+    non-empty line kept, and every such row records the repair explicitly.
+    """
+    outputs = generate_text_batch_seeded(
+        model,
+        tokenizer,
+        [item[3] for item in chunk],
+        seeds=list(seeds),
+        temperature=temperature,
+        top_p=top_p,
+        max_new_tokens=max_new_tokens,
+    )
+    resolved: list[_ResolvedCompletion | None] = [None] * len(chunk)
+    invalid_attempts = [0] * len(chunk)
+    last_raw = [str(value) for value in outputs]
+    used_seeds = list(seeds)
+    pending: list[int] = []
+    for index, raw in enumerate(outputs):
+        try:
+            resolved[index] = _ResolvedCompletion(
+                normalize_completion(raw), used_seeds[index], 1, 0, "none"
+            )
+        except ValueError:
+            invalid_attempts[index] = 1
+            pending.append(index)
+
+    for attempt in range(2, SAME_PROMPT_MAX_ATTEMPTS + 1):
+        if not pending:
+            break
+        retry_seeds = [
+            int(seeds[index]) + attempt * SAME_PROMPT_ATTEMPT_SEED_STRIDE for index in pending
+        ]
+        retry_outputs = generate_text_batch_seeded(
+            model,
+            tokenizer,
+            [chunk[index][3] for index in pending],
+            seeds=retry_seeds,
+            temperature=temperature,
+            top_p=top_p,
+            max_new_tokens=max_new_tokens,
+        )
+        still_pending: list[int] = []
+        for index, raw, retry_seed in zip(pending, retry_outputs, retry_seeds, strict=True):
+            last_raw[index] = str(raw)
+            used_seeds[index] = retry_seed
+            try:
+                resolved[index] = _ResolvedCompletion(
+                    normalize_completion(raw), retry_seed, attempt, invalid_attempts[index], "none"
+                )
+            except ValueError:
+                invalid_attempts[index] += 1
+                still_pending.append(index)
+        pending = still_pending
+
+    for index in pending:
+        text, repair = _repair_malformed_completion(last_raw[index])
+        resolved[index] = _ResolvedCompletion(
+            text,
+            used_seeds[index],
+            SAME_PROMPT_MAX_ATTEMPTS,
+            invalid_attempts[index],
+            repair,
+        )
+    return [item for item in resolved if item is not None]
+
+
 def _same_prompt_expansion_v1_records(
     raw: Mapping[str, Any], root: Path, output_dir: Path
 ) -> tuple[list[dict[str, Any]], Path]:
@@ -819,17 +920,17 @@ def generate_same_prompt_expansion(config_path: Path, output_dir: Path) -> dict[
                     int(slot["seed"]) + index * 1000
                     for index in range(batch_start, batch_start + len(chunk))
                 ]
-                outputs = generate_text_batch_seeded(
+                resolved = _resolve_same_prompt_batch(
                     model,
                     tokenizer,
-                    [item[3] for item in chunk],
+                    chunk=chunk,
                     seeds=seeds,
                     temperature=float(slot["temperature"]),
                     top_p=float(slot["top_p"]),
                     max_new_tokens=int(generator["max_new_tokens"]),
                 )
-                for local, ((record, control, prompt, _ids), raw_text, item_seed) in enumerate(
-                    zip(chunk, outputs, seeds, strict=True)
+                for local, ((record, control, prompt, _ids), completion) in enumerate(
+                    zip(chunk, resolved, strict=True)
                 ):
                     absolute = absolute_start + local
                     if absolute < len(completed):
@@ -848,7 +949,7 @@ def generate_same_prompt_expansion(config_path: Path, output_dir: Path) -> dict[
                         "positive_count": 1,
                         "reference": str(record["query"]),
                         "metadata": record.get("metadata", {}),
-                        "generated": normalize_completion(raw_text),
+                        "generated": completion.text,
                         "mode": "controlled_same_prompt",
                         "candidate_index": int(slot["slot"]),
                         "candidate_slot_index": int(slot["slot"]),
@@ -857,8 +958,10 @@ def generate_same_prompt_expansion(config_path: Path, output_dir: Path) -> dict[
                         "requested_form": control.form.value,
                         "requested_intent": control.intent.value,
                         "requested_focus": control.focus_bucket,
-                        "seed": item_seed,
-                        "attempt": 1,
+                        "seed": completion.seed,
+                        "attempt": completion.attempt,
+                        "invalid_attempts": completion.invalid_attempts,
+                        "format_repair": completion.repair,
                         "generation_config": dict(slot),
                         "prompt": prompt,
                         "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
@@ -882,6 +985,13 @@ def generate_same_prompt_expansion(config_path: Path, output_dir: Path) -> dict[
         "prompt_count": len(records),
         "generation_count": len(rows),
         "resumed_generation_count": len(completed),
+        "max_attempts_per_slot": SAME_PROMPT_MAX_ATTEMPTS,
+        "retried_row_count": sum(1 for row in rows if int(row.get("attempt", 1)) > 1),
+        "invalid_completion_count": sum(int(row.get("invalid_attempts", 0)) for row in rows),
+        "format_repair_counts": {
+            repair: sum(1 for row in rows if str(row.get("format_repair", "none")) == repair)
+            for repair in ("none", "first_line", "empty")
+        },
         "precision": precision.label,
         "elapsed_seconds": time.perf_counter() - started,
         "peak_vram_allocated_bytes": torch.cuda.max_memory_allocated(),

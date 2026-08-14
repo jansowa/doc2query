@@ -64,6 +64,7 @@ htmlcov/
 !/reports/decisions/task06_d01b_hybrid_handoff_v1.md
 !/reports/decisions/task06_same_prompt_diversity_gate_v1.md
 !/reports/decisions/task06_same_prompt_expansion_v2_2026-08-13.md
+!/reports/decisions/task06_same_prompt_v2_invalid_completion_amendment_2026-08-14.md
 !/reports/plans/
 /reports/plans/*
 !/reports/plans/task05_d01_overnight_2026-07-26.md
