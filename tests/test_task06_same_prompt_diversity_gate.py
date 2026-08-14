@@ -297,6 +297,38 @@ def test_gate_publishes_atomic_artifacts_and_reports_rejections(tmp_path: Path) 
     ) == manifest.model_dump(mode="json")
 
 
+def test_gate_accepts_the_v2_generation_contract(tmp_path: Path) -> None:
+    """The gate must accept every same-prompt cohort contract, not only v1."""
+    generations, summary, identity = _write_cohort(tmp_path, [_group(DIVERSE)])
+    for path in (summary, identity):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["contract"] = "task06-same-prompt-preference-expansion-v2"
+        path.write_text(json.dumps(payload), encoding="utf-8")
+    manifest = apply_same_prompt_diversity_gate(
+        generations_path=generations,
+        generations_summary_path=summary,
+        generations_identity_path=identity,
+        policy_path=POLICY,
+        output_dir=tmp_path / "gate_v2",
+    )
+    assert manifest.eligible_group_count == 1
+
+
+def test_gate_rejects_mismatched_summary_and_identity_contracts(tmp_path: Path) -> None:
+    generations, summary, identity = _write_cohort(tmp_path, [_group(DIVERSE)])
+    payload = json.loads(summary.read_text(encoding="utf-8"))
+    payload["contract"] = "task06-same-prompt-preference-expansion-v2"
+    summary.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="pin different contracts"):
+        apply_same_prompt_diversity_gate(
+            generations_path=generations,
+            generations_summary_path=summary,
+            generations_identity_path=identity,
+            policy_path=POLICY,
+            output_dir=tmp_path / "gate_mismatch",
+        )
+
+
 def test_gate_refuses_to_overwrite_existing_output(tmp_path: Path) -> None:
     generations, summary, identity = _write_cohort(tmp_path, [_group(DIVERSE)])
     output = tmp_path / "diversity_gate"

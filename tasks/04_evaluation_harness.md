@@ -6,6 +6,13 @@
 
 `IMPLEMENTED`
 
+Aktualizacja 2026-08-14 (M-03 w toku): w oknie bezobsługowym 2026-08-14
+uruchomiono brakujące seedy 45 i 46 confirmu TriviaQA dla obu ramion (W06 i
+Hybrid), wyłącznie jako treningi probe. Agregacja pięciu seedów oraz
+jakakolwiek reinterpretacja wyniku confirmu wymagają obecności właściciela i nie
+zostały wykonane. ADR:
+[`task06_unattended_compute_window_2026-08-14.md`](../reports/decisions/task06_unattended_compute_window_2026-08-14.md).
+
 Aktualizacja 2026-08-13 (rozszerzenie zakresu, M-03): harness probe otrzymuje
 obowiązkowy guardrail zbieżności treningu — run probe raportuje trajektorię
 eval loss oraz minimalny sanity wynik retrieval, a seed niezbiegnięty (jak

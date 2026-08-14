@@ -39,7 +39,12 @@ from doc2query.utils.records import JsonlWriter, read_records, write_json
 POLICY_CONTRACT = "task06-same-prompt-diversity-gate-policy-v1"
 GATE_CONTRACT = "task06-same-prompt-diversity-gate-v1"
 GATE_STATUS = "diversity_gate_applied_not_paired"
-GENERATION_CONTRACT = "task06-same-prompt-preference-expansion-v1"
+GENERATION_CONTRACTS = frozenset(
+    {
+        "task06-same-prompt-preference-expansion-v1",
+        "task06-same-prompt-preference-expansion-v2",
+    }
+)
 GENERATION_STATUS = "same_prompt_generation_complete"
 EXACT_NORMALIZATION = "task06_whitespace_casefold"
 LEMMA_BACKEND = SimplePolishNormalizer.cache_namespace
@@ -335,8 +340,11 @@ def _load_generations(
     identity = json.loads(identity_path.read_text(encoding="utf-8"))
     if not isinstance(summary, dict) or not isinstance(identity, dict):
         raise ValueError("generation summary and identity must be mappings")
-    if summary.get("contract") != GENERATION_CONTRACT or summary.get("status") != GENERATION_STATUS:
+    contract = summary.get("contract")
+    if contract not in GENERATION_CONTRACTS or summary.get("status") != GENERATION_STATUS:
         raise ValueError("same-prompt generation is not complete under the frozen contract")
+    if identity.get("contract") != contract:
+        raise ValueError("same-prompt generation summary and identity pin different contracts")
     if summary.get("final_tests_used") != [] or identity.get("final_tests_used") != []:
         raise ValueError("same-prompt generation provenance declares final-test usage")
     generations_sha256 = file_sha256(generations_path)

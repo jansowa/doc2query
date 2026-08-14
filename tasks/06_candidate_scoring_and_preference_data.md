@@ -6,6 +6,25 @@
 
 `IN PROGRESS`
 
+Aktualizacja 2026-08-14 (kohorta v2 zamknięta, okno bezobsługowe): run v2 jest
+ukończony — 4000/4000 wygenerowanych (3 completions resamplowane, zero napraw
+przez ucięcie) i 4000/4000 ocenionych. Bramka różnorodności na v2 dała
+**466/500 grup `eligible` (93.2%)** wobec 362/500 w v1, co potwierdza skuteczność
+szerszego rozkładu decodingu przy niezmienionych progach. Razem obie kohorty dają
+**828 grup** kwalifikujących się do budowy par, czyli powyżej rozwojowego progu
+500 par. Bramka wymagała jednej poprawki: pinowała wyłącznie kontrakt
+`...-expansion-v1`, więc odrzucała artefakt v2; teraz akceptuje zbiór znanych
+kontraktów i wymaga zgodności summary z identity (test regresji dodany).
+Na okno bezobsługowe 2–3 dób (ADR
+[`task06_unattended_compute_window_2026-08-14.md`](../reports/decisions/task06_unattended_compute_window_2026-08-14.md))
+zamrożono trzy rozłączne klastrowo kohorty v3/v4/v5 po 3000 pasaży (nowe,
+opcjonalne `cohort.partition`; brak partycji jest bajtowo identyczny z
+dotychczasowym zachowaniem, co potwierdzono na zamrożonej kohorcie v2) i
+uruchomiono nadzorowaną kolejkę `scripts/run_unattended_queue.sh`. Budowa par
+pozostaje nieautoryzowana i celowo nie wchodzi do okna: jest tania na CPU i
+wymaga decyzji właściciela o polityce `chosen/rejected`.
+Walidacja: Ruff, `mypy src`, pełny pytest. `final_tests_used=[]`.
+
 Aktualizacja 2026-08-14 (przerwany run v2 i amendment): pierwszy run generacji
 v2 przerwał się po 3559/4000 kandydatach na `ValueError: query completion must
 be a single line` — w slocie 7 (temperatura 1.2) model zwrócił completion z

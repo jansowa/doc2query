@@ -205,6 +205,49 @@ def test_cohort_freeze_is_quality_blind_and_disjoint(tmp_path: Path) -> None:
     assert [value["doc_id"] for value in first["hard_negatives"]] == expected_negatives
 
 
+def test_cohort_partitions_are_disjoint_and_leave_the_default_untouched(tmp_path: Path) -> None:
+    unpartitioned = _repository(tmp_path / "whole")
+    reference = freeze_same_prompt_expansion_cohort(
+        _config(unpartitioned), unpartitioned / "artifacts/task06/same_prompt_expansion_v2"
+    )
+    assert "partition" not in reference  # absent keeps v2 byte-identical
+
+    selected: list[set[str]] = []
+    for index in range(2):
+        root = _repository(tmp_path / f"part{index}")
+        _rewrite_config(
+            root,
+            lambda payload, index=index: payload["cohort"].update(
+                {"partition": {"index": index, "count": 2}, "passage_count": 2}
+            ),
+        )
+        manifest = freeze_same_prompt_expansion_cohort(
+            _config(root), root / "artifacts/task06/same_prompt_expansion_v2"
+        )
+        assert manifest["partition"] == {"index": index, "count": 2}
+        ids = json.loads(
+            (root / "artifacts/task06/same_prompt_expansion_v2/cohort.ids.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        selected.append({row["cluster_id"] for row in ids["records"]})
+    assert selected[0].isdisjoint(selected[1])
+    assert manifest["eligible_pair_count"] < reference["eligible_pair_count"]
+
+
+@pytest.mark.parametrize(
+    "partition",
+    [{"index": 2, "count": 2}, {"index": -1, "count": 4}, {"index": 0, "count": 1}],
+)
+def test_cohort_partition_is_validated(tmp_path: Path, partition: dict[str, int]) -> None:
+    root = _repository(tmp_path)
+    _rewrite_config(root, lambda payload: payload["cohort"].__setitem__("partition", partition))
+    with pytest.raises(ValueError, match=r"cohort\.partition requires"):
+        freeze_same_prompt_expansion_cohort(
+            _config(root), root / "artifacts/task06/same_prompt_expansion_v2"
+        )
+
+
 def test_cohort_freeze_is_deterministic_and_idempotent(tmp_path: Path) -> None:
     root = _repository(tmp_path)
     output = root / "artifacts/task06/same_prompt_expansion_v2"

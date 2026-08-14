@@ -105,6 +105,32 @@ def _excluded_clusters(
     return clusters, hashes
 
 
+def _cohort_partition(cohort: Mapping[str, Any]) -> tuple[int, int] | None:
+    """Read the optional disjoint-partition selector; absent means the whole pool."""
+    raw = cohort.get("partition")
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        raise ValueError("cohort.partition must be a mapping")
+    unexpected = sorted(set(raw) - {"index", "count"})
+    if unexpected:
+        raise ValueError(f"unsupported cohort.partition fields: {unexpected}")
+    index = int(raw["index"])
+    count = int(raw["count"])
+    if count < 2 or not 0 <= index < count:
+        raise ValueError("cohort.partition requires count >= 2 and 0 <= index < count")
+    return index, count
+
+
+def _in_partition(cluster_id: str, *, seed: int, partition: tuple[int, int] | None) -> bool:
+    """Assign each near-duplicate cluster to exactly one partition, deterministically."""
+    if partition is None:
+        return True
+    index, count = partition
+    digest = hashlib.sha256(f"{seed}:partition:{cluster_id}".encode()).digest()
+    return int.from_bytes(digest[:8], "big") % count == index
+
+
 def freeze_same_prompt_expansion_cohort(config_path: Path, output_dir: Path) -> dict[str, Any]:
     """Freeze a new cluster-disjoint same-prompt cohort without generating anything."""
     config = _load_expansion_config(config_path)
@@ -189,12 +215,14 @@ def freeze_same_prompt_expansion_cohort(config_path: Path, output_dir: Path) -> 
     passage_count = int(cohort["passage_count"])
     minimum_negatives = int(cohort["min_hard_negatives"])
     seed = int(cohort["selection_seed"])
+    partition = _cohort_partition(cohort)
     eligible = [
         {**row, "cluster_id": doc_to_cluster[row["doc_id"]]}
         for row in identities
         if len(row["negative_doc_ids"]) >= minimum_negatives
         and doc_to_cluster[row["doc_id"]] not in trained_clusters
         and doc_to_cluster[row["doc_id"]] not in prior_clusters
+        and _in_partition(doc_to_cluster[row["doc_id"]], seed=seed, partition=partition)
     ]
     eligible.sort(
         key=lambda row: hashlib.sha256(
@@ -235,6 +263,8 @@ def freeze_same_prompt_expansion_cohort(config_path: Path, output_dir: Path) -> 
         "excluded_prior_ids_sha256": prior_hashes,
         "final_tests_used": [],
     }
+    if partition is not None:
+        id_payload["partition"] = {"index": partition[0], "count": partition[1]}
     id_payload["fingerprint"] = _canonical_sha256(id_payload)
     if id_manifest_path.is_file():
         if json.loads(id_manifest_path.read_text(encoding="utf-8")) != id_payload:
@@ -310,5 +340,7 @@ def freeze_same_prompt_expansion_cohort(config_path: Path, output_dir: Path) -> 
         "model_loading_performed": False,
         "final_tests_used": [],
     }
+    if partition is not None:
+        manifest["partition"] = {"index": partition[0], "count": partition[1]}
     write_json(manifest_path, manifest)
     return manifest
