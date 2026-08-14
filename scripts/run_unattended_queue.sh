@@ -23,6 +23,7 @@ GPU_IDLE_WAIT_SECONDS="${DOC2QUERY_QUEUE_GPU_WAIT:-7200}"
 COOLDOWN_WAIT_SECONDS="${DOC2QUERY_QUEUE_COOLDOWN_WAIT:-1800}"
 POLL_SECONDS="${DOC2QUERY_QUEUE_POLL:-5}"
 RETRY_SLEEP_SECONDS="${DOC2QUERY_QUEUE_RETRY_SLEEP:-60}"
+KILL_GRACE_SECONDS="${DOC2QUERY_QUEUE_KILL_GRACE:-60}"
 
 test -f "$QUEUE_FILE" || { echo "missing queue file: $QUEUE_FILE" >&2; exit 2; }
 mkdir -p "$QUEUE_ROOT/logs" "$QUEUE_ROOT/done"
@@ -128,7 +129,7 @@ run_limited() {
     if [ "$waited" -ge "$limit" ]; then
       log "time limit ${limit}s reached; terminating process group $pgid"
       kill -TERM -"$pgid" 2>/dev/null
-      sleep 60
+      sleep "$KILL_GRACE_SECONDS"
       kill -KILL -"$pgid" 2>/dev/null
       wait "$pgid" 2>/dev/null
       return 124

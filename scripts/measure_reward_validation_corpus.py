@@ -253,8 +253,9 @@ def measure(
     }
     verdicts: dict[str, Any] = {}
     for name, (metric_key, threshold_key) in checks.items():
-        value = results[metric_key]
-        threshold = thresholds[threshold_key]
+        raw = results[metric_key]
+        value = float(raw) if isinstance(raw, int | float) else None
+        threshold = float(thresholds[threshold_key])
         verdicts[name] = {
             "value": value,
             "threshold": threshold,

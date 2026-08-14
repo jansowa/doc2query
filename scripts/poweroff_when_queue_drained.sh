@@ -30,6 +30,12 @@ test -f "$QUEUE_FILE" || { echo "missing queue file: $QUEUE_FILE" >&2; exit 2; }
 mkdir -p "$QUEUE_ROOT"
 say() { printf '[%s] %s\n' "$(date --iso-8601=seconds)" "$*" | tee -a "$LOG"; }
 
+# Never power off a machine that is merely running the test suite.
+if [ -n "${PYTEST_CURRENT_TEST:-}" ] && [ "$DRY_RUN" = "0" ]; then
+  say "hold: refusing to power off from inside a test run"
+  exit 0
+fi
+
 if [ -f "$QUEUE_ROOT/no_poweroff" ]; then
   say "hold: $QUEUE_ROOT/no_poweroff exists"
   exit 0

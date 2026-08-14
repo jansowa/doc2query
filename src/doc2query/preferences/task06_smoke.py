@@ -741,7 +741,10 @@ def _resolve_same_prompt_batch(
             invalid_attempts[index],
             repair,
         )
-    return [item for item in resolved if item is not None]
+    completions = [item for item in resolved if item is not None]
+    if len(completions) != len(chunk):
+        raise RuntimeError("same-prompt batch resolution left an unfilled candidate slot")
+    return completions
 
 
 def _same_prompt_expansion_v1_records(
