@@ -51,7 +51,10 @@ prospektywne ADR-y **przed** generacją i pomiarem:
    `artifacts/task06/teacher_claude_v1/`. Wszystkie cztery kontrolki są
    generowane, więc dla każdego pasażu istnieje kandydat teachera na
    **identyczny** prompt, jaki round-robin przypisał lokalnemu generatorowi.
-   Generacja jest **w toku** (shardy po 25 pasaży, wznawialne pojedynczo).
+   Generacja jest **ukończona**: 24/24 shardów, **9600/9600** rekordów,
+   walidacja bez błędów (`cohort.validation.json`,
+   `candidates.jsonl sha256=40f7a6d6f85bb14b…`). Raport:
+   [`task06_claude_teacher_ablation_generation_v1.md`](../reports/measurements/task06_claude_teacher_ablation_generation_v1.md).
    Teacher nie ma przypiętych wag (`claude-opus-5[1m]`, transport API), więc
    kohorta jest nieodtwarzalna bit-exact i pozostaje **osobnym ramieniem
    ablacyjnym**, nie ścieżką główną; lokalny `Qwen3.6-27B` Q4 pozostaje
@@ -60,12 +63,21 @@ prospektywne ADR-y **przed** generacją i pomiarem:
    teachera są pisane z intencją bycia różnymi) i nie uzupełniają deficytu par
    z v1/v2.
 
-Sygnał jakościowy z generacji teachera (raportowany, nie ukrywany): zamrożone
-kontrolki D01 często nie mają materiału w pasażu — udział `intent_fit=strained`
-w ukończonych shardach mieści się w przedziale ok. 23–50% rekordów, najczęściej
-dla `procedure`@end i `entity_lookup`/`definition`@middle. Niezależnie sześć
-podsesji zgłosiło, że `split_sentences` rozcina skróty i produkuje
-pseudo-zdania, przez co `focus_buckets` wskazuje nagłówki i paski nawigacyjne.
+Sygnał jakościowy z ukończonej generacji teachera (raportowany, nie ukrywany):
+zamrożone kontrolki D01 często nie mają pokrycia w pasażu. `intent_fit=strained`
+wystąpiło w 3132/9600 rekordów (32.6%), z bardzo nierównym rozkładem:
+`procedure`@end **60.6%**, `entity_lookup`@middle 28.5%, `definition`@middle
+27.6%, `fact_lookup`@beginning 13.8%. Kontrolka `procedure`@end jest w praktyce
+niewykonalna na `msmarco_pl` (notki faktograficzne, biogramy, cenniki, hasła
+słownikowe), a round-robin przypisuje ją co czwartemu pasażowi. To przesłanka
+dla przyszłego, prospektywnego projektu kontrolek (warunkowe przypisanie
+intencji zamiast stałej rotacji), a nie decyzja — nic zamrożonego nie zmieniono.
+`focus_fit=degenerate` wystąpiło w 1004/9600 rekordów (10.5%).
+`passage_quality_note` ustawiono dla 266/600 pasaży (44.3%): duplikaty zdań,
+zdania rozcięte na skrótach, mojibake, resztki interfejsu strony i błędy
+tłumaczenia nazw własnych (`Georgia`→„Gruzja”, `Lebanon`→„Liban”). Jest to
+niezależne potwierdzenie ryzyka translationese zaakceptowanego świadomie w
+Task 03 — bez zmiany frozen train i progu `source_en_score >= 23.50`.
 
 Scoring kohorty teachera, budowa par i audyt dual-LLM pozostają
 nieautoryzowane; `final_tests_used=[]`.

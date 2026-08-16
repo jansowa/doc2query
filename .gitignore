@@ -91,6 +91,7 @@ htmlcov/
 !/reports/measurements/task06_same_prompt_expansion_result_2026-08-13.md
 !/reports/measurements/task06_same_prompt_expansion_v2_cohort_2026-08-13.md
 !/reports/measurements/task06_reward_validation_corpus_v1.md
+!/reports/measurements/task06_claude_teacher_ablation_generation_v1.md
 !/reports/measurements/task06_unattended_compute_window_result_2026-08-16.md
 !/reports/measurements/task05/
 /reports/measurements/task05/*
