@@ -6,6 +6,15 @@
 
 `IMPLEMENTED`
 
+Aktualizacja 2026-08-16 (M-03: treningi wykonane, guardrail wciąż do
+zdefiniowania): cztery treningi seedów 45/46 confirmu TriviaQA są ukończone, a
+towarzyszący sweep budżetu probe (12 runów) dostarczył twardej przesłanki dla
+tego wymogu: przy stałym ramieniu i budżecie `corpus_ndcg_at_10` waha się od
+0,0011 do 0,0826, a korelacja straty treningowej z wynikiem retrievalu wynosi
+`r = −0,199` (n=12). Guardrail zbieżności musi więc opierać się na sygnale
+retrievalowym, nie na stracie. Agregacji pięciu seedów nie wykonano. Wynik:
+[`task06_unattended_compute_window_result_2026-08-16.md`](../reports/measurements/task06_unattended_compute_window_result_2026-08-16.md).
+
 Aktualizacja 2026-08-14 (M-03 w toku): w oknie bezobsługowym 2026-08-14
 uruchomiono brakujące seedy 45 i 46 confirmu TriviaQA dla obu ramion (W06 i
 Hybrid), wyłącznie jako treningi probe. Agregacja pięciu seedów oraz

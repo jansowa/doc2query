@@ -10,6 +10,24 @@ Zadanie jest planowanym etapem programu, zablokowanym wyłącznie
 zależnościami (Task 07 i warunki startowe poniżej), a nie decyzją o
 opcjonalności.
 
+Aktualizacja 2026-08-14 (materiał przygotowawczy do projektu nagrody, bez
+zmiany statusu): w Task 06 zamrożono i zmierzono korpus walidacyjny komponentów
+nagrody (ADR
+[`task06_reward_validation_corpus_v1.md`](../reports/decisions/task06_reward_validation_corpus_v1.md),
+pomiar
+[`task06_reward_validation_corpus_v1.md`](../reports/measurements/task06_reward_validation_corpus_v1.md)).
+Jest to pierwszy w programie zbiór, w którym porządek jakości kandydatów jest
+znany **z konstrukcji**, a nie z korelacji z sędzią, więc bezpośrednio dotyczy
+projektu wielokryterialnej nagrody tego zadania. Dwa wyniki są istotne dla
+składu nagrody: `entity_preservation` nie jest sygnałem specyficzności (przy
+zapytaniach bez encji daje maksimum przez konwencję `empty=1.0`, remis w 180/180
+grup), a `format_valid` jest podatny na obejście przez wtrącenie bez
+interpunkcji („Oto …”), czyli jako składnik nagrody premiowałby formę, której
+nie wykrywa. Karanie ogólności trzeba oprzeć na osobnym sygnale
+(`content_jaccard` rozdzielił klasy w 85.6% grup) i zaprojektować prospektywnie.
+Task 08 pozostaje `BLOCKED`: ten korpus jest materiałem przygotowawczym i **nie**
+zastępuje wymaganej decyzji `reports/decisions/enable_grpo.md`.
+
 Aktualizacja 2026-08-13 (decyzja właściciela): projekt ma jawny cel
 edukacyjny — praktyczne opanowanie DPO i GRPO (AGENTS.md §2). GRPO przestaje
 być ścieżką warunkową „tylko gdy DPO zawiedzie": ścieżka 1.5B (R00–R05) jest

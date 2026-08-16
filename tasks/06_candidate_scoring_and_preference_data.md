@@ -6,6 +6,70 @@
 
 `IN PROGRESS`
 
+Aktualizacja 2026-08-16 (wynik okna bezobsługowego): kolejka zakończyła się
+**25/25 zadań bez ani jednej awarii** w 49,18 h GPU; nadzorca nie padł ani razu,
+a strażnik wyłączył maszynę 16.08 o 20:45 po godzinie stabilnego stanu
+wyczerpania. Kohorty v3–v11 mają komplet 9 × 24000 wygenerowanych i ocenionych
+kandydatów; bramka o niezmienionych progach dała 25164/27000 grup `eligible`
+(93,2%, rozstęp międzykohortowy 92,3–94,1%). Z v1 (362) i v2 (466) daje to
+**25992 grup** do budowy par, czyli powyżej progu 1000 par przed finalnym DPO.
+Polityka resamplingu zadziałała 153 razy i **ani razu** nie trzeba było naprawiać
+wiersza przez ucięcie. Wykonano też cztery treningi M-03 (seedy 45/46 obu ramion)
+oraz dwunastoelementowy sweep budżetu probe, który pokazał, że wariancja między
+seedami (0,0011–0,0826 przy stałym ramieniu i budżecie) bywa większa niż mierzone
+efekty, a strata treningowa nie jest guardrailem zbieżności (`r = −0,199`).
+Agregacji pięciu seedów nie wykonano (zamrożony `compare` pinuje 42/43/44) i
+niczego nie promowano. Raport:
+[`task06_unattended_compute_window_result_2026-08-16.md`](../reports/measurements/task06_unattended_compute_window_result_2026-08-16.md).
+`final_tests_used=[]`.
+
+Aktualizacja 2026-08-14 (okno tokenowe: korpus walidacyjny nagrody i ablacja
+teachera na modelu API): właściciel udostępnił budżet tokenów modelu
+asystującego przy jednoczesnym pełnym obłożeniu GPU kolejką bezobsługową,
+z komendą generowania danych bezpośrednio tokenami modelu. Zamrożono dwa
+prospektywne ADR-y **przed** generacją i pomiarem:
+
+1. [`task06_reward_validation_corpus_v1.md`](../reports/decisions/task06_reward_validation_corpus_v1.md)
+   — korpus diagnostyczny 180 pasaży × 8 klas błędu (1440 zapytań) o etykietach
+   nadanych z konstrukcji, z predykcjami P1–P8 i progami zamrożonymi przed
+   odczytem. Generacja i pomiar CPU są **ukończone**: 6/9 predykcji PASS,
+   3 FAIL. Szczegóły i diagnozy:
+   [`reports/measurements/task06_reward_validation_corpus_v1.md`](../reports/measurements/task06_reward_validation_corpus_v1.md).
+   Najważniejsze: bramka różnorodności o niezmienionych progach przepuściła
+   180/180 grup o świadomie różnych klasach (P7), a `entity_preservation`
+   okazał się detektorem halucynowanych encji, **nie** sygnałem specyficzności
+   (remis 1.0 w 180/180 grup — konwencja `empty=1.0`). `format_valid` nie
+   wykrywa wtrącenia „Oto …” bez dwukropka (45/45 przypadków tego wariantu
+   przechodzi jako poprawne), a `assign_focus` nie rozstrzyga focusu w 46/180
+   rekordów klasy `good_specific`. Żadnego progu nie kalibrowano, `format.py`
+   ani splittera zdań nie zmieniono — zmiana wymaga własnego ADR, bo dotknęłaby
+   interpretacji zamrożonych pomiarów Tasków 04–05.
+2. [`task06_claude_teacher_ablation_v1.md`](../reports/decisions/task06_claude_teacher_ablation_v1.md)
+   — jawna ablacja teachera przewidziana w tym pliku (sekcja o bramce
+   różnorodności): 600 pasaży kohorty v3 × 4 kontrolki D01 × 4 kandydatury
+   = 9600 zapytań, osobne provenance, katalog
+   `artifacts/task06/teacher_claude_v1/`. Wszystkie cztery kontrolki są
+   generowane, więc dla każdego pasażu istnieje kandydat teachera na
+   **identyczny** prompt, jaki round-robin przypisał lokalnemu generatorowi.
+   Generacja jest **w toku** (shardy po 25 pasaży, wznawialne pojedynczo).
+   Teacher nie ma przypiętych wag (`claude-opus-5[1m]`, transport API), więc
+   kohorta jest nieodtwarzalna bit-exact i pozostaje **osobnym ramieniem
+   ablacyjnym**, nie ścieżką główną; lokalny `Qwen3.6-27B` Q4 pozostaje
+   preferowanym teacherem programu. Grupy teachera **nie** wchodzą do bramki
+   różnorodności same-prompt (bramka mierzy kolaps samplingu, a kandydatury
+   teachera są pisane z intencją bycia różnymi) i nie uzupełniają deficytu par
+   z v1/v2.
+
+Sygnał jakościowy z generacji teachera (raportowany, nie ukrywany): zamrożone
+kontrolki D01 często nie mają materiału w pasażu — udział `intent_fit=strained`
+w ukończonych shardach mieści się w przedziale ok. 23–50% rekordów, najczęściej
+dla `procedure`@end i `entity_lookup`/`definition`@middle. Niezależnie sześć
+podsesji zgłosiło, że `split_sentences` rozcina skróty i produkuje
+pseudo-zdania, przez co `focus_buckets` wskazuje nagłówki i paski nawigacyjne.
+
+Scoring kohorty teachera, budowa par i audyt dual-LLM pozostają
+nieautoryzowane; `final_tests_used=[]`.
+
 Aktualizacja 2026-08-14 (kohorta v2 zamknięta, okno bezobsługowe): run v2 jest
 ukończony — 4000/4000 wygenerowanych (3 completions resamplowane, zero napraw
 przez ucięcie) i 4000/4000 ocenionych. Bramka różnorodności na v2 dała
