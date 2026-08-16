@@ -79,8 +79,31 @@ tłumaczenia nazw własnych (`Georgia`→„Gruzja”, `Lebanon`→„Liban”).
 niezależne potwierdzenie ryzyka translationese zaakceptowanego świadomie w
 Task 03 — bez zmiany frozen train i progu `source_en_score >= 23.50`.
 
-Scoring kohorty teachera, budowa par i audyt dual-LLM pozostają
-nieautoryzowane; `final_tests_used=[]`.
+Aktualizacja 2026-08-16 (autoryzacja GPU dla kohort tokenowych): właściciel
+udostępnił GPU po zakończeniu kolejki bezobsługowej, z warunkiem sensownej
+wznawialności. Amendment
+[`task06_llm_cohort_gpu_scoring_amendment_2026-08-16.md`](../reports/decisions/task06_llm_cohort_gpu_scoring_amendment_2026-08-16.md)
+autoryzuje **wyłącznie scoring** obu kohort tokenowych zamrożonym kontraktem
+(primary builder, shadow kontrola, corpus round-trip, batch 8) oraz pomiar
+prerejestrowanych kryteriów; nie zmienia żadnej predykcji ani progu.
+
+Wejścia scoringu zmaterializowano w zamrożonym schemacie rekordów generacji
+(`scripts/materialize_llm_cohort_scoring_inputs.py`, idempotentnie): 1440
+rekordów korpusu nagrody i 9600 rekordów teachera. Weryfikacja kontraktu
+same-prompt wypadła czysto: dla **600/600** pasaży `prompt_sha256` teachera jest
+identyczny z promptem, jaki dostał lokalny generator w kohorcie v3 — czyli dla
+każdego pasażu istnieje para kandydatów na bajtowo tym samym promptcie.
+
+Wznawialność (warunek właściciela): scoring idzie istniejącą ścieżką
+`evaluate_intrinsic_records` z fsyncowanym `scoring.journal.jsonl` i
+`scoring.resume.json`, runner (`scripts/run_llm_cohort_scoring.sh`) bierze
+`flock` i pomija kohortę już ukończoną. Maksymalna strata przy zabiciu procesu
+to jeden batch ośmiu rekordów.
+
+Stan wykonania: scoring korpusu nagrody uruchomiony 2026-08-16 (~3,2 rek./s,
+peak VRAM ok. 4,7 GB). Scoring kohorty teachera **nie został uruchomiony**.
+Pomiar P8 i kryteriów ablacji nie został jeszcze policzony. Budowa par, audyt
+dual-LLM i trening pozostają nieautoryzowane; `final_tests_used=[]`.
 
 Aktualizacja 2026-08-14 (kohorta v2 zamknięta, okno bezobsługowe): run v2 jest
 ukończony — 4000/4000 wygenerowanych (3 completions resamplowane, zero napraw

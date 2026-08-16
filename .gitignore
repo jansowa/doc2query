@@ -68,6 +68,7 @@ htmlcov/
 !/reports/decisions/task06_unattended_compute_window_2026-08-14.md
 !/reports/decisions/task06_reward_validation_corpus_v1.md
 !/reports/decisions/task06_claude_teacher_ablation_v1.md
+!/reports/decisions/task06_llm_cohort_gpu_scoring_amendment_2026-08-16.md
 !/reports/plans/
 /reports/plans/*
 !/reports/plans/task05_d01_overnight_2026-07-26.md
