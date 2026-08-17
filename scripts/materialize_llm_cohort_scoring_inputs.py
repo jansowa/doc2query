@@ -211,9 +211,7 @@ def main() -> int:
 
     cohort_records = _load_cohort_records(args.cohort_records)
     if args.kind == "teacher":
-        rows = build_teacher_records(
-            args.source, cohort_records, experiment_id=args.experiment_id
-        )
+        rows = build_teacher_records(args.source, cohort_records, experiment_id=args.experiment_id)
     else:
         rows = build_reward_records(args.source, cohort_records, experiment_id=args.experiment_id)
     if not rows:

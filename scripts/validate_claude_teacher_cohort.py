@@ -149,9 +149,7 @@ def main() -> int:
     merged_rows: list[dict[str, Any]] = []
     for path in sorted(shard_dir.glob("shard_*.jsonl")):
         report = validate_shard(path, controls)
-        outside = sorted(
-            {str(row["cluster_id"]) for row in report["rows"]} - cohort_clusters
-        )
+        outside = sorted({str(row["cluster_id"]) for row in report["rows"]} - cohort_clusters)
         if outside:
             report["problems"].append(f"klastry poza kohortą: {outside[:5]}")
             report["complete"] = False
