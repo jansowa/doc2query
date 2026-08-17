@@ -6,6 +6,22 @@
 
 `IN PROGRESS`
 
+Aktualizacja 2026-08-17 (kierunek polityki par v2, decyzja właściciela):
+właściciel — po zapoznaniu się z wynikami dnia 1 audytu dual-LLM — zatwierdził
+kierunkowo przejście z porządkowania par marginesem primary na **pary
+zakotwiczone w osiach defektów**: `rejected` ma zmierzony, nazwany defekt
+(oś A: nieodpowiadalność/halucynacja; oś B: łatwość leksykalna/kopiowanie;
+oś C: niezgodność z żądanym focusem), a `chosen` jest od niego wolny; monotonia
+(problem populacyjny) jest jawnie poza parami i mieszka w kontrolkach, M-05 i
+set-level nagrodzie GRPO. Pełna specyfikacja z zadaniami V2-00…V2-07,
+zależnościami, kosztami i prerejestrowanymi predykcjami:
+[`task06_defect_anchored_pairs_v2_spec_2026-08-17.md`](../reports/plans/task06_defect_anchored_pairs_v2_spec_2026-08-17.md).
+Specyfikacja jest planistyczna: progi zamrożą dopiero prospektywne ADR-y
+(V2-01 sędzia odpowiadalności, V2-03 polityka par v2) po pełnym wyniku audytu
+v1; polityka v1/v1.1, pary, eksport i audyt pozostają zamrożonym punktem
+odniesienia. Implementacja w kolejnych sesjach; nic nie zostało uruchomione.
+`task07_training_authorized=false`, `final_tests_used=[]`.
+
 Aktualizacja 2026-08-16 (autoryzacja właściciela: zamrożenie polityki par i
 budowa tentative par): właściciel autoryzował zamrożenie polityki
 `chosen`/`rejected`, zbudowanie tentative par i ślepy audyt dual-LLM.
