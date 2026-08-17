@@ -1,0 +1,114 @@
+# Polityka budowy tentative par chosen/rejected dla Task 06 — wersja 1.1.
+#
+# JEDYNA różnica wobec task06_tentative_pair_policy_v1.yaml to lista
+# `authorized_cohorts`, rozszerzona o `same_prompt_expansion_v3` na mocy
+# amendmentu reports/decisions/task06_tentative_pair_policy_v3_topup_amendment_2026-08-17.md.
+# Wszystkie progi, definicje i strata są bajtowo identyczne z v1 i pozostają
+# zamrożone prospektywnie sprzed odczytu jakiejkolwiek pary. Amendment NIE
+# zmienia sposobu budowy pary, tylko zakres autoryzacji kohort.
+schema_version: 1
+contract: task06-tentative-pair-policy-v1
+policy_id: task06-tentative-pair-policy-v1.1
+status: frozen_before_pair_read
+adr: reports/decisions/task06_tentative_pair_policy_v3_topup_amendment_2026-08-17.md
+
+pairing:
+  strategy: top_vs_near_miss
+  max_pairs_per_group: 1
+  require_exact_same_prompt: true
+  require_diversity_gate_eligible: true
+  restrict_to_gate_representatives: true
+  max_normalized_query_jaccard: 0.85
+
+# Jedyny sygnał, który buduje parę i porządkuje kandydatów.
+primary:
+  judge: sdadas/polish-reranker-roberta-v3
+  signal: pool_margin
+  role: sole_pair_building_signal
+  min_chosen_margin_exclusive: 0.0
+  min_margin_gap: 1.0
+
+# Shadow nigdy nie wybiera kandydata; może wyłącznie unieważnić parę.
+shadow:
+  judge: BAAI/bge-reranker-v2-m3
+  signal: shadow_pool_margin
+  role: veto_only_never_selection
+  veto_on_margin_inversion: true
+  veto_on_rank_inversion: true
+
+# Niezależny od obu sędziów sygnał odzyskiwalności zapytania w pełnym korpusie.
+corpus_round_trip:
+  role: independent_filter
+  chosen_required_field: corpus_round_trip_at_20
+  rejected_required_field: corpus_round_trip_at_100
+
+format:
+  require_format_valid: true
+  forbid_prefix: true
+  forbid_metacomment: true
+  forbid_multiple_query: true
+  forbid_empty: true
+  # Uzupełnienie zmierzonej ślepej plamki format_valid (raport
+  # task06_reward_validation_corpus_v1.md, predykcja P4): wtrącenie "Oto ..."
+  # bez dwukropka przechodzi przez format.py. Guard działa TYLKO tutaj;
+  # src/doc2query/evaluation/format.py pozostaje nietknięty.
+  supplementary_lead_in_guard: task06_lead_in_guard_v1
+
+# Kontrakt kopiowania odziedziczony bez zmian z Task 05
+# (configs/evaluation/d01_copy_semantic_quality_v1.yaml oraz
+# d01b_usefulness_hybrid_v1.yaml, sekcja copy_risk).
+copy_risk:
+  inherited_from: task05-d01-copy-semantic-quality-v1
+  minimum_query_words: 4
+  copy_density: 0.6
+  normalized_lcs: 0.8
+  longest_copied_ngram: 3.0
+  query_to_passage_length_ratio: 0.3838827838827845
+  reject_chosen_on_copy_risk: true
+  reject_rejected_on_copy_risk: false
+
+# focus_accuracy jest słabym filtrem: 26% rekordów nie ma rozstrzygnięcia
+# (assign_focus zwraca None). Abstencja nigdy nie karze kandydata.
+focus:
+  role: weak_filter_only
+  reject_chosen_on_zero_focus_accuracy: true
+  abstention_penalized: false
+
+# Komponenty jawnie wykluczone z polityki par wraz z uzasadnieniem.
+excluded_signals:
+  - name: entity_preservation
+    reason: >-
+      Zmierzony detektor halucynowanych encji, nie sygnał specyficzności
+      (konwencja empty=1.0, remis 1.0 w 180/180 grup korpusu walidacyjnego).
+  - name: total_score
+    reason: >-
+      Nie istnieje zamrożona, skalibrowana funkcja wag; polityka używa
+      wyłącznie surowego marginesu primary.
+  - name: shadow_pool_margin_as_ranking_key
+    reason: Shadow jest sędzią potwierdzającym, nigdy sygnałem selekcji.
+
+# Deterministyczna, stratyfikowana próbka do rozwojowego audytu dual-LLM.
+audit_sample:
+  target_pair_count: 500
+  seed: 20260816
+  strata:
+    - cohort_id
+    - requested_form
+    - primary_margin_gap_band
+  primary_margin_gap_bands:
+    - [1.0, 2.0]
+    - [2.0, 4.0]
+    - [4.0, .inf]
+  allocation: proportional_largest_remainder
+  ordering: pair_id
+  orientation: deterministic_counterbalanced_committed_before_review
+
+# Kohorty, dla których budowa par jest autoryzowana tym ADR-em.
+# v3 jest dopuszczona WYŁĄCZNIE po to, by rozwojowa próbka audytowa miała 500
+# par. Reszta v3 poza próbką oraz v4-v11 nadal czekają na pozytywny audyt.
+authorized_cohorts:
+  - same_prompt_expansion_v1
+  - same_prompt_expansion_v2
+  - same_prompt_expansion_v3
+
+final_tests_used: []

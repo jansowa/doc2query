@@ -63,14 +63,81 @@ podmianie jednej orientacji). Próbka jest deterministyczna: strata
 kohorta × `requested_form` × pasmo marginesu, alokacja metodą największych reszt,
 ziarno per-stratum z SHA-256, powtórzony eksport daje identyczne SHA-256.
 
-**Otwarta decyzja właściciela (blokada punktu 3):** zamrożony
-`configs/preferences/task06_groq_preference_audit_v1.json` pinuje
-`pair_count = 500` i `load_llm_audit_config` odrzuca każdą inną wartość. Przy 447
-parach audyt wymaga więc jawnego amendmentu — albo obniżenia rozwojowej bramki do
-447 par, albo dopuszczenia kohorty v3 do uzupełnienia próbki (co jest odwrotnością
-kolejności „v3 dopiero po audycie”). Tej decyzji **nie** podjęto samodzielnie i
-zamrożonego configu **nie** zmieniono. Runner dual-LLM Groq nie został
-uruchomiony: w `.env` nie ma klucza, więc wywołania API pozostają dla właściciela.
+Aktualizacja 2026-08-17 (decyzja właściciela o niedoborze + audyt dual-LLM):
+niedobór 53 par rozstrzygnięto **dopuszczeniem kohorty v3**, nie obniżeniem
+bramki. Amendment
+[`task06_tentative_pair_policy_v3_topup_amendment_2026-08-17.md`](../reports/decisions/task06_tentative_pair_policy_v3_topup_amendment_2026-08-17.md)
+tworzy `configs/preferences/task06_tentative_pair_policy_v1_1.yaml`, którego
+**jedyną** różnicą wobec v1 jest lista `authorized_cohorts` rozszerzona o
+`same_prompt_expansion_v3` (plus pole `adr`). Zamrożony plik v1 i jego artefakty
+pozostają nietknięte jako ślad audytowy, a zamrożonego kontraktu Groq
+(`pair_count=500`) **nie zmieniono w ogóle**.
+
+Pary przebudowano pod v1.1 do katalogów `tentative_pairs_v1_1/`: v1 **202**,
+v2 **245**, v3 **1565** — razem **2012 par**. Amendment jest zweryfikowany
+maszynowo: `pair_ids_fingerprint` dla v1 i v2 jest **identyczny** z tym zbudowanym
+pod v1, a jedynym różniącym się polem w rekordach par jest `policy_id`, co dowodzi,
+że amendment nie zmienił sposobu budowy pary. Nowy ślepy eksport
+`artifacts/task06/preference_audit_v2/` ma **500 par** (`development_gate_met=true`,
+niedobór 0), orientację kontrbalansowaną **250/250** i 500/500 zobowiązań
+zweryfikowanych. Przy populacji 2012 sampler **faktycznie losuje** proporcjonalnie
+w 18 stratach, więc 1512 par pozostaje nieoglądanym zapasem. Eksport
+`preference_audit_v1` (447 par) jest **superseded** i nie wolno go użyć do ocen.
+
+Runner audytu dual-LLM (`src/doc2query/preferences/groq_pair_audit.py`,
+`scripts/run_task06_groq_preference_audit.py`, 30 testów CPU z wstrzykniętym
+transportem i zegarem) realizuje kontrakt: globalna serializacja ≥4 s bez
+równoległości, trwały per-model journal z resume, odmowa ponowienia requestu bez
+zapisanej odpowiedzi, odroczenie modelu po wyczerpaniu limitu i czysty stop, gdy
+odroczone są oba, oraz disagreement wykluczający parę z automatycznej akceptacji.
+Klucz Groq jest w lokalnym `.env` pod polem `api_key` (wcześniejszy raport o jego
+braku był moim błędem odczytu) i nigdy nie jest logowany.
+
+Audyt **uruchomiono** i jest **niekompletny zgodnie z kontraktem**: miękkie
+dzienne budżety tokenów (185 tys. na model) nie pozwalają ocenić 500 par w jednym
+dniu, więc oba modele są odroczone jako `daily_token_budget_exhausted`, a run
+zatrzymał się czysto ze statusem `incomplete_quota_deferred`. Pokrycie po dniu 1:
+`gpt-oss-120b` 244/500 par, `qwen3.6-27b` 414/500, analiza na **244 parach z
+oceną obu modeli**. Raport:
+[`task06_dual_llm_pair_audit_2026-08-17.md`](../reports/measurements/task06_dual_llm_pair_audit_2026-08-17.md).
+
+Wyniki wstępne, wszystkie z jawnym mianownikiem i CI:
+
+- zgodność automatu z `gpt-oss` **0,701** (n=97, CI [0,608; 0,794]) i z `qwen`
+  **0,688** (n=276, CI [0,634; 0,743]), ale zgodność **między modelami 0,915**
+  (n=82, CI [0,854; 0,964]). Ta asymetria jest głównym wynikiem: niezgodność z
+  porządkiem po marginesie primary nie jest szumem sędziów, bo sędziowie zgadzają
+  się ze sobą;
+- bramka fail-closed wyklucza **184/244 par (75,4%)** z automatycznej akceptacji
+  (60 konsensus za, 15 konsensus przeciw, 7 disagreement, 162 abstencje). Przy
+  utrzymaniu uzysku 500 par dałoby ~123 pary akceptowalne, o rząd wielkości
+  poniżej bramki 1000 par przed finalnym DPO;
+- remisy dominują (`gpt-oss` 50,0% + 10,2% `both_bad`, `qwen` 33,3%) i **nie
+  maleją z pewnością sędziego**, czyli są pewnymi deklaracjami równoważności;
+- pewność sędziego przewiduje zgodność u obu modeli (0,375→0,730 i 0,577→0,714);
+- brak obciążenia pozycyjnego (47,4% i 50,4% wyborów A);
+- kontrola krzyżowa formatu: **zero niezgodności** z pipeline'em, żadna nowa
+  ślepa plamka `format.py` się nie ujawniła;
+- kontrola krzyżowa answerability: **~18% par `chosen` uznano za nieodpowiadalne
+  z pasażu** mimo spełnionego round-tripu w top-20, a round-trip praktycznie
+  **nie różnicuje** ocenianej odpowiadalności (69,8% vs 65,5% i 61,6% vs 62,5%).
+  Specyfikacja wymaga odrzucania par, na które nie da się odpowiedzieć z pasażu,
+  a polityka par nie ma takiej kontroli poza round-tripem;
+- **korekta wstępnej obserwacji**: pozorny monotoniczny wzrost zgodności z pasmem
+  marginesu (0,691→0,711→0,750 przy 228 ocenach) **nie utrzymał się**. Na
+  pełniejszym pokryciu `qwen` jest płaski (0,688 / 0,693 / 0,680), więc wielkość
+  marginesu primary nie niesie informacji o zgodności z czytającym i
+  podniesienie `min_margin_gap` nie ma w tych danych uzasadnienia.
+
+Dwa deterministyczne defekty sędziów przy `temperature=0` (qwen gubi znaki w
+środku `audit_id`, gpt-oss zwraca `reason_code` poza listą) blokowały konkretne
+pary na stałe i odroczyły modele. Naprawiono je w parserze runnera, nie w
+zamrożonym kontrakcie: ID rozpoznawane po unikalnym przedrostku 8 znaków z
+wymuszonym pełnym pokryciem requestu (1 naprawa na 658 ocen), a `reason_code`
+poza schematem zapisywany dosłownie jako `out_of_schema` (2 wystąpienia), bo jest
+metadaną diagnostyczną i twarde odrzucanie requestu za to pole wprowadzałoby
+obciążenie pokrycia. Progów nie zmieniono, rubryki sędziego nie zmieniono,
+`task07_training_authorized=false`, `final_tests_used=[]`.
 
 Aktualizacja 2026-08-16 (wynik okna bezobsługowego): kolejka zakończyła się
 **25/25 zadań bez ani jednej awarii** w 49,18 h GPU; nadzorca nie padł ani razu,
