@@ -6,6 +6,54 @@
 
 `IN PROGRESS`
 
+Aktualizacja 2026-08-16 (autoryzacja właściciela: zamrożenie polityki par i
+budowa tentative par): właściciel autoryzował zamrożenie polityki
+`chosen`/`rejected`, zbudowanie tentative par i ślepy audyt dual-LLM.
+Prospektywny ADR
+[`task06_tentative_pair_policy_v1.md`](../reports/decisions/task06_tentative_pair_policy_v1.md)
+zamroził politykę **przed odczytem jakiejkolwiek pary**, z jawnym wyliczeniem,
+co było widoczne przed zamrożeniem progów: primary `pool_margin` jest jedynym
+sygnałem budującym, shadow wyłącznie veto (nigdy selekcja), corpus round-trip
+niezależnym filtrem (`chosen` @20, `rejected` @100), strategia
+`top_vs_near_miss`, maksymalnie jedna para na prompt, pary tylko wewnątrz grupy
+same-prompt i tylko z reprezentantów klastrów grup `eligible` bramki. Minimalny
+margines primary zamrożono na **1.0** jako jedną naturalną jednostkę log-odds
+(≈2,72× lepsze szanse) na surowej skali pair-logitu sędziego, sześciokrotnie
+poniżej minimalnego marginesu frozen train (6.0) — argument skalowy, nie
+wydajnościowy. Wiążące wnioski korpusu walidacyjnego nagrody są respektowane:
+`entity_preservation` jest **wykluczone** z polityki (detektor halucynacji, nie
+sygnał specyficzności), `focus_accuracy` działa wyłącznie jako słaby filtr
+(abstencja nigdy nie karze), a zmierzoną ślepą plamkę `format_valid` domyka
+osobny guard wtrącenia `task06_lead_in_guard_v1` działający tylko w polityce par
+— `src/doc2query/evaluation/format.py` i progi bramki różnorodności pozostają
+**nietknięte**.
+
+Zaimplementowano fail-closed builder (`src/doc2query/preferences/pair_policy.py`,
+`scripts/build_task06_tentative_pairs.py`, 18 testów CPU): pinowanie SHA-256
+scoringu, summary, cohort records i obu artefaktów bramki, walidacja
+fingerprintów manifestu, atomowa publikacja przez staging + `os.replace`, odmowa
+nadpisania, odmowa kohorty spoza `authorized_cohorts`, jawne pola
+`shadow_used_for_selection=false`, `total_score_computed=false`,
+`thresholds_calibrated_here=false`, `audit_completed=false`,
+`task07_training_authorized=false`.
+
+Pary zbudowano **wyłącznie z kohort v1+v2** (828 grup `eligible`), zgodnie z
+kolejnością z ADR: **202 pary z v1 (55,8%) i 245 par z v2 (52,6%), łącznie 447**.
+To **mniej niż 500** par rozwojowej bramki dual-LLM, więc uruchamia się
+prerejestrowana ścieżka niedoboru: audyt obejmie wszystkie uzyskane pary,
+niedobór jest raportowany, żadnego progu nie wolno poluzować, a rozszerzenie na
+kohortę v3 wymaga osobnej decyzji właściciela jako amendment do ADR. Kohorty
+v3–v11 dostaną pary tą samą polityką dopiero po pozytywnym audycie. Veto shadow
+zadziałało 85 razy (10,3% grup `eligible`) — niezależna, mierzalna niezgodność
+sędziów, rzędu wielkości zgodna z 9,81% disagreement bramki HN. Raport:
+[`task06_tentative_pairs_v1_v2_2026-08-16.md`](../reports/measurements/task06_tentative_pairs_v1_v2_2026-08-16.md).
+Walidacja: Ruff, `mypy src`, pełny pytest. `final_tests_used=[]`.
+
+Niewykonane w tej sesji i zaplanowane jako następny krok: deterministyczna,
+stratyfikowana próbka audytowa, ślepy eksport par, runner dual-LLM Groq
+(w `.env` **nie ma** klucza Groq, więc wywołania API zostają dla właściciela)
+oraz prerejestrowany ADR M-03 guardraila zbieżności probe w Task 04.
+
 Aktualizacja 2026-08-16 (wynik okna bezobsługowego): kolejka zakończyła się
 **25/25 zadań bez ani jednej awarii** w 49,18 h GPU; nadzorca nie padł ani razu,
 a strażnik wyłączył maszynę 16.08 o 20:45 po godzinie stabilnego stanu
