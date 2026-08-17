@@ -38,10 +38,49 @@ walidacyjnego nagrody (`entity_preservation` wykluczone, guard wtrącenia dodany
 nośność** jej guarda `copy_risk`, zamiast go podważać. Przerwanie zostawiłoby
 runner audytu niezacommitowany i audyt nieuruchomiony, czyli stan gorszy.
 
-1. **Domknąć audyt dual-LLM** (trwająca sesja), po rozstrzygnięciu blokady 447 vs
-   500 poniżej.
-2. **Przegląd przekrojowy** (nowa sesja) — zakres w tym pliku.
-3. Dopiero potem jakakolwiek decyzja o Task 07.
+1. **Domknąć audyt dual-LLM** (trwająca sesja). Blokada niedoboru par została
+   rozstrzygnięta przez właściciela 2026-08-17 dopuszczeniem kohorty v3
+   (amendment `task06_tentative_pair_policy_v3_topup_amendment_2026-08-17.md`,
+   2012 par, ślepy eksport 500). Punkt jest więc odblokowany.
+2. **Punkt zerowy: zapadnięcia probe** (nowa sesja) — zakres poniżej. Wyprzedza
+   pozostałe punkty, bo bez niego każde porównanie ramion jest zatrute w losowym
+   momencie.
+3. **Przegląd przekrojowy** — zakres w tym pliku.
+4. Dopiero potem jakakolwiek decyzja o Task 07.
+
+## Punkt zerowy: zapadnięcia probe (zaktualizowany 2026-08-17 po pomiarze)
+
+Pomiar metrologiczny
+[`task04_probe_within_arm_variance_2026-08-17.md`](../measurements/task04_probe_within_arm_variance_2026-08-17.md)
+zmienia treść tego punktu. **Nie chodzi o dokładanie seedów**, jak zakładała
+pierwsza wersja tego planu, lecz o zapadnięcia:
+
+- pięć replikatów **tego samego** ramienia (różny tylko seed) dało 1 zapadnięcie
+  na 5; łącznie z kalibracją M-03 to **5/27 = 18,5%**;
+- wariancja **wewnątrz** ramienia jest natomiast znośna: sd `corpus_ndcg_at_10`
+  = 0,0046 (CV 8,8%), co daje półszerokość 95% CI 0,0052 przy n=3. Wcześniejszy
+  wniosek, że przyrząd zasadniczo nie ma rozdzielczości na próg `+0,01`, był
+  **przedwczesny** — opierał się na sd 0,0126 z par, a obie estymacje pochodzą
+  z n=4 i są szumne;
+- problemem są więc **jednostronne odchyłki od zapadnięć**, nie szum wokół
+  średniej. Porównanie dwóch ramion na trzech seedach ma ~71% szans, że zawiera
+  co najmniej jeden zapadnięty run;
+- reguła `last_loss >= first_loss` wykrywa zapadnięcia z czułością **2/5** przy
+  **zerowych** fałszywych alarmach na 22 zbieżnych runach — tanio, ale za mało
+  czule, by wystarczyła sama.
+
+Zakres punktu zerowego:
+
+1. Zaproponować **prospektywny ADR** na wykrywanie zapadnięcia *w trakcie* runu:
+   utrwalanie krzywej straty i pośredniej ewaluacji retrievalowej na checkpoincie
+   (dziś `embedder_probe.py` zapisuje tylko `losses[0]` i `losses[-1]`, a
+   `checkpoint.pt` usuwa po sukcesie). ADR musi zawierać rachunek, które
+   zamknięte pomiary przestają być porównywalne po zmianie narzędzia.
+2. Zaprojektować **automatyczny reseed** po wykryciu, z jawnym zapisem liczby prób
+   i użytych seedów w provenance — liczba prób nigdy nie może być ukryta.
+3. Dopiero po opanowaniu odsetka zapadnięć rozważać zwiększanie liczby seedów.
+
+Kodu `embedder_probe.py` **nie zmieniać** bez tego ADR.
 
 ## Ustalenia faktyczne, które trzeba przekazać dalej
 

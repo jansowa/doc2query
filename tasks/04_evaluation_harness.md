@@ -6,6 +6,35 @@
 
 `IMPLEMENTED`
 
+Aktualizacja 2026-08-17 (metrologia przyrządu probe, diagnostyka): pięć
+replikatów **tego samego** ramienia W06 (identyczne wejście i hiperparametry co
+zadania M-03, różny tylko seed 47–51) zmierzyło własności samego przyrządu, bez
+tworzenia jakiejkolwiek różnicy między ramionami. Raport:
+[`task04_probe_within_arm_variance_2026-08-17.md`](../reports/measurements/task04_probe_within_arm_variance_2026-08-17.md).
+
+- **Zapadnięcia są prawidłowością:** 1/5 w tej serii, łącznie z kalibracją M-03
+  **5/27 = 18,5%**. Przy różnicy wyłącznie w seedzie zapadnięcie nie jest
+  własnością ramienia, danych ani budżetu, a procedury treningu probe. Porównanie
+  dwóch ramion na trzech seedach ma ~71% szans, że zawiera zapadnięty run.
+- **Wariancja wewnątrz ramienia jest znośna:** sd `corpus_ndcg_at_10` = 0,0046
+  (CV 8,8%), półszerokość 95% CI 0,0052 przy n=3. Podejrzenie, że przyrząd
+  zasadniczo nie ma rozdzielczości na próg `+0,01`, było **przedwczesne** —
+  opierało się na sd 0,0126 z par; obie estymacje mają n=4 i są szumne. Problemem
+  są jednostronne odchyłki od zapadnięć, nie szum wokół średniej.
+- **Kierunek zmiany straty uzupełnia ustalenie `r = −0,199`:** reguła
+  `last_loss >= first_loss` wykrywa zapadnięcia z czułością 2/5 przy **zerowych**
+  fałszywych alarmach na 22 zbieżnych runach, i wychwytuje m.in. W06-S43, czyli
+  run, który zniekształcił nagłówek TriviaQA confirm. Poziom straty pozostaje
+  słabym sygnałem, kierunek jest sygnałem swoistym, ale niedoczułym — nadaje się
+  na tani fail-fast, nie na zamiennik guardraila retrievalowego.
+
+Wniosek operacyjny to **detekcja zapadnięcia w trakcie runu i automatyczny
+reseed**, nie dokładanie seedów; wymaga prospektywnego ADR, bo dotyka
+`embedder_probe.py` użytego w zamkniętych pomiarach. Zakres rozpisany w
+[`reports/plans/task06_cross_cutting_review_2026-08-17.md`](../reports/plans/task06_cross_cutting_review_2026-08-17.md).
+Progów M-03 nie kalibrowano, kodu probe nie zmieniano, nic nie zostało
+wypromowane. `final_tests_used=[]`.
+
 Aktualizacja 2026-08-16 (M-03: guardrail zamrożony prospektywnie i skalibrowany):
 prerejestrowany ADR
 [`task04_m03_probe_convergence_guardrail_v1.md`](../reports/decisions/task04_m03_probe_convergence_guardrail_v1.md)

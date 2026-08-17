@@ -1,0 +1,84 @@
+{
+  "arm": "W06",
+  "collapse_rate": 0.2,
+  "collapsed_runs": [
+    "PROBE-VAR-W06-4.5B-S50"
+  ],
+  "comparison_performed": false,
+  "converged_count": 4,
+  "corpus_ndcg_at_10_cv": 0.08848160251753771,
+  "corpus_ndcg_at_10_mean": 0.05192816687305377,
+  "corpus_ndcg_at_10_sd": 0.004594687420725913,
+  "final_tests_used": [],
+  "guardrail": "configs/evaluation/task04_m03_probe_convergence_guardrail_v1.yaml",
+  "half_width_95_at_n": {
+    "10": 0.002847816767659572,
+    "20": 0.002013710547988838,
+    "3": 0.005199378277628655,
+    "5": 0.004027421095977676
+  },
+  "median_floor_applied": 0.06234977225428577,
+  "promotion_decided_here": false,
+  "promotion_threshold_reference": 0.01,
+  "purpose": "instrument_metrology_single_arm",
+  "random_floor_reference": 0.002861598775235724,
+  "run_count": 5,
+  "runs": [
+    {
+      "applied_floor": 0.06234977225428577,
+      "converged": true,
+      "corpus_ndcg_at_10": 0.04745608941152794,
+      "corpus_recall_at_100": 0.11428770414385407,
+      "failure_reason": null,
+      "first_loss": 3.8139052391052246,
+      "last_loss": 1.09434974193573,
+      "run": "PROBE-VAR-W06-4.5B-S47",
+      "seed": 47
+    },
+    {
+      "applied_floor": 0.06234977225428577,
+      "converged": true,
+      "corpus_ndcg_at_10": 0.04989102445426632,
+      "corpus_recall_at_100": 0.12469954450857154,
+      "failure_reason": null,
+      "first_loss": 2.375213623046875,
+      "last_loss": 0.1050274670124054,
+      "run": "PROBE-VAR-W06-4.5B-S48",
+      "seed": 48
+    },
+    {
+      "applied_floor": 0.06234977225428577,
+      "converged": true,
+      "corpus_ndcg_at_10": 0.0521828551724765,
+      "corpus_recall_at_100": 0.1365516842790959,
+      "failure_reason": null,
+      "first_loss": 2.788426637649536,
+      "last_loss": 0.4217943549156189,
+      "run": "PROBE-VAR-W06-4.5B-S49",
+      "seed": 49
+    },
+    {
+      "applied_floor": 0.06234977225428577,
+      "converged": false,
+      "corpus_ndcg_at_10": 0.0006522340622173615,
+      "corpus_recall_at_100": 0.0023881495984095715,
+      "failure_reason": "corpus_recall_at_100_below_floor",
+      "first_loss": 1.0364787578582764,
+      "last_loss": 2.1210684776306152,
+      "run": "PROBE-VAR-W06-4.5B-S50",
+      "seed": 50
+    },
+    {
+      "applied_floor": 0.06234977225428577,
+      "converged": true,
+      "corpus_ndcg_at_10": 0.05818269845394434,
+      "corpus_recall_at_100": 0.14326352703418713,
+      "failure_reason": null,
+      "first_loss": 1.741042137145996,
+      "last_loss": 0.9971444606781006,
+      "run": "PROBE-VAR-W06-4.5B-S51",
+      "seed": 51
+    }
+  ],
+  "thresholds_calibrated_here": false
+}
