@@ -196,11 +196,39 @@ jako `chosen` (przyczyny: `normalized_lcs` 15, `minimum_query_words` 13,
 zamrożony kontrakt; zapis służy jako znana przyczyna, jeśli audyt dual-LLM
 pokaże niedoreprezentowanie formy `keyword_query` wśród `chosen`.
 
-Stan wykonania: scoring kohorty teachera (9600 rekordów) **uruchomiony**
-2026-08-16, ok. 3,2 rek./s. Porównanie teacher vs student według
-prerejestrowanych kryteriów nie jest jeszcze policzone. Budowa par z kohorty
-teachera, audyt dual-LLM i trening pozostają nieautoryzowane;
-`final_tests_used=[]`.
+Scoring kohorty teachera jest **ukończony** (9600/9600) i porównanie z
+prerejestrowanymi kryteriami **policzone**:
+[`task06_teacher_vs_student_v3_2026-08-16.md`](../reports/measurements/task06_teacher_vs_student_v3_2026-08-16.md).
+Porównanie objęło **600/600** par (pasaż, kontrolka) o identycznym
+`prompt_sha256`, zero odrzuceń.
+
+**Odpowiedź ablacji jest negatywna: teacher API nie bije lokalnego D01 4.5B na
+zamrożonym sygnale budującym.** Primary wskazuje teachera jako lepszego w 34,7%
+pasaży w wersji literalnej z ADR (best-of-8 studenta) i 41,5–41,7% w analizie
+post-hoc równobudżetowej (student ograniczony do czterech slotów, oba rozłączne
+podzbiory). Shadow daje lekkie wskazanie na teachera (54,7–56,7%), ale kierunek
+primary i shadow **rozchodzi się w 22,0% grup** — ponad dwa razy częściej niż
+9,81% disagreement bramki HN — więc żaden z tych odsetków nie jest mocnym
+dowodem. Corpus round-trip nie różnicuje (76–85% remisów). Wynik jest negatywny
+i użyteczny: zdejmuje presję wprowadzania do pipeline'u teachera o nieprzypiętych
+wagach. Nie znaczy to, że zapytania teachera są gorsze dla wyszukiwania —
+zmierzono zgodność z sędziami, a wiążącą metryką pozostaje probe-embedder na
+naturalnych zapytaniach, którego tu nie uruchamiano.
+
+Mechanizm: teacher jest **bardziej równy** (średni `pool_margin` 4,19 vs 2,88),
+a student wygrywa **maksimum**, nie średnią — wysokotemperaturowe próbkowanie
+produkuje pojedyncze bardzo wysoko oceniane wyniki. To efekt best-of-N.
+`format_valid`: teacher 1,0000, student 0,9998.
+
+Znalezisko P8 potwierdzone na danych produkcyjnego pipeline'u: wybór kandydata po
+`pool_positive_score` sięga po kandydatów bardziej kopiujących (argmax
+`copy_density` 0,3702 vs 0,3061 średnio u teachera i 0,3494 vs 0,2869 u
+studenta), a **24,8% (teacher) i 28,8% (student)** kandydatów wskazanych przez
+czysty argmax łamie zamrożony guard `copy_risk`. Guard w polityce par jest więc
+nośny, nie formalny. Ani guarda, ani polityki nie zmieniono.
+
+Budowa par z udziałem teachera, audyt dual-LLM i trening pozostają
+nieautoryzowane; `final_tests_used=[]`.
 
 Aktualizacja 2026-08-14 (kohorta v2 zamknięta, okno bezobsługowe): run v2 jest
 ukończony — 4000/4000 wygenerowanych (3 completions resamplowane, zero napraw
