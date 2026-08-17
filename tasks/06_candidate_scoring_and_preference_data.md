@@ -67,6 +67,64 @@ Realizacja rozpoczęta tego samego dnia (raport:
   dziennych budżetów Groq o 00:00 UTC; cronów zgodnie z ograniczeniami nie
   zainstalowano.
 
+Aktualizacja 2026-08-17 (wieczór, kolejne decyzje właściciela i proxy
+odpowiadalności). Właściciel zawęził pierwsze wydanie polityki v2: **oś C wypada**
+(wraca w v2.1 po mocniejszym labelerze focusa), **konstruowanych rejected (V2-04)
+nie budujemy** (inwentarz V2-00 pokazał wystarczającą podaż naturalną), kohorty
+autoryzowane pozostają v1+v2+v3 jak w v1.1, a rolę niedostępnego sędziego 27B w
+osi A miało tymczasowo przejąć **proxy odpowiadalności** skalibrowane na
+etykietach `answerable_a/b` audytu Groq.
+
+- **Krok 0 pozostaje zablokowany operatorsko.** Wznowienie audytu uruchomiono
+  2026-08-17 18:20 UTC i wykonało **0 requestów**: dzienne budżety tokenów obu
+  modeli są wyczerpane (`gpt-oss` 186 057, `qwen` 228 603 przy limicie 185 000),
+  status ponownie `incomplete_quota_deferred`. Ogony ledgerów są jednoznaczne
+  (122/122 i 207/207 requestów rozstrzygniętych, zero bez zapisanej odpowiedzi),
+  więc `--allow-ambiguous-resend` **nie jest potrzebny** przy wznowieniu.
+  W konsekwencji **ADR V2-03 nie został napisany**: jego predykcje wymagają
+  baseline'u z pełnych 500 par, a zamrażanie ich na niekompletnym audycie
+  łamałoby regułę „predykcje przed odczytem, nigdy dostrajane po fakcie”.
+  Budowa par v2 (V2-03/V2-04-bis) i audyt v2 (V2-05) czekają na krok 0.
+- **Proxy odpowiadalności v1: ADR zamrożony, kryterium NIEDOWIEZIONE.**
+  Prospektywny ADR
+  [`task06_answerability_proxy_v1.md`](../reports/decisions/task06_answerability_proxy_v1.md)
+  (commit `8bec836`) zamroził **przed** policzeniem jakiegokolwiek związku cechy z
+  etykietą: etykietę = konsensus obu sędziów Groq co do odpowiadalności **strony**
+  pary (rozjazd sędziów = brak etykiety), deterministyczny podział fit/holdout
+  50/50 po `sha256(audit_id)` z obiema stronami pary w tej samej połowie (pasaż
+  nie przecieka), przestrzeń 13 już policzonych cech scoringu × 2 kierunki ×
+  decyle połowy fit, regułę = atom albo koniunkcja dwóch atomów, cel wyboru na
+  fit, kryterium akceptacji `precision_yes >= 0,88` **i** `recall_yes >= 0,50`,
+  jednorazowy odczyt holdoutu oraz wiążącą klauzulę zastąpienia proxy przypiętym
+  sędzią lokalnym osobnym ADR-em. ADR jawnie wylicza, co było znane przed
+  zamrożeniem (392 etykiety konsensusu z 488 stron, sufit szumu = zgodność
+  sędziów **0,8033**, baza klasy większościowej **0,7806**) i zapisuje predykcję,
+  że P1 raczej nie przejdzie.
+  Implementacja: `src/doc2query/preferences/answerability_proxy.py`,
+  `scripts/run_task06_answerability_proxy.py`, **10 testów CPU** (m.in. brak
+  etykiety bez konsensusu, mapowanie roli po `automatic_chosen_option`,
+  determinizm wyboru, fail-closed: nieudana konstrukcja **nie czyta holdoutu**).
+  Wynik: z 14 920 reguł 253 przeszły kryterium na fit; zwycięzca
+  `longest_copied_ngram <= 3 AND pool_positive_score >= 7,777` ma na fit (n=212)
+  czystość 0,9042, a na **holdoucie (n=180) 0,8707** (CI [0,8163; 0,9184]) przy
+  `recall_yes` 0,9078 (CI [0,8582; 0,9504]), `accuracy` 0,8222,
+  `balanced_accuracy` 0,7103. **Próg 0,88 nie został osiągnięty**, więc status
+  artefaktu to `rejected_axis_a_without_answerability_filter`.
+  Konsekwencje (wprost z §7 ADR, bez negocjacji): oś A powstanie **bez filtra
+  odpowiadalności** po stronie `chosen`; ADR V2-03 **nie może** przewidywać
+  spadku udziału nieodpowiadalnych `chosen` do 5% (dopuszczalna predykcja to brak
+  pogorszenia względem wartości z pełnego audytu v1); luka odpowiadalności
+  pozostaje **nazwanym długiem** do ADR-u sędziego lokalnego (harness V2-01 jest
+  gotowy i fail-closed, brakuje wyłącznie wag 27B na maszynie 16 GB).
+  Sygnały uboczne: zwycięska reguła używa **absolutnego** `pool_positive_score`,
+  nie marginesu (zgodnie z tezą v2, że cross-encoder jest filtrem absolutnego
+  score, nie rankingiem dwóch zapytań), a przekroju per rola (czystość 0,9024 na
+  stronach `chosen`) **świadomie nie użyto** jako furtki, bo nie był kryterium w
+  ADR i byłby wyborem podzbioru po zobaczeniu wyniku. Reguła zostaje jako punkt
+  odniesienia dla przyszłej kalibracji sędziego lokalnego na tych samych
+  etykietach. Raport:
+  [`task06_answerability_proxy_v1_2026-08-17.md`](../reports/measurements/task06_answerability_proxy_v1_2026-08-17.md).
+
 Aktualizacja 2026-08-16 (autoryzacja właściciela: zamrożenie polityki par i
 budowa tentative par): właściciel autoryzował zamrożenie polityki
 `chosen`/`rejected`, zbudowanie tentative par i ślepy audyt dual-LLM.
