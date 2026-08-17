@@ -105,6 +105,7 @@ htmlcov/
 !/reports/measurements/task06_unattended_compute_window_result_2026-08-16.md
 !/reports/measurements/task06_tentative_pairs_v1_v2_2026-08-16.md
 !/reports/measurements/task06_answerability_proxy_v1_2026-08-17.md
+!/reports/measurements/task06_monotony_baseline_2026-08-17.md
 !/reports/measurements/task04_m03_probe_convergence_calibration_2026-08-16.md
 !/reports/measurements/task06_dual_llm_pair_audit_2026-08-17.md
 !/reports/measurements/task06_defect_inventory_and_focus_v2_2026-08-17.md

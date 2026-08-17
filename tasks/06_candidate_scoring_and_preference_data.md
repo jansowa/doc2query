@@ -124,6 +124,31 @@ etykietach `answerable_a/b` audytu Groq.
   odniesienia dla przyszłej kalibracji sędziego lokalnego na tych samych
   etykietach. Raport:
   [`task06_answerability_proxy_v1_2026-08-17.md`](../reports/measurements/task06_answerability_proxy_v1_2026-08-17.md).
+- **Baseline monotonii (oś D) zmierzony** (`src/doc2query/evaluation/query_monotony.py`,
+  `scripts/run_task06_monotony_baseline.py`, 9 testów CPU; 224 000 zapytań z 11
+  kohort w 19 s CPU, wejścia pinowane po SHA-256). Zadeklarowane wejście
+  projektowe: żadnego progu, żadnej bramki, żadnej pary. Wynik przesuwa adresata
+  problemu P3: **monotonia słów początkowych jest dyktowana kontrolką, nie
+  kolapsem modelu** — `intent=procedure` daje `jak` w **100%** przypadków
+  (distinct=1, entropia 0,0000 w 8 z 11 kohort), `intent=definition` daje
+  `definicja` w 99,5–100%, więc dwa słowa zbierają **połowę populacji**
+  (0,2518 + 0,2503), podczas gdy `entity_lookup` ma 816–885 różnych otwarć.
+  Celu parowego ani set-level nagrody nie ma tu co naprawiać — model robi to, o co
+  go proszono; do poprawy są **dwie kontrolki intencji napisane jak szablony**.
+  Konsekwencja dla M-05: rozkład słów początkowych trzeba raportować **per
+  `intent`**, inaczej pomiar „odkryje” szablon i przypisze go modelowi.
+  Drugie znalezisko: kontrolka `length` **nigdy nie została użyta** (jedyna
+  zaobserwowana wartość we wszystkich 11 kohortach to `medium`), więc ciasnoty
+  rozkładu długości (średnia 5,09–5,15 słowa, p05–p95 = 2–9) **nie wolno**
+  przypisać modelowi; kontrolka `form` natomiast separuje wyraźnie (6,12 vs 4,06
+  słowa), co dowodzi, że kontrolki działają. Baseline set-level dla nagrody GRPO
+  (V2-07): distinct-1/distinct-2 per grupa to 0,470–0,477 / 0,659–0,668 stabilnie
+  w kohortach v3–v11, przy **v1 wyraźnie niżej** (0,326 / 0,455) — niezależne
+  potwierdzenie zmierzonego kolapsu v1 (`duplicate_rate` 0,399) innym przyrządem.
+  Reaktywacji `entity_preservation` **nie wykonano**: wymaga backendu spaCy
+  (`pl_core_news`), a modele spaCy są hostowane na GitHubie, nieosiągalnym z tej
+  maszyny (connect timeout). Raport:
+  [`task06_monotony_baseline_2026-08-17.md`](../reports/measurements/task06_monotony_baseline_2026-08-17.md).
 
 Aktualizacja 2026-08-16 (autoryzacja właściciela: zamrożenie polityki par i
 budowa tentative par): właściciel autoryzował zamrożenie polityki
