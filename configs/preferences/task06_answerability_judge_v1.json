@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "contract": "task06-answerability-judge-v1",
+  "status": "draft_pending_weight_pinning",
+  "prompt_version": "task06-answerability-pl-v1",
+  "generator_family": "bielik",
+  "judge": {
+    "backend": "ollama",
+    "model": "qwen3.6:27b-q4_K_M",
+    "model_digest": null,
+    "url": "http://127.0.0.1:11434/api/chat",
+    "tags_url": "http://127.0.0.1:11434/api/tags",
+    "temperature": 0.0,
+    "seed": 20260817,
+    "max_completion_tokens": 24,
+    "timeout_seconds": 300
+  },
+  "decision": {
+    "labels": ["yes", "no", "uncertain"],
+    "uncertain_blocks_chosen": true,
+    "uncertain_is_not_a_defect": true
+  },
+  "calibration": {
+    "sources": [
+      "groq_audit_answerable_sides",
+      "reward_corpus_constructed_classes"
+    ],
+    "acceptance_note": "Progi akceptacji kalibracji zamraża prospektywny ADR V2-01 razem z digestem wag, PRZED uruchomieniem kalibracji; ten szkic ich nie ustala."
+  },
+  "hardware_note": "Maszyna bazowa ma 8 GB VRAM; Q4 27B wymaga offloadu CPU przez ollama. Pobranie wag (~17 GB) i przypięcie digestu jest decyzją operatorską.",
+  "self_preference_guard": "Sędzia nie należy do rodziny generatora (Bielik) ani nie jest teacherem ablacji; walidowane w load_judge_config.",
+  "used_for_pair_building": false,
+  "final_tests_used": []
+}

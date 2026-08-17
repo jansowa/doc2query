@@ -47,6 +47,22 @@ Realizacja rozpoczęta tego samego dnia (raport:
   progu `minimum_confidence` nie dostrajano pod pomiar. Oś C pozostaje
   zablokowana do decyzji właściciela przy V2-03: mocniejszy przypisywacz
   (wariant rerankerowy, GPU) albo rezygnacja z osi C w pierwszym wydaniu v2.
+- **V2-01: harness sędziego odpowiadalności zaimplementowany, nie uruchomiony**
+  (`src/doc2query/preferences/answerability_judge.py`,
+  `scripts/run_task06_answerability_judge.py`,
+  `configs/preferences/task06_answerability_judge_v1.json` ze statusem
+  `draft_pending_weight_pinning`, 11 testów CPU z fałszywym backendem). Runner
+  jest fail-closed: odmawia pracy bez przypiętego digestu wag i przy
+  niezgodności digestu z lokalnym backendem; `temperature=0`, deterministyczny
+  seed, trwały journal per item z resume, `uncertain` blokuje rolę `chosen`,
+  ale nie liczy się jako defekt; walidacja odrzuca sędziego z rodziny
+  generatora (Bielik). Kalibracja jest gotowa programowo: itemy per (para,
+  strona) z etykiet `answerable_a/b` audytu Groq oraz klasy konstrukcyjne
+  korpusu walidacyjnego (`ungrounded` → `no`), z analizą zgodności i CI.
+  **Blokada operatorska**: maszyna bazowa ma 8 GB VRAM i ollama bez modeli;
+  Q4 27B (~17 GB, 53 GB wolnego na dysku) wymaga pobrania wag i przypięcia
+  digestu — decyzja właściciela. Progi akceptacji kalibracji zamrozi ADR V2-01
+  razem z digestem, przed uruchomieniem kalibracji.
 - Krok 0 (dokończenie audytu v1: 128 + 43 requesty) czeka na odnowienie
   dziennych budżetów Groq o 00:00 UTC; cronów zgodnie z ograniczeniami nie
   zainstalowano.
