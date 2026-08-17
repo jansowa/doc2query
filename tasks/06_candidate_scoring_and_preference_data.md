@@ -148,10 +148,41 @@ Wznawialność (warunek właściciela): scoring idzie istniejącą ścieżką
 `flock` i pomija kohortę już ukończoną. Maksymalna strata przy zabiciu procesu
 to jeden batch ośmiu rekordów.
 
-Stan wykonania: scoring korpusu nagrody uruchomiony 2026-08-16 (~3,2 rek./s,
-peak VRAM ok. 4,7 GB). Scoring kohorty teachera **nie został uruchomiony**.
-Pomiar P8 i kryteriów ablacji nie został jeszcze policzony. Budowa par, audyt
-dual-LLM i trening pozostają nieautoryzowane; `final_tests_used=[]`.
+Scoring korpusu nagrody jest **ukończony** (1440/1440, 175 s, batch 8) i
+**P8 zmierzone**:
+[`task06_reward_validation_corpus_p8_2026-08-16.md`](../reports/measurements/task06_reward_validation_corpus_p8_2026-08-16.md).
+P8a **PASS**: `ungrounded` ma niższy primary score niż `good_specific` w
+**95,6%** grup (próg 0,85, zero remisów), a niezależna kontrola shadow daje
+96,7% — kierunek nie jest artefaktem jednego sędziego. P8b była zapisana
+**kierunkowo, bez progu**, więc nie orzeczono PASS/FAIL: 124/180 słabszych,
+54 remisy (w 43 z nich również `good_specific` nie wróciło w top-20, co mówi o
+trudności korpusu, nie o metryce), średnie 0,750 vs 0,072. Wznawianie
+potwierdzone w praktyce: pierwszy run przerwał się na 944/1440, a ponowne
+uruchomienie tej samej komendy wypisało `[intrinsic resume] 944/1,440 rows
+durable` i dokończyło bez powtarzania pracy.
+
+Dwa wyniki mają bezpośrednią konsekwencję dla polityki par. `ungrounded` ma
+**ujemny** średni `pool_margin` (−0,48), czyli primary stawia twardy negatyw nad
+pozytywem — sygnał gruntowania działa też w wartości bezwzględnej. Zarazem
+sygnały sędziowskie **najmocniej nagradzają kopiowanie**: `copy_verbatim` bije
+`good_specific` na primary (11,99 vs 10,67), marginesie (7,71 vs 5,21) i
+round-tripie, a w **95/180 grup (52,8%)** dosłowna kopia ma najwyższy
+`pool_margin` w grupie. Ponieważ zamrożona polityka par używa `pool_margin` jako
+jedynego sygnału budującego, bez ochrony przed kopiowaniem ponad połowa par
+wybrałaby jako `chosen` kopię pasażu. Ochrona istnieje
+(`copy_risk.reject_chosen_on_copy_risk`, odziedziczona z Task 05) i zmierzona
+skuteczność to **180/180 (100%)** złapanych kopii, przy mierzalnym koszcie:
+29,4% poprawnych, krótkich zapytań w formie `keyword_query` też jest odrzucanych
+jako `chosen` (przyczyny: `normalized_lcs` 15, `minimum_query_words` 13,
+`copy_density` 9, reszta w kombinacjach). Nic z tego nie zmieniono — to
+zamrożony kontrakt; zapis służy jako znana przyczyna, jeśli audyt dual-LLM
+pokaże niedoreprezentowanie formy `keyword_query` wśród `chosen`.
+
+Stan wykonania: scoring kohorty teachera (9600 rekordów) **uruchomiony**
+2026-08-16, ok. 3,2 rek./s. Porównanie teacher vs student według
+prerejestrowanych kryteriów nie jest jeszcze policzone. Budowa par z kohorty
+teachera, audyt dual-LLM i trening pozostają nieautoryzowane;
+`final_tests_used=[]`.
 
 Aktualizacja 2026-08-14 (kohorta v2 zamknięta, okno bezobsługowe): run v2 jest
 ukończony — 4000/4000 wygenerowanych (3 completions resamplowane, zero napraw

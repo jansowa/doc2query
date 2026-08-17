@@ -90,6 +90,10 @@ predictions:
     P5_declared_form_agreement_rate_min: 0.80
     P6_near_duplicate_collapse_rate_min: 0.70
     P7_group_gate_pass_rate_min: 0.95
+    # Przepisane dosłownie z ADR (P8: "w >= 85% grup"), zapisanego przed generacją.
+    # Druga połowa P8 (corpus round-trip dla too_general) była zapisana kierunkowo,
+    # bez progu, i celowo nie dostaje progu po zobaczeniu danych.
+    P8a_ungrounded_below_good_rate_min: 0.85
 
 prohibitions:
   recalibrate_frozen_thresholds: false
