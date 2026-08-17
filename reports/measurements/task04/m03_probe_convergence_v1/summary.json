@@ -1,0 +1,984 @@
+{
+  "final_tests_used": [],
+  "groups": [
+    {
+      "comparison": {
+        "contract": "task04-m03-probe-convergence-guardrail-v1",
+        "converged": {
+          "mean_difference": 0.014251353844240103,
+          "paired_bootstrap": {
+            "bootstrap_samples": 2000,
+            "ci95_high": 0.02382428187045014,
+            "ci95_low": 0.002487846062718844,
+            "difference": 0.014251353844240103,
+            "query_count": 4,
+            "seed": 42,
+            "variant_win_fraction": 0.9945
+          },
+          "per_seed_difference": {
+            "42": 0.027038320306064012,
+            "44": 0.014182166563608524,
+            "45": 0.018701700635494124,
+            "46": -0.002916772128206249
+          },
+          "sd_difference": 0.012623541950707582,
+          "seed_pair_count": 4,
+          "seeds": [
+            42,
+            44,
+            45,
+            46
+          ],
+          "sign_flip": {
+            "observed_mean_minus_threshold": 0.0042513538442401026,
+            "p_value": 0.3125,
+            "permutations": 16,
+            "seed_pair_count": 4,
+            "smallest_attainable_p_value": 0.0625,
+            "test": "exact_sign_flip_one_sided",
+            "threshold": 0.01
+          }
+        },
+        "convergence_verdicts": [
+          {
+            "applied_floor": 0.07875099228661123,
+            "arm": "hybrid",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": true,
+            "failure_reason": null,
+            "median_floor": 0.07875099228661123,
+            "run_id": "D01B-TRIVIA-CONFIRM-HYBRID-4.5B-S42",
+            "seed": 42,
+            "signal_value": 0.195624424478443
+          },
+          {
+            "applied_floor": 0.07875099228661123,
+            "arm": "hybrid",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": true,
+            "failure_reason": null,
+            "median_floor": 0.07875099228661123,
+            "run_id": "D01B-TRIVIA-CONFIRM-HYBRID-4.5B-S43",
+            "seed": 43,
+            "signal_value": 0.189951136880572
+          },
+          {
+            "applied_floor": 0.07875099228661123,
+            "arm": "hybrid",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": true,
+            "failure_reason": null,
+            "median_floor": 0.07875099228661123,
+            "run_id": "D01B-TRIVIA-CONFIRM-HYBRID-4.5B-S44",
+            "seed": 44,
+            "signal_value": 0.1602832297234344
+          },
+          {
+            "applied_floor": 0.07875099228661123,
+            "arm": "hybrid",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": true,
+            "failure_reason": null,
+            "median_floor": 0.07875099228661123,
+            "run_id": "D01B-TRIVIA-CONFIRM-HYBRID-4.5B-S45",
+            "seed": 45,
+            "signal_value": 0.15887470615788463
+          },
+          {
+            "applied_floor": 0.07875099228661123,
+            "arm": "hybrid",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": true,
+            "failure_reason": null,
+            "median_floor": 0.07875099228661123,
+            "run_id": "D01B-TRIVIA-CONFIRM-HYBRID-4.5B-S46",
+            "seed": 46,
+            "signal_value": 0.13777310095608028
+          },
+          {
+            "applied_floor": 0.07875099228661123,
+            "arm": "w06",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": true,
+            "failure_reason": null,
+            "median_floor": 0.07875099228661123,
+            "run_id": "D01B-TRIVIA-CONFIRM-W06-4.5B-S42",
+            "seed": 42,
+            "signal_value": 0.16601943074437422
+          },
+          {
+            "applied_floor": 0.07875099228661123,
+            "arm": "w06",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": false,
+            "failure_reason": "corpus_recall_at_100_below_floor",
+            "median_floor": 0.07875099228661123,
+            "run_id": "D01B-TRIVIA-CONFIRM-W06-4.5B-S43",
+            "seed": 43,
+            "signal_value": 0.0004518385175806347
+          },
+          {
+            "applied_floor": 0.07875099228661123,
+            "arm": "w06",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": true,
+            "failure_reason": null,
+            "median_floor": 0.07875099228661123,
+            "run_id": "D01B-TRIVIA-CONFIRM-W06-4.5B-S44",
+            "seed": 44,
+            "signal_value": 0.1408303471742672
+          },
+          {
+            "applied_floor": 0.07875099228661123,
+            "arm": "w06",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": true,
+            "failure_reason": null,
+            "median_floor": 0.07875099228661123,
+            "run_id": "D01B-TRIVIA-CONFIRM-W06-4.5B-S45",
+            "seed": 45,
+            "signal_value": 0.12686294921978564
+          },
+          {
+            "applied_floor": 0.07875099228661123,
+            "arm": "w06",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": true,
+            "failure_reason": null,
+            "median_floor": 0.07875099228661123,
+            "run_id": "D01B-TRIVIA-CONFIRM-W06-4.5B-S46",
+            "seed": 46,
+            "signal_value": 0.15612926298856025
+          }
+        ],
+        "decision_metric": "corpus_ndcg_at_10",
+        "dropped_seeds": [
+          43
+        ],
+        "final_tests_used": [],
+        "guardrail_id": "task04-m03-probe-convergence-guardrail-v1",
+        "min_converged_seed_pairs": 5,
+        "promotion_authorized": false,
+        "schema_version": 1,
+        "status": "insufficient_converged_seeds",
+        "superiority_threshold": 0.01,
+        "unfiltered": {
+          "mean_difference": 0.03187695342852505,
+          "paired_bootstrap": {
+            "bootstrap_samples": 2000,
+            "ci95_high": 0.06800438449921942,
+            "ci95_low": 0.006494034097010758,
+            "difference": 0.03187695342852505,
+            "query_count": 5,
+            "seed": 42,
+            "variant_win_fraction": 1.0
+          },
+          "per_seed_difference": {
+            "42": 0.027038320306064012,
+            "43": 0.1023793517656648,
+            "44": 0.014182166563608524,
+            "45": 0.018701700635494124,
+            "46": -0.002916772128206249
+          },
+          "sd_difference": 0.04090017312999644,
+          "seed_pair_count": 5,
+          "seeds": [
+            42,
+            43,
+            44,
+            45,
+            46
+          ],
+          "sign_flip": {
+            "observed_mean_minus_threshold": 0.021876953428525043,
+            "p_value": 0.15625,
+            "permutations": 32,
+            "seed_pair_count": 5,
+            "smallest_attainable_p_value": 0.03125,
+            "test": "exact_sign_flip_one_sided",
+            "threshold": 0.01
+          }
+        }
+      },
+      "convergence": {
+        "applied_floor": 0.07875099228661123,
+        "chance_level": 0.000715399693808931,
+        "final_tests_used": [],
+        "group_id": "task05_d01b_scale_interaction_4_5b_trivia_dev_confirm_v1",
+        "max_signal": 0.195624424478443,
+        "median_signal": 0.15750198457322245,
+        "min_signal": 0.0004518385175806347,
+        "non_converged_run_count": 1,
+        "non_converged_runs": [
+          "D01B-TRIVIA-CONFIRM-W06-4.5B-S43"
+        ],
+        "run_count": 10
+      },
+      "run_group": "runs/task05_d01b_scale_interaction_4_5b_trivia_dev_confirm_v1",
+      "runs": [
+        {
+          "arm": "hybrid",
+          "candidate_count": 139782,
+          "first_loss": 1.7824031114578247,
+          "last_loss": 0.0683102011680603,
+          "metrics": {
+            "corpus_map": 0.06556000847454563,
+            "corpus_mrr_at_10": 0.19592569444444444,
+            "corpus_ndcg_at_10": 0.10525076631659532,
+            "corpus_recall_at_1": 0.02931002573737684,
+            "corpus_recall_at_10": 0.08617481380420298,
+            "corpus_recall_at_100": 0.195624424478443,
+            "corpus_recall_at_5": 0.06416122027097759
+          },
+          "query_count": 8000,
+          "run_id": "D01B-TRIVIA-CONFIRM-HYBRID-4.5B-S42",
+          "seed": 42
+        },
+        {
+          "arm": "hybrid",
+          "candidate_count": 139782,
+          "first_loss": 4.596759796142578,
+          "last_loss": 0.08006563782691956,
+          "metrics": {
+            "corpus_map": 0.06311570239942078,
+            "corpus_mrr_at_10": 0.19435381944444444,
+            "corpus_ndcg_at_10": 0.10239832203954956,
+            "corpus_recall_at_1": 0.027619399878475264,
+            "corpus_recall_at_10": 0.08485005651295975,
+            "corpus_recall_at_100": 0.189951136880572,
+            "corpus_recall_at_5": 0.06383212891868717
+          },
+          "query_count": 8000,
+          "run_id": "D01B-TRIVIA-CONFIRM-HYBRID-4.5B-S43",
+          "seed": 43
+        },
+        {
+          "arm": "hybrid",
+          "candidate_count": 139782,
+          "first_loss": 1.4028031826019287,
+          "last_loss": 0.06615139544010162,
+          "metrics": {
+            "corpus_map": 0.04621379727236833,
+            "corpus_mrr_at_10": 0.1387344742063492,
+            "corpus_ndcg_at_10": 0.07376646570270837,
+            "corpus_recall_at_1": 0.019089305125637206,
+            "corpus_recall_at_10": 0.06407015583795597,
+            "corpus_recall_at_100": 0.1602832297234344,
+            "corpus_recall_at_5": 0.04764628339302204
+          },
+          "query_count": 8000,
+          "run_id": "D01B-TRIVIA-CONFIRM-HYBRID-4.5B-S44",
+          "seed": 44
+        },
+        {
+          "arm": "hybrid",
+          "candidate_count": 139782,
+          "first_loss": 2.027618408203125,
+          "last_loss": 0.1795237958431244,
+          "metrics": {
+            "corpus_map": 0.04384734505038635,
+            "corpus_mrr_at_10": 0.12650957341269842,
+            "corpus_ndcg_at_10": 0.06846219334593523,
+            "corpus_recall_at_1": 0.016508441470040765,
+            "corpus_recall_at_10": 0.0618609929633989,
+            "corpus_recall_at_100": 0.15887470615788463,
+            "corpus_recall_at_5": 0.044412100056631085
+          },
+          "query_count": 8000,
+          "run_id": "D01B-TRIVIA-CONFIRM-HYBRID-4.5B-S45",
+          "seed": 45
+        },
+        {
+          "arm": "hybrid",
+          "candidate_count": 139782,
+          "first_loss": 1.8439807891845703,
+          "last_loss": 0.2740274667739868,
+          "metrics": {
+            "corpus_map": 0.04047817378243924,
+            "corpus_mrr_at_10": 0.13094439484126985,
+            "corpus_ndcg_at_10": 0.06662048920811019,
+            "corpus_recall_at_1": 0.017330283649524436,
+            "corpus_recall_at_10": 0.056343357991335455,
+            "corpus_recall_at_100": 0.13777310095608028,
+            "corpus_recall_at_5": 0.041879110759398167
+          },
+          "query_count": 8000,
+          "run_id": "D01B-TRIVIA-CONFIRM-HYBRID-4.5B-S46",
+          "seed": 46
+        },
+        {
+          "arm": "w06",
+          "candidate_count": 139782,
+          "first_loss": 3.904214859008789,
+          "last_loss": 0.2683742046356201,
+          "metrics": {
+            "corpus_map": 0.04824427972175113,
+            "corpus_mrr_at_10": 0.14796369047619046,
+            "corpus_ndcg_at_10": 0.0782124460105313,
+            "corpus_recall_at_1": 0.019542546055305598,
+            "corpus_recall_at_10": 0.06843030382897261,
+            "corpus_recall_at_100": 0.16601943074437422,
+            "corpus_recall_at_5": 0.04938444007058669
+          },
+          "query_count": 8000,
+          "run_id": "D01B-TRIVIA-CONFIRM-W06-4.5B-S42",
+          "seed": 42
+        },
+        {
+          "arm": "w06",
+          "candidate_count": 139782,
+          "first_loss": 1.34307062625885,
+          "last_loss": 1.3889105319976807,
+          "metrics": {
+            "corpus_map": 0.00013601890542438717,
+            "corpus_mrr_at_10": 3.8690476190476195e-05,
+            "corpus_ndcg_at_10": 1.897027388475442e-05,
+            "corpus_recall_at_1": 0.0,
+            "corpus_recall_at_10": 1.4285714285714285e-05,
+            "corpus_recall_at_100": 0.0004518385175806347,
+            "corpus_recall_at_5": 0.0
+          },
+          "query_count": 8000,
+          "run_id": "D01B-TRIVIA-CONFIRM-W06-4.5B-S43",
+          "seed": 43
+        },
+        {
+          "arm": "w06",
+          "candidate_count": 139782,
+          "first_loss": 1.5464750528335571,
+          "last_loss": 0.5983471870422363,
+          "metrics": {
+            "corpus_map": 0.0368039603672316,
+            "corpus_mrr_at_10": 0.1148251984126984,
+            "corpus_ndcg_at_10": 0.05958429913909984,
+            "corpus_recall_at_1": 0.014383552314825913,
+            "corpus_recall_at_10": 0.05495089184040902,
+            "corpus_recall_at_100": 0.1408303471742672,
+            "corpus_recall_at_5": 0.03881206815447047
+          },
+          "query_count": 8000,
+          "run_id": "D01B-TRIVIA-CONFIRM-W06-4.5B-S44",
+          "seed": 44
+        },
+        {
+          "arm": "w06",
+          "candidate_count": 139782,
+          "first_loss": 4.75361967086792,
+          "last_loss": 0.11385670304298401,
+          "metrics": {
+            "corpus_map": 0.03181422755856101,
+            "corpus_mrr_at_10": 0.09248506944444444,
+            "corpus_ndcg_at_10": 0.049760492710441105,
+            "corpus_recall_at_1": 0.011649751851470576,
+            "corpus_recall_at_10": 0.04455368766446516,
+            "corpus_recall_at_100": 0.12686294921978564,
+            "corpus_recall_at_5": 0.031356333361532075
+          },
+          "query_count": 8000,
+          "run_id": "D01B-TRIVIA-CONFIRM-W06-4.5B-S45",
+          "seed": 45
+        },
+        {
+          "arm": "w06",
+          "candidate_count": 139782,
+          "first_loss": 2.047163963317871,
+          "last_loss": 0.17238734662532806,
+          "metrics": {
+            "corpus_map": 0.043608440811878535,
+            "corpus_mrr_at_10": 0.12962013888888888,
+            "corpus_ndcg_at_10": 0.06953726133631644,
+            "corpus_recall_at_1": 0.01761487643940457,
+            "corpus_recall_at_10": 0.06283724804150324,
+            "corpus_recall_at_100": 0.15612926298856025,
+            "corpus_recall_at_5": 0.04514119036181032
+          },
+          "query_count": 8000,
+          "run_id": "D01B-TRIVIA-CONFIRM-W06-4.5B-S46",
+          "seed": 46
+        }
+      ]
+    },
+    {
+      "comparison": {
+        "contract": "task04-m03-probe-convergence-guardrail-v1",
+        "converged": {
+          "mean_difference": 0.03760434103893568,
+          "per_seed_difference": {
+            "43": 0.03760434103893568
+          },
+          "sd_difference": null,
+          "seed_pair_count": 1,
+          "seeds": [
+            43
+          ]
+        },
+        "convergence_verdicts": [
+          {
+            "applied_floor": 0.03867097661633419,
+            "arm": "hybrid",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": true,
+            "failure_reason": null,
+            "median_floor": 0.03867097661633419,
+            "run_id": "PROBE-BUDGET-1024-HYBRID-S42",
+            "seed": 42,
+            "signal_value": 0.12088719628619615
+          },
+          {
+            "applied_floor": 0.03867097661633419,
+            "arm": "hybrid",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": true,
+            "failure_reason": null,
+            "median_floor": 0.03867097661633419,
+            "run_id": "PROBE-BUDGET-1024-HYBRID-S43",
+            "seed": 43,
+            "signal_value": 0.142138780027702
+          },
+          {
+            "applied_floor": 0.03867097661633419,
+            "arm": "hybrid",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": false,
+            "failure_reason": "corpus_recall_at_100_below_floor",
+            "median_floor": 0.03867097661633419,
+            "run_id": "PROBE-BUDGET-1024-HYBRID-S44",
+            "seed": 44,
+            "signal_value": 0.032927124547021944
+          },
+          {
+            "applied_floor": 0.03867097661633419,
+            "arm": "w06",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": false,
+            "failure_reason": "corpus_recall_at_100_below_floor",
+            "median_floor": 0.03867097661633419,
+            "run_id": "PROBE-BUDGET-1024-W06-S42",
+            "seed": 42,
+            "signal_value": 0.0014336591320401142
+          },
+          {
+            "applied_floor": 0.03867097661633419,
+            "arm": "w06",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": true,
+            "failure_reason": null,
+            "median_floor": 0.03867097661633419,
+            "run_id": "PROBE-BUDGET-1024-W06-S43",
+            "seed": 43,
+            "signal_value": 0.07487677784246079
+          },
+          {
+            "applied_floor": 0.03867097661633419,
+            "arm": "w06",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": true,
+            "failure_reason": null,
+            "median_floor": 0.03867097661633419,
+            "run_id": "PROBE-BUDGET-1024-W06-S44",
+            "seed": 44,
+            "signal_value": 0.07980712862287595
+          }
+        ],
+        "decision_metric": "corpus_ndcg_at_10",
+        "dropped_seeds": [
+          42,
+          44
+        ],
+        "final_tests_used": [],
+        "guardrail_id": "task04-m03-probe-convergence-guardrail-v1",
+        "min_converged_seed_pairs": 5,
+        "promotion_authorized": false,
+        "schema_version": 1,
+        "status": "insufficient_converged_seeds",
+        "superiority_threshold": 0.01,
+        "unfiltered": {
+          "mean_difference": 0.02115850048846982,
+          "paired_bootstrap": {
+            "bootstrap_samples": 2000,
+            "ci95_high": 0.04443262877507043,
+            "ci95_low": -0.01856146834859665,
+            "difference": 0.02115850048846982,
+            "query_count": 3,
+            "seed": 42,
+            "variant_win_fraction": 0.96
+          },
+          "per_seed_difference": {
+            "42": 0.04443262877507043,
+            "43": 0.03760434103893568,
+            "44": -0.01856146834859665
+          },
+          "sd_difference": 0.03456751830353187,
+          "seed_pair_count": 3,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "sign_flip": {
+            "observed_mean_minus_threshold": 0.01115850048846982,
+            "p_value": 0.375,
+            "permutations": 8,
+            "seed_pair_count": 3,
+            "smallest_attainable_p_value": 0.125,
+            "test": "exact_sign_flip_one_sided",
+            "threshold": 0.01
+          }
+        }
+      },
+      "convergence": {
+        "applied_floor": 0.03867097661633419,
+        "chance_level": 0.000715399693808931,
+        "final_tests_used": [],
+        "group_id": "task05_probe_budget_sensitivity_v1",
+        "max_signal": 0.142138780027702,
+        "median_signal": 0.07734195323266838,
+        "min_signal": 0.0014336591320401142,
+        "non_converged_run_count": 2,
+        "non_converged_runs": [
+          "PROBE-BUDGET-1024-HYBRID-S44",
+          "PROBE-BUDGET-1024-W06-S42"
+        ],
+        "run_count": 6
+      },
+      "run_group": "runs/task05_probe_budget_sensitivity_v1::PROBE-BUDGET-1024",
+      "runs": [
+        {
+          "arm": "hybrid",
+          "candidate_count": 139782,
+          "first_loss": 2.5129904747009277,
+          "last_loss": 8.761273056734353e-05,
+          "metrics": {
+            "corpus_map": 0.02798694554081196,
+            "corpus_mrr_at_10": 0.0843735615079365,
+            "corpus_ndcg_at_10": 0.04453687152135071,
+            "corpus_recall_at_1": 0.009370311424971122,
+            "corpus_recall_at_10": 0.04199972990276467,
+            "corpus_recall_at_100": 0.12088719628619615,
+            "corpus_recall_at_5": 0.029281392534806574
+          },
+          "query_count": 8000,
+          "run_id": "PROBE-BUDGET-1024-HYBRID-S42",
+          "seed": 42
+        },
+        {
+          "arm": "hybrid",
+          "candidate_count": 139782,
+          "first_loss": 2.2952301502227783,
+          "last_loss": 0.07086359709501266,
+          "metrics": {
+            "corpus_map": 0.0387385005079283,
+            "corpus_mrr_at_10": 0.12083353174603176,
+            "corpus_ndcg_at_10": 0.062183990816856105,
+            "corpus_recall_at_1": 0.015767500248508714,
+            "corpus_recall_at_10": 0.0535581691432793,
+            "corpus_recall_at_100": 0.142138780027702,
+            "corpus_recall_at_5": 0.03878202735869272
+          },
+          "query_count": 8000,
+          "run_id": "PROBE-BUDGET-1024-HYBRID-S43",
+          "seed": 43
+        },
+        {
+          "arm": "hybrid",
+          "candidate_count": 139782,
+          "first_loss": 1.9760665893554688,
+          "last_loss": 0.08237183839082718,
+          "metrics": {
+            "corpus_map": 0.0059339483071539235,
+            "corpus_mrr_at_10": 0.021778472222222223,
+            "corpus_ndcg_at_10": 0.009881673329197508,
+            "corpus_recall_at_1": 0.002106656609913942,
+            "corpus_recall_at_10": 0.00870625208206824,
+            "corpus_recall_at_100": 0.032927124547021944,
+            "corpus_recall_at_5": 0.00576464661683639
+          },
+          "query_count": 8000,
+          "run_id": "PROBE-BUDGET-1024-HYBRID-S44",
+          "seed": 44
+        },
+        {
+          "arm": "w06",
+          "candidate_count": 139782,
+          "first_loss": 4.012953281402588,
+          "last_loss": 0.6772756576538086,
+          "metrics": {
+            "corpus_map": 0.00021709322064481269,
+            "corpus_mrr_at_10": 0.0003875,
+            "corpus_ndcg_at_10": 0.00010424274628027904,
+            "corpus_recall_at_1": 1.1408730158730158e-05,
+            "corpus_recall_at_10": 3.6126775271512114e-05,
+            "corpus_recall_at_100": 0.0014336591320401142,
+            "corpus_recall_at_5": 2.7198203842940682e-05
+          },
+          "query_count": 8000,
+          "run_id": "PROBE-BUDGET-1024-W06-S42",
+          "seed": 42
+        },
+        {
+          "arm": "w06",
+          "candidate_count": 139782,
+          "first_loss": 1.222086787223816,
+          "last_loss": 0.4206114411354065,
+          "metrics": {
+            "corpus_map": 0.015724707642225864,
+            "corpus_mrr_at_10": 0.048471626984126985,
+            "corpus_ndcg_at_10": 0.024579649777920425,
+            "corpus_recall_at_1": 0.00540207101908175,
+            "corpus_recall_at_10": 0.023253825001413833,
+            "corpus_recall_at_100": 0.07487677784246079,
+            "corpus_recall_at_5": 0.016308062767893254
+          },
+          "query_count": 8000,
+          "run_id": "PROBE-BUDGET-1024-W06-S43",
+          "seed": 43
+        },
+        {
+          "arm": "w06",
+          "candidate_count": 139782,
+          "first_loss": 2.1036300659179688,
+          "last_loss": 3.391442442080006e-05,
+          "metrics": {
+            "corpus_map": 0.017513332975183746,
+            "corpus_mrr_at_10": 0.056378869047619046,
+            "corpus_ndcg_at_10": 0.028443141677794156,
+            "corpus_recall_at_1": 0.006314607237214585,
+            "corpus_recall_at_10": 0.025686692948183674,
+            "corpus_recall_at_100": 0.07980712862287595,
+            "corpus_recall_at_5": 0.01767454785555936
+          },
+          "query_count": 8000,
+          "run_id": "PROBE-BUDGET-1024-W06-S44",
+          "seed": 44
+        }
+      ]
+    },
+    {
+      "comparison": {
+        "contract": "task04-m03-probe-convergence-guardrail-v1",
+        "converged": {
+          "mean_difference": 0.015472135416960055,
+          "paired_bootstrap": {
+            "bootstrap_samples": 2000,
+            "ci95_high": 0.026713176960190863,
+            "ci95_low": 0.004231093873729247,
+            "difference": 0.015472135416960055,
+            "query_count": 2,
+            "seed": 42,
+            "variant_win_fraction": 1.0
+          },
+          "per_seed_difference": {
+            "42": 0.004231093873729247,
+            "44": 0.026713176960190863
+          },
+          "sd_difference": 0.015897233405636396,
+          "seed_pair_count": 2,
+          "seeds": [
+            42,
+            44
+          ],
+          "sign_flip": {
+            "observed_mean_minus_threshold": 0.005472135416960054,
+            "p_value": 0.5,
+            "permutations": 4,
+            "seed_pair_count": 2,
+            "smallest_attainable_p_value": 0.25,
+            "test": "exact_sign_flip_one_sided",
+            "threshold": 0.01
+          }
+        },
+        "convergence_verdicts": [
+          {
+            "applied_floor": 0.07264018530455824,
+            "arm": "hybrid",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": true,
+            "failure_reason": null,
+            "median_floor": 0.07264018530455824,
+            "run_id": "PROBE-BUDGET-2048-HYBRID-S42",
+            "seed": 42,
+            "signal_value": 0.17061098937435507
+          },
+          {
+            "applied_floor": 0.07264018530455824,
+            "arm": "hybrid",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": false,
+            "failure_reason": "corpus_recall_at_100_below_floor",
+            "median_floor": 0.07264018530455824,
+            "run_id": "PROBE-BUDGET-2048-HYBRID-S43",
+            "seed": 43,
+            "signal_value": 0.005752775384420592
+          },
+          {
+            "applied_floor": 0.07264018530455824,
+            "arm": "hybrid",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": true,
+            "failure_reason": null,
+            "median_floor": 0.07264018530455824,
+            "run_id": "PROBE-BUDGET-2048-HYBRID-S44",
+            "seed": 44,
+            "signal_value": 0.16441478607211335
+          },
+          {
+            "applied_floor": 0.07264018530455824,
+            "arm": "w06",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": true,
+            "failure_reason": null,
+            "median_floor": 0.07264018530455824,
+            "run_id": "PROBE-BUDGET-2048-W06-S42",
+            "seed": 42,
+            "signal_value": 0.1523940170700151
+          },
+          {
+            "applied_floor": 0.07264018530455824,
+            "arm": "w06",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": true,
+            "failure_reason": null,
+            "median_floor": 0.07264018530455824,
+            "run_id": "PROBE-BUDGET-2048-W06-S43",
+            "seed": 43,
+            "signal_value": 0.1100211075170534
+          },
+          {
+            "applied_floor": 0.07264018530455824,
+            "arm": "w06",
+            "chance_floor": 0.002861598775235724,
+            "chance_level": 0.000715399693808931,
+            "converged": true,
+            "failure_reason": null,
+            "median_floor": 0.07264018530455824,
+            "run_id": "PROBE-BUDGET-2048-W06-S44",
+            "seed": 44,
+            "signal_value": 0.13816672414821785
+          }
+        ],
+        "decision_metric": "corpus_ndcg_at_10",
+        "dropped_seeds": [
+          43
+        ],
+        "final_tests_used": [],
+        "guardrail_id": "task04-m03-probe-convergence-guardrail-v1",
+        "min_converged_seed_pairs": 5,
+        "promotion_authorized": false,
+        "schema_version": 1,
+        "status": "insufficient_converged_seeds",
+        "superiority_threshold": 0.01,
+        "unfiltered": {
+          "mean_difference": -0.002277874974186423,
+          "paired_bootstrap": {
+            "bootstrap_samples": 2000,
+            "ci95_high": 0.026713176960190863,
+            "ci95_low": -0.03777789575647938,
+            "difference": -0.002277874974186423,
+            "query_count": 3,
+            "seed": 42,
+            "variant_win_fraction": 0.424
+          },
+          "per_seed_difference": {
+            "42": 0.004231093873729247,
+            "43": -0.03777789575647938,
+            "44": 0.026713176960190863
+          },
+          "sd_difference": 0.032734532555606544,
+          "seed_pair_count": 3,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "sign_flip": {
+            "observed_mean_minus_threshold": -0.012277874974186425,
+            "p_value": 0.75,
+            "permutations": 8,
+            "seed_pair_count": 3,
+            "smallest_attainable_p_value": 0.125,
+            "test": "exact_sign_flip_one_sided",
+            "threshold": 0.01
+          }
+        }
+      },
+      "convergence": {
+        "applied_floor": 0.07264018530455824,
+        "chance_level": 0.000715399693808931,
+        "final_tests_used": [],
+        "group_id": "task05_probe_budget_sensitivity_v1",
+        "max_signal": 0.17061098937435507,
+        "median_signal": 0.14528037060911647,
+        "min_signal": 0.005752775384420592,
+        "non_converged_run_count": 1,
+        "non_converged_runs": [
+          "PROBE-BUDGET-2048-HYBRID-S43"
+        ],
+        "run_count": 6
+      },
+      "run_group": "runs/task05_probe_budget_sensitivity_v1::PROBE-BUDGET-2048",
+      "runs": [
+        {
+          "arm": "hybrid",
+          "candidate_count": 139782,
+          "first_loss": 4.6543073654174805,
+          "last_loss": 0.25264424085617065,
+          "metrics": {
+            "corpus_map": 0.05094497999203335,
+            "corpus_mrr_at_10": 0.15613804563492065,
+            "corpus_ndcg_at_10": 0.08205158626925037,
+            "corpus_recall_at_1": 0.021516303942316652,
+            "corpus_recall_at_10": 0.07137953706574941,
+            "corpus_recall_at_100": 0.17061098937435507,
+            "corpus_recall_at_5": 0.051104363566170374
+          },
+          "query_count": 8000,
+          "run_id": "PROBE-BUDGET-2048-HYBRID-S42",
+          "seed": 42
+        },
+        {
+          "arm": "hybrid",
+          "candidate_count": 139782,
+          "first_loss": 0.9268996119499207,
+          "last_loss": 0.3967048227787018,
+          "metrics": {
+            "corpus_map": 0.000794201089034949,
+            "corpus_mrr_at_10": 0.002671775793650794,
+            "corpus_ndcg_at_10": 0.0010919466196546237,
+            "corpus_recall_at_1": 0.00027272783656289606,
+            "corpus_recall_at_10": 0.0008840342488511485,
+            "corpus_recall_at_100": 0.005752775384420592,
+            "corpus_recall_at_5": 0.0005110855126685203
+          },
+          "query_count": 8000,
+          "run_id": "PROBE-BUDGET-2048-HYBRID-S43",
+          "seed": 43
+        },
+        {
+          "arm": "hybrid",
+          "candidate_count": 139782,
+          "first_loss": 3.1074917316436768,
+          "last_loss": 0.41100355982780457,
+          "metrics": {
+            "corpus_map": 0.05032215932504491,
+            "corpus_mrr_at_10": 0.1606187996031746,
+            "corpus_ndcg_at_10": 0.08254713402091564,
+            "corpus_recall_at_1": 0.022709588765113607,
+            "corpus_recall_at_10": 0.0715499615210549,
+            "corpus_recall_at_100": 0.16441478607211335,
+            "corpus_recall_at_5": 0.05227933599820398
+          },
+          "query_count": 8000,
+          "run_id": "PROBE-BUDGET-2048-HYBRID-S44",
+          "seed": 44
+        },
+        {
+          "arm": "w06",
+          "candidate_count": 139782,
+          "first_loss": 2.855128288269043,
+          "last_loss": 0.047195885330438614,
+          "metrics": {
+            "corpus_map": 0.04726175196605982,
+            "corpus_mrr_at_10": 0.15072693452380953,
+            "corpus_ndcg_at_10": 0.07782049239552112,
+            "corpus_recall_at_1": 0.020323756951794107,
+            "corpus_recall_at_10": 0.06264953945916216,
+            "corpus_recall_at_100": 0.1523940170700151,
+            "corpus_recall_at_5": 0.04782750021211311
+          },
+          "query_count": 8000,
+          "run_id": "PROBE-BUDGET-2048-W06-S42",
+          "seed": 42
+        },
+        {
+          "arm": "w06",
+          "candidate_count": 139782,
+          "first_loss": 1.3424783945083618,
+          "last_loss": 0.16879789531230927,
+          "metrics": {
+            "corpus_map": 0.024872564381784427,
+            "corpus_mrr_at_10": 0.0768123015873016,
+            "corpus_ndcg_at_10": 0.038869842376134,
+            "corpus_recall_at_1": 0.009606476393865521,
+            "corpus_recall_at_10": 0.03479335413794735,
+            "corpus_recall_at_100": 0.1100211075170534,
+            "corpus_recall_at_5": 0.02422971376930169
+          },
+          "query_count": 8000,
+          "run_id": "PROBE-BUDGET-2048-W06-S43",
+          "seed": 43
+        },
+        {
+          "arm": "w06",
+          "candidate_count": 139782,
+          "first_loss": 1.6771488189697266,
+          "last_loss": 0.700430691242218,
+          "metrics": {
+            "corpus_map": 0.034763295370247804,
+            "corpus_mrr_at_10": 0.10799960317460318,
+            "corpus_ndcg_at_10": 0.055833957060724776,
+            "corpus_recall_at_1": 0.013872853269800272,
+            "corpus_recall_at_10": 0.04856206221353509,
+            "corpus_recall_at_100": 0.13816672414821785,
+            "corpus_recall_at_5": 0.03405100044727718
+          },
+          "query_count": 8000,
+          "run_id": "PROBE-BUDGET-2048-W06-S44",
+          "seed": 44
+        }
+      ]
+    }
+  ],
+  "guardrail": {
+    "adr": "reports/decisions/task04_m03_probe_convergence_guardrail_v1.md",
+    "aggregation": {
+      "bootstrap_samples": 2000,
+      "bootstrap_seed": 42,
+      "decision_metric": "corpus_ndcg_at_10",
+      "drop_policy": "drop_whole_seed_pair",
+      "max_permutation_p": 0.05,
+      "min_converged_seed_pairs": 5,
+      "permutation": "exact_sign_flip_one_sided",
+      "report_unfiltered_result": true,
+      "superiority_threshold": 0.01
+    },
+    "calibration_run_groups": [
+      "runs/task05_d01b_scale_interaction_4_5b_trivia_dev_confirm_v1",
+      "runs/task05_probe_budget_sensitivity_v1"
+    ],
+    "contract": "task04-m03-probe-convergence-guardrail-v1",
+    "final_tests_used": [],
+    "guardrail_id": "task04-m03-probe-convergence-guardrail-v1",
+    "schema_version": 1,
+    "signal": {
+      "loss_based_guardrail_permitted": false,
+      "metric": "corpus_recall_at_100",
+      "min_chance_multiple": 4.0,
+      "min_fraction_of_pooled_median": 0.5,
+      "retrieval_depth": 100,
+      "source_file": "corpus_retrieval_summary.json"
+    },
+    "status": "frozen_for_future_comparisons"
+  },
+  "guardrail_id": "task04-m03-probe-convergence-guardrail-v1"
+}

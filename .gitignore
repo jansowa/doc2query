@@ -69,6 +69,7 @@ htmlcov/
 !/reports/decisions/task06_reward_validation_corpus_v1.md
 !/reports/decisions/task06_claude_teacher_ablation_v1.md
 !/reports/decisions/task06_tentative_pair_policy_v1.md
+!/reports/decisions/task04_m03_probe_convergence_guardrail_v1.md
 !/reports/decisions/task06_llm_cohort_gpu_scoring_amendment_2026-08-16.md
 !/reports/plans/
 /reports/plans/*
@@ -97,6 +98,12 @@ htmlcov/
 !/reports/measurements/task06_reward_validation_corpus_p8_2026-08-16.md
 !/reports/measurements/task06_unattended_compute_window_result_2026-08-16.md
 !/reports/measurements/task06_tentative_pairs_v1_v2_2026-08-16.md
+!/reports/measurements/task04_m03_probe_convergence_calibration_2026-08-16.md
+!/reports/measurements/task04/
+/reports/measurements/task04/*
+!/reports/measurements/task04/m03_probe_convergence_v1/
+/reports/measurements/task04/m03_probe_convergence_v1/*
+!/reports/measurements/task04/m03_probe_convergence_v1/summary.json
 !/reports/measurements/task05/
 /reports/measurements/task05/*
 !/reports/measurements/task05/d01b_scale_interaction_4_5b_dev_confirm_feasibility_v1.json

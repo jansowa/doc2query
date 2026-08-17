@@ -49,10 +49,28 @@ sędziów, rzędu wielkości zgodna z 9,81% disagreement bramki HN. Raport:
 [`task06_tentative_pairs_v1_v2_2026-08-16.md`](../reports/measurements/task06_tentative_pairs_v1_v2_2026-08-16.md).
 Walidacja: Ruff, `mypy src`, pełny pytest. `final_tests_used=[]`.
 
-Niewykonane w tej sesji i zaplanowane jako następny krok: deterministyczna,
-stratyfikowana próbka audytowa, ślepy eksport par, runner dual-LLM Groq
-(w `.env` **nie ma** klucza Groq, więc wywołania API zostają dla właściciela)
-oraz prerejestrowany ADR M-03 guardraila zbieżności probe w Task 04.
+Ślepy eksport audytowy jest **zamrożony** (`src/doc2query/preferences/pair_audit_export.py`,
+`scripts/export_task06_preference_audit.py`, 11 testów CPU, artefakt
+`artifacts/task06/preference_audit_v1/`). Zawiera 447 ślepych par w **dokładnie
+pięciu** dozwolonych polach (`audit_id`, `passage`, `query_a`, `query_b`,
+`orientation_commitment`) — bez `chosen`/`rejected`, bez marginesów i bez typów
+błędu; osobny, nieprzekazywany sędziom klucz odślepiający; pełne rekordy próbki
+do późniejszej analizy. Orientacja A/B jest **kontrbalansowana** (224/223) i
+**zobowiązana przed jakąkolwiek oceną**: każdy ślepy wiersz nosi
+`sha256(sól‖pair_id‖orientacja)`, sól jest opublikowana w manifeście, a
+447/447 zobowiązań zweryfikowano ponownie z klucza (test regresji psuje się przy
+podmianie jednej orientacji). Próbka jest deterministyczna: strata
+kohorta × `requested_form` × pasmo marginesu, alokacja metodą największych reszt,
+ziarno per-stratum z SHA-256, powtórzony eksport daje identyczne SHA-256.
+
+**Otwarta decyzja właściciela (blokada punktu 3):** zamrożony
+`configs/preferences/task06_groq_preference_audit_v1.json` pinuje
+`pair_count = 500` i `load_llm_audit_config` odrzuca każdą inną wartość. Przy 447
+parach audyt wymaga więc jawnego amendmentu — albo obniżenia rozwojowej bramki do
+447 par, albo dopuszczenia kohorty v3 do uzupełnienia próbki (co jest odwrotnością
+kolejności „v3 dopiero po audycie”). Tej decyzji **nie** podjęto samodzielnie i
+zamrożonego configu **nie** zmieniono. Runner dual-LLM Groq nie został
+uruchomiony: w `.env` nie ma klucza, więc wywołania API pozostają dla właściciela.
 
 Aktualizacja 2026-08-16 (wynik okna bezobsługowego): kolejka zakończyła się
 **25/25 zadań bez ani jednej awarii** w 49,18 h GPU; nadzorca nie padł ani razu,
@@ -620,6 +638,8 @@ Preference train/dev/test muszą dziedziczyć split passage. Żaden passage/near
 ## Wymagane skrypty
 
 - `scripts/apply_task06_same_prompt_diversity_gate.py`
+- `scripts/build_task06_tentative_pairs.py`
+- `scripts/export_task06_preference_audit.py`
 - `scripts/freeze_task06_same_prompt_expansion_v2.py`
 - `scripts/run_task06_same_prompt_expansion_v2.sh`
 - `scripts/generate_candidates.py`

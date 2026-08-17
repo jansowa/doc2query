@@ -6,6 +6,48 @@
 
 `IMPLEMENTED`
 
+Aktualizacja 2026-08-16 (M-03: guardrail zamrożony prospektywnie i skalibrowany):
+prerejestrowany ADR
+[`task04_m03_probe_convergence_guardrail_v1.md`](../reports/decisions/task04_m03_probe_convergence_guardrail_v1.md)
+zamraża kontrakt `task04-m03-probe-convergence-guardrail-v1`
+(`configs/evaluation/task04_m03_probe_convergence_guardrail_v1.yaml`,
+`src/doc2query/evaluation/probe_convergence.py`,
+`scripts/apply_task04_m03_probe_convergence_guardrail.py`, 12 testów CPU):
+
+- sygnał zbieżności jest **retrievalowy** (`corpus_recall_at_100`), a
+  `loss_based_guardrail_permitted: false` jest wpisane w kontrakt wprost, bo
+  zmierzone `r = −0,199` (n=12) wyklucza stratę treningową jako detektor;
+  metryki decyzyjnej (`corpus_ndcg_at_10`) świadomie **nie** używa się jako
+  filtru, żeby nie selekcjonować na zmiennej wynikowej;
+- podłoga jest **niezależna od ramienia**:
+  `max(4 × poziom losowy, ½ mediany sygnału wspólnej dla obu ramion)`;
+- seed odrzucany jest **jako para** obu ramion, a wynik bez filtra jest liczony i
+  raportowany obowiązkowo;
+- decyzja wymaga łącznie ≥5 zbieżnych par seedów, dolnej granicy 95% CI
+  sparowanego bootstrapu **po seedach** nie niżej niż niezmieniony próg `+0.01`
+  oraz dokładnego jednostronnego testu znakowego `p ≤ 0.05`. Minimum pięciu
+  seedów nie jest liczbą z wygody: przy czterech parach najmniejsze osiągalne
+  `p` to `1/16 = 0,0625 > 0,05`, więc reguła byłaby konstrukcyjnie
+  nierozstrzygalna.
+
+Progi skalibrowano retrospektywnie na 22 zakończonych runach (10 confirmu
+TriviaQA S42–46 i 12 sweepu budżetu) i zamrożono dla przyszłych porównań.
+Guardrail oznaczył **4/22 runy** jako niezbieżne — dokładnie cztery najniższe po
+sygnale, przy separacji 2,3× do pierwszego runu zdrowego. Diagnostyka pięciu
+seedów confirmu TriviaQA (osobny artefakt, zgodnie z polityką „nie
+reinterpretować zamkniętego confirmu”): po odrzuceniu pary seeda 43, w której
+ramię kontrolne W06 nie zbiegło (`corpus_recall_at_100 = 0,000452`, poniżej
+poziomu losowego), zostają **4 zbieżne pary**, czyli status
+`insufficient_converged_seeds`. Średnia różnica bez filtra to `+0,0319`
+(CI `[+0,0065,+0,0680]`), po filtrze `+0,0143` (sd 0,0126,
+CI `[+0,0025,+0,0238]`) — dodatnia, ale z dolną granicą poniżej progu `+0,01`.
+Zamknięty confirm **nie** jest unieważniony, nie jest powtarzany i nie jest
+zastępowany; nic nie zostało wypromowane (`promotion_authorized=false`
+w każdym porównaniu). Raport i artefakt:
+[`task04_m03_probe_convergence_calibration_2026-08-16.md`](../reports/measurements/task04_m03_probe_convergence_calibration_2026-08-16.md),
+[`task04/m03_probe_convergence_v1/summary.json`](../reports/measurements/task04/m03_probe_convergence_v1/summary.json).
+Walidacja: Ruff, `mypy src`, pełny pytest. `final_tests_used=[]`.
+
 Aktualizacja 2026-08-16 (M-03: treningi wykonane, guardrail wciąż do
 zdefiniowania): cztery treningi seedów 45/46 confirmu TriviaQA są ukończone, a
 towarzyszący sweep budżetu probe (12 runów) dostarczył twardej przesłanki dla

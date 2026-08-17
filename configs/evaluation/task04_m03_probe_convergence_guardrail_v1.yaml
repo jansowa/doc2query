@@ -1,0 +1,50 @@
+# M-03: zamrożony guardrail zbieżności probe i statystyka decyzyjna na
+# sparowanych różnicach per-seed.
+#
+# Progi skalibrowano na 22 istniejących, zakończonych runach (10 runów confirmu
+# TriviaQA S42-46 oraz 12 runów sweepu budżetu probe) i zamrożono dla
+# przyszłych porównań. ADR:
+# reports/decisions/task04_m03_probe_convergence_guardrail_v1.md
+schema_version: 1
+contract: task04-m03-probe-convergence-guardrail-v1
+guardrail_id: task04-m03-probe-convergence-guardrail-v1
+status: frozen_for_future_comparisons
+adr: reports/decisions/task04_m03_probe_convergence_guardrail_v1.md
+
+# Sygnał zbieżności jest retrievalowy, nie treningowy: zmierzona korelacja
+# last_loss z corpus_ndcg_at_10 wynosi r = -0.199 (n=12), więc strata nie
+# wykrywa runu zdegenerowanego.
+signal:
+  metric: corpus_recall_at_100
+  source_file: corpus_retrieval_summary.json
+  retrieval_depth: 100
+  # Podłoga bezpieczeństwa: run poniżej czterokrotności poziomu losowego
+  # (retrieval_depth / rozmiar korpusu) nie odzyskuje niczego.
+  min_chance_multiple: 4.0
+  # Podłoga główna: połowa mediany sygnału zebranej WSPÓLNIE z obu ramion
+  # danego porównania, więc próg nie zależy od ramienia. Run, który odzyskuje
+  # własny dokument rzadziej niż o połowę względem typowego runu tego samego
+  # porównania, jest traktowany jako niezbieżny.
+  min_fraction_of_pooled_median: 0.5
+  loss_based_guardrail_permitted: false
+
+aggregation:
+  decision_metric: corpus_ndcg_at_10
+  # M-03: minimum pięć zbieżnych par seedów po odrzuceniach.
+  min_converged_seed_pairs: 5
+  # Seed odrzucany jest zawsze jako para (oba ramiona), więc filtr nie może
+  # preferencyjnie usuwać słabych runów jednego ramienia.
+  drop_policy: drop_whole_seed_pair
+  # Niezmieniony próg wyższości programu z kontraktu Task 04/05.
+  superiority_threshold: 0.01
+  bootstrap_samples: 2000
+  bootstrap_seed: 42
+  permutation: exact_sign_flip_one_sided
+  max_permutation_p: 0.05
+  report_unfiltered_result: true
+
+calibration_run_groups:
+  - runs/task05_d01b_scale_interaction_4_5b_trivia_dev_confirm_v1
+  - runs/task05_probe_budget_sensitivity_v1
+
+final_tests_used: []
