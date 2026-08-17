@@ -105,6 +105,7 @@ htmlcov/
 !/reports/measurements/task06_tentative_pairs_v1_v2_2026-08-16.md
 !/reports/measurements/task04_m03_probe_convergence_calibration_2026-08-16.md
 !/reports/measurements/task06_dual_llm_pair_audit_2026-08-17.md
+!/reports/measurements/task06_defect_inventory_and_focus_v2_2026-08-17.md
 !/reports/measurements/task04/
 /reports/measurements/task04/*
 !/reports/measurements/task04/probe_within_arm_variance_v1.json
@@ -120,6 +121,12 @@ htmlcov/
 !/reports/measurements/task05/d01b_scale_interaction_4_5b_trivia_dev_confirm_v1/status.json
 !/reports/measurements/task06/
 /reports/measurements/task06/*
+!/reports/measurements/task06/defect_inventory_v1/
+/reports/measurements/task06/defect_inventory_v1/*
+!/reports/measurements/task06/defect_inventory_v1/summary.json
+!/reports/measurements/task06/focus_v2_validation/
+/reports/measurements/task06/focus_v2_validation/*
+!/reports/measurements/task06/focus_v2_validation/summary.json
 !/reports/measurements/task06/d01b_hybrid_handoff_v1/
 /reports/measurements/task06/d01b_hybrid_handoff_v1/*
 !/reports/measurements/task06/d01b_hybrid_handoff_v1/preflight.json

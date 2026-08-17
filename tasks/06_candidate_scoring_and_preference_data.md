@@ -19,8 +19,37 @@ zależnościami, kosztami i prerejestrowanymi predykcjami:
 Specyfikacja jest planistyczna: progi zamrożą dopiero prospektywne ADR-y
 (V2-01 sędzia odpowiadalności, V2-03 polityka par v2) po pełnym wyniku audytu
 v1; polityka v1/v1.1, pary, eksport i audyt pozostają zamrożonym punktem
-odniesienia. Implementacja w kolejnych sesjach; nic nie zostało uruchomione.
-`task07_training_authorized=false`, `final_tests_used=[]`.
+odniesienia. `task07_training_authorized=false`, `final_tests_used=[]`.
+
+Realizacja rozpoczęta tego samego dnia (raport:
+[`task06_defect_inventory_and_focus_v2_2026-08-17.md`](../reports/measurements/task06_defect_inventory_and_focus_v2_2026-08-17.md)):
+
+- **V2-00 wykonane** (`src/doc2query/preferences/defect_inventory.py`,
+  `scripts/run_task06_defect_inventory.py`, 10 testów CPU): na 25992 grupach
+  `eligible` (reprezentanci bramki, loadery v1 z pinowaniem SHA-256) podaż par
+  defektowych wynosi: **oś A 17669 grup** (68,0%; defekt = brak rt@100 —
+  naturalna podaż wystarcza bez konstruowanych), **oś B 4857 grup** przy
+  kandydującym cięciu p75 `content_jaccard ≥ 0,0857` (1900 przy p90; wybór
+  cięcia należy do ADR V2-03), **oś C 0 grup** na starych etykietach focus,
+  czysty `chosen` w 21102 grupach (81,2%). Znalezisko:
+  `entity_preservation` jest w tych kohortach **stałą 1,0 z konstrukcji** —
+  scoring używał `SimplePolishNormalizer`, który zawsze zwraca `entities=()`,
+  więc komponent nie jest tam nawet detektorem halucynacji; rola ta wymagałaby
+  relabelingu backendem spaCy (decyzja przy V2-03), a oś A opiera się na
+  round-tripie i sędzim V2-01.
+- **V2-02 zaimplementowane i zmierzone; kryterium akceptacji NIEDOWIEZIONE**
+  (`src/doc2query/data/focus_labels_v2.py`, `scripts/validate_task06_focus_v2.py`,
+  11 testów CPU): splitter `focus-v2:pl-abbrev-v1` eliminuje wszystkie
+  pseudo-zdania (8→0 na 180 pasażach, 716→659 zdań), ale abstencja focusa
+  spada tylko z 25,6% do 25,0% (`good_specific`), a sukces minimalnie spada
+  (0,622→0,600) — wąskim gardłem jest scorer leksykalny, nie segmentacja.
+  Formuła scoringu v2 jest bajtowo zgodna z v1, nic zamrożonego nie zmieniono,
+  progu `minimum_confidence` nie dostrajano pod pomiar. Oś C pozostaje
+  zablokowana do decyzji właściciela przy V2-03: mocniejszy przypisywacz
+  (wariant rerankerowy, GPU) albo rezygnacja z osi C w pierwszym wydaniu v2.
+- Krok 0 (dokończenie audytu v1: 128 + 43 requesty) czeka na odnowienie
+  dziennych budżetów Groq o 00:00 UTC; cronów zgodnie z ograniczeniami nie
+  zainstalowano.
 
 Aktualizacja 2026-08-16 (autoryzacja właściciela: zamrożenie polityki par i
 budowa tentative par): właściciel autoryzował zamrożenie polityki

@@ -8,6 +8,16 @@ odczytem wyników etapu, którego dotyczy. Dokument nie autoryzuje treningu
 (`final_tests_used=[]` wszędzie) i nie unieważnia żadnego zamrożonego artefaktu.
 Implementacja w kolejnych sesjach, zadaniami V2-00…V2-07.
 
+Stan realizacji (2026-08-17, wieczór): **V2-00 wykonane** (podaż: oś A 17669
+grup, oś B 4857 przy cięciu p75, oś C 0 na starych etykietach;
+`entity_preservation` okazało się stałą 1,0 z konstrukcji, bo scoring używał
+backendu bez ekstrakcji encji). **V2-02 zaimplementowane i zmierzone;
+kryterium akceptacji niedowiezione** — segmentacja obiektywnie czystsza, ale
+abstencja focusa spadła tylko o ~1 pp, więc wąskim gardłem jest scorer
+leksykalny, a oś C pozostaje zablokowana do decyzji przy V2-03 (mocniejszy
+przypisywacz rerankerowy albo rezygnacja z osi C w pierwszym wydaniu). Raport:
+[`task06_defect_inventory_and_focus_v2_2026-08-17.md`](../measurements/task06_defect_inventory_and_focus_v2_2026-08-17.md).
+
 ## 1. Diagnoza: dlaczego polityka v1/v1.1 wymaga następczyni
 
 Polityka v1 porządkuje pary **marginesem primary** (`pool_margin`), strategią

@@ -1,0 +1,79 @@
+{
+  "contract": "task06-focus-v2-validation-v1",
+  "final_tests_used": [],
+  "focus_agreement": {
+    "changed_assignments": 13,
+    "degenerate_single_sentence_excluded": 9,
+    "query_count": 360,
+    "v1": {
+      "good_specific": {
+        "abstained": 46,
+        "abstention_rate": 0.25555555555555554,
+        "match": 112,
+        "mismatch": 22,
+        "overall_success_rate": 0.6222222222222222,
+        "success_definition": "match_declared",
+        "success_rate_on_decided": 0.835820895522388,
+        "total": 180
+      },
+      "wrong_focus": {
+        "abstained": 56,
+        "abstention_rate": 0.32748538011695905,
+        "match": 4,
+        "mismatch": 111,
+        "overall_success_rate": 0.6491228070175439,
+        "success_definition": "detect_violation",
+        "success_rate_on_decided": 0.9652173913043478,
+        "total": 171
+      }
+    },
+    "v2": {
+      "good_specific": {
+        "abstained": 45,
+        "abstention_rate": 0.25,
+        "match": 108,
+        "mismatch": 27,
+        "overall_success_rate": 0.6,
+        "success_definition": "match_declared",
+        "success_rate_on_decided": 0.8,
+        "total": 180
+      },
+      "wrong_focus": {
+        "abstained": 54,
+        "abstention_rate": 0.3157894736842105,
+        "match": 7,
+        "mismatch": 110,
+        "overall_success_rate": 0.6432748538011696,
+        "success_definition": "detect_violation",
+        "success_rate_on_decided": 0.9401709401709402,
+        "total": 171
+      }
+    }
+  },
+  "focus_v2_version": "focus-v2:pl-abbrev-v1",
+  "inputs": {
+    "cohort_records_sha256": "b5424a0ce04568d4bd821c5b290ce70404fc1436cd3b64a1f025dfc9dbee98cd",
+    "corpus_sha256": "5b92a8d4c595d786448327d72dcac68c70e0fd77d577002307f4578b5c5c93ca"
+  },
+  "schema_version": 1,
+  "segmentation": {
+    "v1": {
+      "letterless_sentences": 8,
+      "mean_sentences": 3.977777777777778,
+      "passages": 180,
+      "single_sentence_passages": 9,
+      "total_sentences": 716,
+      "two_sentence_passages": 30
+    },
+    "v2": {
+      "letterless_sentences": 0,
+      "mean_sentences": 3.661111111111111,
+      "passages": 180,
+      "single_sentence_passages": 12,
+      "total_sentences": 659,
+      "two_sentence_passages": 39
+    }
+  },
+  "status": "component_measured_frozen_artifacts_untouched",
+  "v1_labels_modified": false
+}

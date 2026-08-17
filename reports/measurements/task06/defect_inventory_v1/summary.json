@@ -1,0 +1,182 @@
+{
+  "answerability_judge_pending": true,
+  "axis_c_labels_caveat": "wstępne etykiety focus pochodzą ze starego splittera zdań o zmierzonych wadach; wiążąca podaż osi C wymaga focus_v2 (zadanie V2-02)",
+  "contract": "task06-defect-supply-inventory-v1",
+  "final_tests_used": [],
+  "inputs": {
+    "same_prompt_expansion_v1": {
+      "gate_manifest_sha256": "27000ba2ef6b6df6abb905effd1039a3e1c4b03c6a4a9d4c4784265294b4bb58",
+      "generation_identity_sha256": "5881ccc9282ce0ab280f03148b1b6994a629ca8a46da17ed72a96ab9260a93e9",
+      "scoring_sha256": "02fb85e9713b10ee835ff1ffbc316d1efea2963a077ece962a6b76bd09f4a54e"
+    },
+    "same_prompt_expansion_v10": {
+      "gate_manifest_sha256": "d2949005c4a43f7880baa31b5b245aa392ee5879019cc88796c751dfb4da472f",
+      "generation_identity_sha256": "b4d36362a51ed658a6a20baa5154ba960f667e8d8d141f065a60a14356689960",
+      "scoring_sha256": "731ec6dac00a65d9e835da9b91d4c99d0cb516b231f6e3f59676d21c72e034c3"
+    },
+    "same_prompt_expansion_v11": {
+      "gate_manifest_sha256": "15084d1d9986f2c425bb1a855a70056c18afbdd52e7d8b0fd1a365cca537884d",
+      "generation_identity_sha256": "6b54d7f25d8b29703772c8261cbcfa3835b76b61d0631fa9f960de15490ae167",
+      "scoring_sha256": "1d67692e6d8935558523931c766c2747fbad34967aa54c095e586139ff6d401a"
+    },
+    "same_prompt_expansion_v2": {
+      "gate_manifest_sha256": "045893f24ae295198371c900e8a70bd2704cb330e72cf309a7ca02b37cfad455",
+      "generation_identity_sha256": "be33ec5cf48b0de17b0a779ee8c2d80b7281324659d6809daf6dc10aa94037e0",
+      "scoring_sha256": "f7a1fa67ef1d8f036cf9e019c75cf05a3578a8fb8675a693d43271ad3632ed02"
+    },
+    "same_prompt_expansion_v3": {
+      "gate_manifest_sha256": "f67ea8e12aaf02434bea7bb7ead308c5d0c6331823041fa243f714ecffb514bf",
+      "generation_identity_sha256": "f1ec0d1122b34ddd524a7e03927eaacff63827c02b1ee3541c5ad8374c06267e",
+      "scoring_sha256": "ba566953c995f66e21940ef20b77d3af6e4714b5f57cfa1e45784523df9f5821"
+    },
+    "same_prompt_expansion_v4": {
+      "gate_manifest_sha256": "fd4da01795cd68a722b6932079aca5f8e935e442868c98589c00a39b7d1a5a95",
+      "generation_identity_sha256": "57abaaa3f2ed2d93e5e357cef943549bc6b25f9682af11b89aed5bdb3ccb0241",
+      "scoring_sha256": "8ff3a82fc09bef363ebbe237810726ace08cad025723dd9e38929c4a01f4f2c6"
+    },
+    "same_prompt_expansion_v5": {
+      "gate_manifest_sha256": "e17cf5774abe6b4d853665643d2f41721a59cb10f9e1ee8a6c1cc96d9e8d7230",
+      "generation_identity_sha256": "6c97dd403a81ec2657dc412e3e42c407652cc2f4fa568827e44613abc1835c84",
+      "scoring_sha256": "a4cb75a5e176dfd403c0e2e5018e0cdd56b9d7a0c3bf25132eba15567608c222"
+    },
+    "same_prompt_expansion_v6": {
+      "gate_manifest_sha256": "48e9d357f7226eafe0aafbbee4297de04f11ab217d4f1ad5c4bbbc84e49b182b",
+      "generation_identity_sha256": "5537e4400b8a3e09faf1c2a633451b1a1cd850785eaedbf91dace54523381dd9",
+      "scoring_sha256": "089246be7631024c6e0be09a639b18033df0fb83470957c70737758a30bf4258"
+    },
+    "same_prompt_expansion_v7": {
+      "gate_manifest_sha256": "9a54348495639ba3207c9bceb9f35889d20bb888022c49a6dab87f3bbdbf1566",
+      "generation_identity_sha256": "968dc17d4926b033eb61a1a2e30b520b490c72942c3f80eb1bd6c2578e56da6f",
+      "scoring_sha256": "57ade5251e0432a3b26cb4f59230777d3c4e5e2dc3bdb90aa5fb9e4da9a9783a"
+    },
+    "same_prompt_expansion_v8": {
+      "gate_manifest_sha256": "b49b9eee4e12f1993d8e1d60629cf3d95817f47d3a67841a15107df58b31f799",
+      "generation_identity_sha256": "ae89002060ba40847aba9c959864d266e0cb6798b84672e9b6e47133bf00744f",
+      "scoring_sha256": "2d65fcccac14799578fed572804116ea35627ca98eb1d8d0d028456742657edd"
+    },
+    "same_prompt_expansion_v9": {
+      "gate_manifest_sha256": "dd05851278bf5c48879382f77828fbde8f23358c8cc0b37a0ade0f3fa9136d52",
+      "generation_identity_sha256": "157ca68299caecb3dc467b8060859e3566262ee5eadc20bcc793ed090772ae3b",
+      "scoring_sha256": "2f3b970d363e9a01d09eec96fcedd3c517a2cc759eb2e3b0322d090a4516c657"
+    }
+  },
+  "overlap_cut_candidates": {
+    "p50": 0.05555555555555555,
+    "p75": 0.08571428571428572,
+    "p90": 0.12121212121212122
+  },
+  "overlap_distribution_answerable_proxy": {
+    "count": 101146,
+    "p10": 0.019230769230769232,
+    "p25": 0.03225806451612903,
+    "p50": 0.05555555555555555,
+    "p75": 0.08571428571428572,
+    "p90": 0.12121212121212122
+  },
+  "overlap_signal": "content_jaccard",
+  "pairing_max_normalized_query_jaccard": 0.85,
+  "pairs_built": false,
+  "per_cohort": {
+    "same_prompt_expansion_v1": {
+      "axis_a_pairable_groups": 193,
+      "axis_b_pairable_groups_high_p75": 54,
+      "axis_b_pairable_groups_high_p90": 17,
+      "eligible_groups": 362,
+      "groups_with_clean_chosen": 291,
+      "groups_with_round_trip_100_fail": 259
+    },
+    "same_prompt_expansion_v10": {
+      "axis_a_pairable_groups": 1935,
+      "axis_b_pairable_groups_high_p75": 522,
+      "axis_b_pairable_groups_high_p90": 202,
+      "eligible_groups": 2780,
+      "groups_with_clean_chosen": 2260,
+      "groups_with_round_trip_100_fail": 2441
+    },
+    "same_prompt_expansion_v11": {
+      "axis_a_pairable_groups": 1900,
+      "axis_b_pairable_groups_high_p75": 519,
+      "axis_b_pairable_groups_high_p90": 183,
+      "eligible_groups": 2792,
+      "groups_with_clean_chosen": 2281,
+      "groups_with_round_trip_100_fail": 2389
+    },
+    "same_prompt_expansion_v2": {
+      "axis_a_pairable_groups": 311,
+      "axis_b_pairable_groups_high_p75": 102,
+      "axis_b_pairable_groups_high_p90": 52,
+      "eligible_groups": 466,
+      "groups_with_clean_chosen": 372,
+      "groups_with_round_trip_100_fail": 403
+    },
+    "same_prompt_expansion_v3": {
+      "axis_a_pairable_groups": 1923,
+      "axis_b_pairable_groups_high_p75": 524,
+      "axis_b_pairable_groups_high_p90": 202,
+      "eligible_groups": 2791,
+      "groups_with_clean_chosen": 2308,
+      "groups_with_round_trip_100_fail": 2389
+    },
+    "same_prompt_expansion_v4": {
+      "axis_a_pairable_groups": 1888,
+      "axis_b_pairable_groups_high_p75": 541,
+      "axis_b_pairable_groups_high_p90": 197,
+      "eligible_groups": 2817,
+      "groups_with_clean_chosen": 2274,
+      "groups_with_round_trip_100_fail": 2407
+    },
+    "same_prompt_expansion_v5": {
+      "axis_a_pairable_groups": 1912,
+      "axis_b_pairable_groups_high_p75": 526,
+      "axis_b_pairable_groups_high_p90": 199,
+      "eligible_groups": 2823,
+      "groups_with_clean_chosen": 2289,
+      "groups_with_round_trip_100_fail": 2431
+    },
+    "same_prompt_expansion_v6": {
+      "axis_a_pairable_groups": 1906,
+      "axis_b_pairable_groups_high_p75": 507,
+      "axis_b_pairable_groups_high_p90": 192,
+      "eligible_groups": 2803,
+      "groups_with_clean_chosen": 2270,
+      "groups_with_round_trip_100_fail": 2424
+    },
+    "same_prompt_expansion_v7": {
+      "axis_a_pairable_groups": 1877,
+      "axis_b_pairable_groups_high_p75": 536,
+      "axis_b_pairable_groups_high_p90": 229,
+      "eligible_groups": 2768,
+      "groups_with_clean_chosen": 2231,
+      "groups_with_round_trip_100_fail": 2400
+    },
+    "same_prompt_expansion_v8": {
+      "axis_a_pairable_groups": 1938,
+      "axis_b_pairable_groups_high_p75": 502,
+      "axis_b_pairable_groups_high_p90": 205,
+      "eligible_groups": 2804,
+      "groups_with_clean_chosen": 2271,
+      "groups_with_round_trip_100_fail": 2456
+    },
+    "same_prompt_expansion_v9": {
+      "axis_a_pairable_groups": 1886,
+      "axis_b_pairable_groups_high_p75": 524,
+      "axis_b_pairable_groups_high_p90": 222,
+      "eligible_groups": 2786,
+      "groups_with_clean_chosen": 2255,
+      "groups_with_round_trip_100_fail": 2405
+    }
+  },
+  "policy_id": "task06-tentative-pair-policy-v1.1",
+  "policy_sha256": "f09beb794387f2a3c144fdb3825dfb433f28698fc52631d3f3a0a9f09588221e",
+  "pooled": {
+    "axis_a_pairable_groups": 17669,
+    "axis_b_pairable_groups_high_p75": 4857,
+    "axis_b_pairable_groups_high_p90": 1900,
+    "eligible_groups": 25992,
+    "groups_with_clean_chosen": 21102,
+    "groups_with_round_trip_100_fail": 22404
+  },
+  "schema_version": 1,
+  "status": "design_input_measured_no_pairs_built",
+  "thresholds_frozen_here": false
+}
