@@ -28,10 +28,12 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import threading
 import time
 import urllib.request
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -134,6 +136,8 @@ def judge_item_id(query: str, passage: str) -> str:
 
 def _chat_payload(item: JudgeItem, config: Mapping[str, Any]) -> dict[str, Any]:
     judge = cast(Mapping[str, Any], config["judge"])
+    # Pasaż idzie PRZED zapytaniem (sort_keys), więc itemy o tym samym pasażu dzielą
+    # długi prefiks tokenów — to jest warunek działania prefix-cache'u w ollamie.
     user = json.dumps(
         {"passage": item.passage, "query": item.query}, ensure_ascii=False, sort_keys=True
     )
@@ -145,12 +149,50 @@ def _chat_payload(item: JudgeItem, config: Mapping[str, Any]) -> dict[str, Any]:
         ],
         "stream": False,
         "format": "json",
+        # Zamrożony prompt wymaga „bez toku rozumowania”; przy modelu thinking trzeba to
+        # powiedzieć backendowi wprost, inaczej num_predict ucina odpowiedź na reasoningu.
+        "think": bool(judge.get("thinking", False)),
+        # 12 GB wag na 8 GB VRAM: przeładowanie modelu między requestami kosztowałoby
+        # więcej niż sam werdykt, więc keep_alive trzyma go rezydentnie na cały run.
+        "keep_alive": str(judge.get("keep_alive", "30m")),
         "options": {
             "temperature": 0.0,
             "seed": int(judge["seed"]),
             "num_predict": int(judge["max_completion_tokens"]),
+            "num_ctx": int(judge.get("num_ctx", 2048)),
         },
     }
+
+
+def lanes_by_passage(items: Sequence[JudgeItem], lanes: int) -> list[list[JudgeItem]]:
+    """Split items into lanes so each lane walks whole passages in a row.
+
+    Two properties matter and both are deterministic:
+
+    * items sharing a passage stay **consecutive within one lane**, so the backend can
+      reuse the KV prefix of the system prompt plus the passage instead of prefilling it
+      again for every candidate of the same passage;
+    * a passage never spans two lanes, so parallel slots do not evict each other's prefix.
+
+    Verdicts are independent per item (temperature 0, pinned seed), so the lane layout
+    changes throughput only — never a verdict.  Journal *order* does become
+    nondeterministic under parallelism; the journal is keyed by ``item_id`` and every
+    analysis reads it as a mapping, so ordering carries no meaning.
+    """
+    if lanes < 1:
+        raise ValueError("the judge needs at least one lane")
+    grouped: dict[str, list[JudgeItem]] = {}
+    for item in items:
+        grouped.setdefault(item.passage, []).append(item)
+    ordered_passages = sorted(
+        grouped, key=lambda passage: hashlib.sha256(passage.encode("utf-8")).hexdigest()
+    )
+    buckets: list[list[JudgeItem]] = [[] for _ in range(lanes)]
+    for index, passage in enumerate(ordered_passages):
+        buckets[index % lanes].extend(
+            sorted(grouped[passage], key=lambda entry: entry.item_id)
+        )
+    return buckets
 
 
 def parse_verdict(content: str) -> str:
@@ -197,58 +239,76 @@ def run_judgments(
     journal = output_dir / "judgments.journal.jsonl"
     done = load_judgments(journal)
     counters: Counter[str] = Counter()
-    new = 0
-    for item in items:
-        if item.item_id in done:
-            counters["already_judged"] += 1
-            continue
-        if max_new_judgments is not None and new >= max_new_judgments:
-            counters["deferred_by_operator_cap"] += 1
-            continue
+    lanes = max(1, int(judge.get("parallel_requests", 1)))
+    guard = threading.Lock()
+    budget = {"new": 0}
+
+    def judge_one(item: JudgeItem) -> None:
+        with guard:
+            if item.item_id in done:
+                counters["already_judged"] += 1
+                return
+            if max_new_judgments is not None and budget["new"] >= max_new_judgments:
+                counters["deferred_by_operator_cap"] += 1
+                return
+            budget["new"] += 1
         payload = _chat_payload(item, config)
         verdict: str | None = None
         for attempt in range(1, MAX_INVALID_RETRIES + 1):
             response = transport(str(judge["url"]), payload, float(judge["timeout_seconds"]))
-            content = str(
-                cast(Mapping[str, Any], response.get("message", {})).get("content", "")
-            )
+            content = str(cast(Mapping[str, Any], response.get("message", {})).get("content", ""))
             try:
                 verdict = parse_verdict(content)
                 break
             except (ValueError, json.JSONDecodeError) as exc:
-                _append_event(
-                    journal,
-                    {
-                        "schema": JOURNAL_SCHEMA,
-                        "event": "invalid_verdict",
-                        "item_id": item.item_id,
-                        "attempt": attempt,
-                        "error": str(exc)[:500],
-                    },
-                )
+                with guard:
+                    _append_event(
+                        journal,
+                        {
+                            "schema": JOURNAL_SCHEMA,
+                            "event": "invalid_verdict",
+                            "item_id": item.item_id,
+                            "attempt": attempt,
+                            "error": str(exc)[:500],
+                        },
+                    )
                 sleep(0.0)
-        new += 1
-        if verdict is None:
-            counters["failed_closed"] += 1
-            continue
-        _append_event(
-            journal,
-            {
-                "schema": JOURNAL_SCHEMA,
-                "event": "verdict",
-                "item_id": item.item_id,
-                "verdict": verdict,
-                "model_digest": digest,
-                "prompt_version": PROMPT_VERSION,
-                "metadata": item.metadata,
-            },
-        )
-        counters[f"verdict_{verdict}"] += 1
+        with guard:
+            if verdict is None:
+                counters["failed_closed"] += 1
+                return
+            _append_event(
+                journal,
+                {
+                    "schema": JOURNAL_SCHEMA,
+                    "event": "verdict",
+                    "item_id": item.item_id,
+                    "verdict": verdict,
+                    "model_digest": digest,
+                    "prompt_version": PROMPT_VERSION,
+                    "metadata": item.metadata,
+                },
+            )
+            counters[f"verdict_{verdict}"] += 1
+
+    def walk(lane: Sequence[JudgeItem]) -> None:
+        for item in lane:
+            judge_one(item)
+
+    buckets = lanes_by_passage(items, lanes)
+    if lanes == 1:
+        walk(buckets[0])
+    else:
+        with ThreadPoolExecutor(max_workers=lanes) as pool:
+            for future in [pool.submit(walk, bucket) for bucket in buckets]:
+                future.result()
     return {
         "contract": CONTRACT,
         "model_digest": digest,
         "item_count": len(items),
         "judged_count": len(load_judgments(journal)),
+        "lanes": lanes,
+        "thinking": bool(judge.get("thinking", False)),
         "counters": dict(sorted(counters.items())),
         "final_tests_used": [],
     }
