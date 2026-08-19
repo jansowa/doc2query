@@ -213,3 +213,143 @@ wnioski: `weak_corpus_round_trip` 1,000 (n=12), `lower_content_jaccard_than_chos
 Wznowić audyt jutro tą samą komendą (dopełnienie 128 requestów `gpt-oss` i 43
 `qwen`), po czym przeliczyć analizę na pełnych 500 parach. Decyzje o polityce par
 i o Task 07 pozostają zamknięte do tego momentu.
+
+---
+
+# WYNIK PEŁNY (2026-08-19): 500/500 par, `status: complete`
+
+Sekcja dopisana, **nie nadpisuje** liczb dnia 1 — porównanie obu pokryć jest samo
+w sobie informacją o stabilności pomiaru. Audyt domknięto w trzech oknach
+dziennych budżetów (dzień 1: 244 pary z dwiema ocenami; dzień 2: dopełnienie do
+249/250 `gpt-oss` i 250/250 `qwen`; dzień 3: **1 brakujący request**).
+`rated_pair_count = 500`, `development_gate_met = true`,
+`safe_anchor_selection_signal = false`, `final_tests_used = []`.
+Naprawy ID po przedrostku: `qwen` **2** na 1000 ocen, `gpt-oss` 0.
+`reason_code` poza schematem: `gpt-oss` **5** (wszystkie `answerability`).
+
+## Trzy główne wnioski utrzymały się, jeden osłabł ilościowo
+
+| miara | dzień 1 (244 pary) | **pełne 500 par** | 95% CI |
+|---|---|---|---|
+| automat vs `gpt-oss` | 0,701 (n=97) | **0,7179** (n=195) | [0,656; 0,779] |
+| automat vs `qwen` | 0,688 (n=276) | **0,7080** (n=339) | [0,661; 0,755] |
+| **`gpt-oss` vs `qwen`** | 0,915 (n=82) | **0,8793** (n=174) | [0,833; 0,925] |
+
+Asymetria — najważniejszy wynik tego audytu — **pozostaje**: dwa niezależne
+modele zgadzają się ze sobą w 87,9%, a z porządkiem po marginesie primary w
+70,8–71,8%. Przedziały CI zgodności między modelami i z automatem **nie
+nachodzą** na siebie, więc niezgodność z porządkiem marginesowym nie jest szumem
+sędziów. Uczciwie trzeba jednak zapisać, że zgodność między modelami spadła z
+0,915 do 0,879, a zgodność z automatem lekko wzrosła (0,69–0,70 → 0,71–0,72):
+przy pełnym pokryciu luka jest **węższa niż wyglądała po dniu 1** (16 pp zamiast
+22 pp), choć jakościowo ten sam wniosek.
+
+## Bramka fail-closed: uzysk potwierdzony i gorszy niż prognoza
+
+| werdykt | liczba | udział |
+|---|---|---|
+| `consensus_supports_automatic` | **122** | 24,4% |
+| `abstained` | 326 | 65,2% |
+| `consensus_contradicts_automatic` | **31** | 6,2% |
+| `disagreement` | 21 | 4,2% |
+
+**378 z 500 par (75,6%) jest wykluczonych z automatycznej akceptacji** — dokładnie
+tyle, ile przewidywała ekstrapolacja z dnia 1 (75,4%). Akceptowalnych par jest
+**122**, czyli o rząd wielkości poniżej bramki 1000 par przed finalnym DPO. To
+jest twardy argument liczbowy za polityką v2: przy tym uzysku sama v1.1 nie
+dowiezie materiału treningowego, nawet mając 2012 zbudowanych par.
+
+## Remisy: nadal dominują i nadal nie maleją z pewnością
+
+| model | `tie` | `both_bad` | rozstrzygnięte |
+|---|---|---|---|
+| `gpt-oss-120b` | 259 (51,8%) | 46 (9,2%) | 195 (39,0%) |
+| `qwen3.6-27b` | 161 (32,2%) | 0 | 339 (67,8%) |
+
+Udział remisów w pasmach pewności: `gpt-oss` 0,581 przy `[0,7;0,9)` i 0,613 przy
+`[0,9;1,0)`; `qwen` 0,259 i 0,329. U **obu** modeli remisy są **częstsze** w
+pasmie wysokiej pewności — czyli to pewne deklaracje równoważności, nie hedging.
+Wniosek dnia 1 nie tylko się utrzymał, ale wzmocnił.
+
+## Odpowiadalność: luka potwierdzona na pełnej próbie
+
+| rola | sygnał rt@20 | `gpt-oss`: odpowiadalne / nie | `qwen`: odpowiadalne / nie |
+|---|---|---|---|
+| `chosen` | trafienie (wymóg polityki) | 417 / **83 (16,6%)** | 406 / **94 (18,8%)** |
+| `rejected` | trafienie | 272 / 113 (70,6% odp.) | 229 / 156 (59,5% odp.) |
+| `rejected` | pudło | 76 / 39 (66,1% odp.) | 65 / 50 (56,5% odp.) |
+
+1. **16,6% i 18,8% stron `chosen` jest nieodpowiadalne z pasażu** mimo round-tripu
+   w top-20 pełnego korpusu 2,4 mln dokumentów. Oba modele podają zbliżoną
+   wartość, jak po dniu 1.
+2. **Round-trip nadal nie różnicuje odpowiadalności**: 70,6% vs 66,1% (`gpt-oss`)
+   i 59,5% vs 56,5% (`qwen`). Różnica 3–4,5 pp przy n≈115 w komórce „pudło” jest
+   w granicach szumu i ma **ten sam kierunek** u obu modeli, ale wielkość efektu
+   jest bez znaczenia praktycznego.
+
+To jest dokładnie ta luka, którą próbowało zamknąć proxy odpowiadalności
+(nieudanie, [`task06_answerability_proxy_v1_2026-08-17.md`](task06_answerability_proxy_v1_2026-08-17.md))
+i którą teraz adresuje przypięty sędzia z ADR-u V2-01.
+
+## Format: pierwsza niezgodność, znikoma
+
+Przy pełnym pokryciu `gpt-oss` uznał **2 z 500** stron `chosen` i **2 z 500**
+`rejected` za `format_valid=false` (`qwen`: 0 na 1000). Po dniu 1 było zero, więc
+to nowa obserwacja — ale 0,4% przy jednym z dwóch sędziów nie jest przesłanką do
+ruszania `format.py`, tylko przypisem. Zamrożonego `format.py` **nie zmieniono**.
+
+## Pasma marginesu: `qwen` nadal płaski
+
+Na ocenach rozstrzygniętych, per model:
+
+| pasmo | `gpt-oss` | `qwen` |
+|---|---|---|
+| [1,0; 2,0) | 0,694 (n=85) | 0,693 (n=153) |
+| [2,0; 4,0) | 0,708 (n=72) | 0,730 (n=126) |
+| [4,0; ∞) | 0,789 (n=38) | 0,700 (n=60) |
+
+Korekta z dnia 1 **utrzymuje się**: lepiej obsadzony `qwen` jest płaski
+(0,693 / 0,730 / 0,700), a wzrost u `gpt-oss` opiera się na 38 ocenach.
+Podniesienie `min_margin_gap` nadal nie ma w tych danych uzasadnienia i **progów
+nie zmieniono**.
+
+Slice'y konsensusu mają teraz sensowne mianowniki: `weak_corpus_round_trip`
+0,909 (n=33), `judge_rank_disagreement` 0,900 (n=30),
+`lower_content_jaccard_than_chosen` 0,856 (n=97), `lower_primary_margin`
+0,797 (n=153), `possible_ambiguous_query` 0,796 (n=152), `copy_risk` 0,833 (n=6).
+Kierunek jest spójny: **im bardziej defektowy `rejected`, tym częściej sędziowie
+zgadzają się z automatem** — co jest niezależnym wsparciem dla kotwiczenia par w
+defektach zamiast w marginesie.
+
+## Powody werdyktów
+
+| `reason_code` | `gpt-oss` | `qwen` |
+|---|---|---|
+| `grounding` | 176 | 150 |
+| `naturalness` | 143 | 36 |
+| `retrieval_usefulness` | 142 | 270 |
+| `mixed` | 12 | 44 |
+| `answer_leakage` | 11 | 0 |
+| `uncertain` | 11 | 0 |
+| `out_of_schema` | 5 | 0 |
+
+`grounding` jest u `gpt-oss` najczęstszym powodem, a u `qwen` drugim — przy
+rubryce, która nie faworyzuje żadnej osi. Sędziowie sami wskazują grounding jako
+główną osiową różnicę, co jest zbieżne z priorytetem 1 osi A polityki v2.
+
+## Brak obciążenia pozycyjnego (potwierdzone)
+
+`gpt-oss` A 99 / B 96 (50,8% A), `qwen` A 169 / B 170 (49,9% A).
+Kontrbalansowanie 250/250 zadziałało.
+
+## Co ten pełny wynik zmienia w planie
+
+1. **Krok 0 specyfikacji v2 jest zamknięty** — ADR V2-03 ma teraz baseline z
+   pełnych 500 par i może zamrozić predykcje.
+2. Baseline dla predykcji v2 (wartości, wobec których v2 będzie mierzone):
+   `consensus_supports_automatic` **24,4%**, `consensus_contradicts_automatic`
+   **6,2%**, nieodpowiadalne `chosen` **16,6% / 18,8%**, remisy
+   **51,8% / 32,2%**, wykluczone z akceptacji **75,6%**.
+3. Granice pomiaru z dnia 1 obowiązują bez zmian: to **nie** jest human evidence,
+   audyt **nie** jest sygnałem selekcji, rubryki nie wolno poprawiać po zobaczeniu
+   liczb, żadnego progu nie zmieniono i `final_tests_used=[]`.

@@ -75,7 +75,61 @@ autoryzowane pozostają v1+v2+v3 jak w v1.1, a rolę niedostępnego sędziego 27
 osi A miało tymczasowo przejąć **proxy odpowiadalności** skalibrowane na
 etykietach `answerable_a/b` audytu Groq.
 
-- **Krok 0 pozostaje zablokowany operatorsko.** Wznowienie audytu uruchomiono
+- **Krok 0 ZAMKNIĘTY 2026-08-19: audyt v1 jest kompletny (500/500 par,
+  `status: complete`).** Domknięcie zajęło trzy okna dziennych budżetów Groq
+  (dzień 2 dopełnił do 249/250 i 250/250, dzień 3 dorzucił jeden brakujący
+  request). Trzy główne wnioski utrzymały się, jeden osłabł ilościowo: zgodność
+  automatu z `gpt-oss` **0,7179** (CI [0,656; 0,779]) i z `qwen` **0,7080**
+  (CI [0,661; 0,755]) wobec zgodności **między modelami 0,8793**
+  (CI [0,833; 0,925]) — CI nie nachodzą, więc niezgodność z porządkiem
+  marginesowym nadal nie jest szumem sędziów, ale luka jest węższa niż po dniu 1
+  (16 pp zamiast 22 pp). Bramka fail-closed wyklucza **378/500 par (75,6%)**,
+  czyli akceptowalnych jest **122** — o rząd wielkości poniżej bramki 1000 par,
+  co jest twardym argumentem liczbowym za polityką v2. Remisy dominują
+  (`gpt-oss` 51,8% + 9,2% `both_bad`, `qwen` 32,2%) i są **częstsze** w pasmie
+  wysokiej pewności u obu modeli. Nieodpowiadalne `chosen`: **16,6%** i **18,8%**;
+  round-trip nadal nie różnicuje odpowiadalności (70,6% vs 66,1%; 59,5% vs 56,5%).
+  Pasma marginesu: `qwen` płaski (0,693/0,730/0,700), więc podniesienie
+  `min_margin_gap` nadal bez uzasadnienia — progów nie zmieniono. Nowy przypis:
+  `gpt-oss` uznał 2/500 stron `chosen` za `format_valid=false` (`qwen` 0/1000) —
+  0,4% u jednego sędziego, `format.py` bez zmian. Slice'y konsensusu pokazują
+  spójny kierunek: im bardziej defektowy `rejected`, tym wyższa zgodność
+  (`weak_corpus_round_trip` 0,909, `judge_rank_disagreement` 0,900,
+  `lower_content_jaccard` 0,856 vs `lower_primary_margin` 0,797) — niezależne
+  wsparcie dla kotwiczenia par w defektach. Baseline dla predykcji ADR V2-03:
+  `consensus_supports` 24,4%, `consensus_contradicts` 6,2%, nieodpowiadalne
+  `chosen` 16,6%/18,8%, remisy 51,8%/32,2%, wykluczone 75,6%. Raport: sekcja
+  „WYNIK PEŁNY” w
+  [`task06_dual_llm_pair_audit_2026-08-17.md`](../reports/measurements/task06_dual_llm_pair_audit_2026-08-17.md)
+  (liczby dnia 1 zachowane, nie nadpisane).
+- **ADR V2-01 zamrożony 2026-08-19 i sędzia przeniesiony na drugą maszynę.**
+  Prospektywny ADR
+  [`task06_answerability_judge_v1.md`](../reports/decisions/task06_answerability_judge_v1.md)
+  przypina sędziego i zamraża kryteria **przed** jakimkolwiek werdyktem: **K1**
+  zgodność z konsensusem Groq (`accuracy ≥ 0,85` i `balanced_accuracy ≥ 0,75` na
+  817 stronach konsensusowych; baza klasy większościowej 0,7846, sufit szumu
+  0,817), **K2** dwustronne sanity na klasach z konstrukcji (`ungrounded` → `no`
+  w ≥ 0,80 przy ≤ 0,20 odrzuceń w `good_specific` i `good_alternative`), **K3**
+  abstencja ≤ 0,25. Odstępstwo od specyfikacji zapisane jawnie: maszyna bazowa
+  (8 GB VRAM, 16 GB RAM) nie serwuje 27B Q4 uczciwie — zmierzone Q3_K_S działa
+  (3,4 s/item, 1045 itemów/h, parsowalność 8/8), ale jest gorszym punktem
+  jakościowym, więc sędzią jest **Qwen3.8-27B FP8** na endpoincie vLLM operatora
+  (adres wyłącznie parametrem CLI, nie w repo). Wagi Q3_K_S
+  (digest `418bbc5c98e5…`) **nie wyprodukowały żadnego werdyktu kalibracyjnego**.
+  Zmierzono też, że równoległość ollamy nic tu nie daje (1,03× na 3 pasach, 1,00×
+  na 4) — serwer obsługuje jeden slot, a wąskim gardłem jest strumieniowanie wag
+  warstw na CPU. Ramię kontrastowe z thinkingiem **porzucone** (koszt pomiaru na
+  maszynie bazowej nie domknął się; wraca tylko za osobnym ADR-em).
+  Implementacja: label-free pakiet (`src/doc2query/preferences/answerability_remote.py`,
+  `scripts/export_task06_answerability_packet.py`,
+  `scripts/task06_judge_remote.py` — samodzielny, journal z `fsync` i resume,
+  itemy jednego pasażu w jednym pasie dla prefix-cache'u,
+  `scripts/import_task06_answerability_verdicts.py` liczący K1–K3 maszynowo,
+  **11 testów CPU**). Pakiet: **1540 itemów**, 665 pasaży,
+  `items_sha256 = 31ac2436c34ef55d…`; etykiety zostają lokalnie, więc zdalny
+  sędzia nie ma czego dostroić pod wynik. Status: **wagi przypięte, kalibracja
+  jeszcze nie uruchomiona** (czeka na run operatora na maszynie z GPU).
+- **Krok 0 był zablokowany operatorsko do 2026-08-19.** Wznowienie audytu uruchomiono
   2026-08-17 18:20 UTC i wykonało **0 requestów**: dzienne budżety tokenów obu
   modeli są wyczerpane (`gpt-oss` 186 057, `qwen` 228 603 przy limicie 185 000),
   status ponownie `incomplete_quota_deferred`. Ogony ledgerów są jednoznaczne
