@@ -27,13 +27,16 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import http.client
 import json
 import os
 import signal
+import socket
 import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
@@ -131,28 +134,99 @@ def load_done(journal_path):
     return done
 
 
-def post_json(url, payload, timeout, api_key=None):
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = "Bearer " + api_key
-    request = urllib.request.Request(
-        url, data=json.dumps(payload, ensure_ascii=False).encode(), headers=headers, method="POST"
-    )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.loads(response.read().decode())
+class HttpStatusError(Exception):
+    def __init__(self, code, body):
+        super().__init__(f"HTTP {code}")
+        self.code = code
+        self.body = body
 
 
-def get_json(url, timeout, api_key=None):
-    headers = {}
-    if api_key:
-        headers["Authorization"] = "Bearer " + api_key
-    request = urllib.request.Request(url, headers=headers, method="GET")
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.loads(response.read().decode())
+class Endpoint:
+    """Rozwiazany raz adres endpointu, z jawnie wybrana rodzina adresow.
 
+    Po co to istnieje: `curl` robi Happy Eyeballs (probuje IPv4 i IPv6 rownolegle i cicho
+    bierze to, co dziala), a `urllib` bierze adresy po kolei. Jesli host ma rekord AAAA,
+    a trasa IPv6 jest czarna dziura, KAZDY request placi pelny timeout - objawia sie to
+    jako run "liczacy" po jednym batchu na kilka minut przy zerowej utylizacji GPU.
+    Dlatego adres wybieramy raz, sprawdzajac go krotkim connectem, i uzywamy go do konca.
+    """
 
-def url_of(args):
-    return args.base_url.rstrip("/") + "/chat/completions"
+    def __init__(self, base_url, prefer, connect_timeout):
+        parsed = urllib.parse.urlsplit(base_url)
+        if parsed.scheme != "http":
+            raise SystemExit("obslugiwany jest tylko http (bez TLS): " + base_url)
+        self.host = parsed.hostname
+        self.port = parsed.port or 80
+        self.path = parsed.path.rstrip("/") + "/chat/completions"
+        self.models_path = parsed.path.rstrip("/") + "/models"
+        self.host_header = parsed.netloc
+        self.family, self.address = self._pick(prefer, connect_timeout)
+
+    def _candidates(self, prefer):
+        infos = socket.getaddrinfo(self.host, self.port, type=socket.SOCK_STREAM)
+        order = {
+            "ipv4": (socket.AF_INET, socket.AF_INET6),
+            "ipv6": (socket.AF_INET6, socket.AF_INET),
+        }
+        preferred = order.get(prefer, (socket.AF_INET, socket.AF_INET6))
+        ranked = sorted(
+            infos, key=lambda info: preferred.index(info[0]) if info[0] in preferred else 9
+        )
+        seen = []
+        for family, _, _, _, sockaddr in ranked:
+            entry = (family, sockaddr[0])
+            if entry not in seen:
+                seen.append(entry)
+        return seen
+
+    def _pick(self, prefer, connect_timeout):
+        candidates = self._candidates(prefer)
+        if not candidates:
+            raise SystemExit("nie udalo sie rozwiazac hosta " + str(self.host))
+        errors = []
+        for family, address in candidates:
+            probe = socket.socket(family, socket.SOCK_STREAM)
+            probe.settimeout(connect_timeout)
+            try:
+                probe.connect((address, self.port))
+                probe.close()
+                label = "IPv6" if family == socket.AF_INET6 else "IPv4"
+                print(f"adres: {address} ({label}, connect ok)", flush=True)
+                return family, address
+            except OSError as exc:
+                errors.append(f"{address}: {exc}")
+            finally:
+                probe.close()
+        raise SystemExit(
+            "zaden adres hosta nie przyjmuje polaczenia na porcie "
+            + str(self.port)
+            + ":\n  "
+            + "\n  ".join(errors)
+        )
+
+    def request(self, path, payload, timeout, api_key):
+        connection = http.client.HTTPConnection(self.address, self.port, timeout=timeout)
+        if self.family == socket.AF_INET6:
+            connection = http.client.HTTPConnection(
+                "[" + self.address + "]", self.port, timeout=timeout
+            )
+        headers = {"Host": self.host_header}
+        if api_key:
+            headers["Authorization"] = "Bearer " + api_key
+        try:
+            if payload is None:
+                connection.request("GET", path, headers=headers)
+            else:
+                headers["Content-Type"] = "application/json"
+                body = json.dumps(payload, ensure_ascii=False).encode()
+                connection.request("POST", path, body=body, headers=headers)
+            response = connection.getresponse()
+            raw = response.read()
+            if response.status >= 400:
+                raise HttpStatusError(response.status, raw.decode(errors="replace")[:600])
+            return json.loads(raw.decode())
+        finally:
+            connection.close()
 
 
 def build_payload(item, args):
@@ -284,15 +358,23 @@ def main():
     parser.add_argument("--max-tokens", type=int, default=24)
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY", "dummy"))
+    parser.add_argument(
+        "--address-family",
+        choices=("ipv4", "ipv6"),
+        default="ipv4",
+        help="Ktora rodzine adresow probowac pierwsza (domyslnie IPv4).",
+    )
+    parser.add_argument("--connect-timeout", type=float, default=8.0)
     args = parser.parse_args()
 
     if EXPECTED_SYSTEM_PROMPT_SHA256 != hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest():
         raise SystemExit("prompt systemowy został zmodyfikowany")
 
     items = load_items(args.items)
+    endpoint = Endpoint(args.base_url, args.address_family, args.connect_timeout)
     served = {}
     try:
-        served = get_json(args.base_url.rstrip("/") + "/models", 30.0, args.api_key)
+        served = endpoint.request(endpoint.models_path, None, 30.0, args.api_key)
     except Exception as exc:  # metadane są pomocnicze, nie blokujące
         print("uwaga: nie udało się odczytać /models: " + str(exc), file=sys.stderr)
 
@@ -311,24 +393,19 @@ def main():
     # sie jako wielogodzinne "zawieszenie" - kazdy item ponawiany z backoffem w kilku pasach.
     probe = build_payload(items[0], args)
     try:
-        probe_body = post_json(url_of(args), probe, min(args.timeout, 120.0), args.api_key)
-    except urllib.error.HTTPError as exc:
-        detail = ""
-        try:
-            detail = exc.read().decode()[:600]
-        except Exception:
-            pass
+        probe_body = endpoint.request(endpoint.path, probe, min(args.timeout, 120.0), args.api_key)
+    except HttpStatusError as exc:
         raise SystemExit(
             f"PREFLIGHT: serwer odrzucil zamrozony payload (HTTP {exc.code}).\n"
-            f"Odpowiedz serwera: {detail}\n"
+            f"Odpowiedz serwera: {exc.body}\n"
             "Nie zmieniam payloadu po cichu, bo zamrozony protokol wymaga wylaczonego "
             "thinkingu (chat_template_kwargs.enable_thinking=false) i odpowiedzi jako "
             "obiekt JSON (response_format). Ktore pole odrzuca serwer, widac w komunikacie "
             "powyzej - przeslij go, zamiast obchodzic problem lokalnie."
         ) from exc
-    except (urllib.error.URLError, TimeoutError) as exc:
+    except (OSError, urllib.error.URLError, TimeoutError) as exc:
         raise SystemExit(
-            f"PREFLIGHT: brak odpowiedzi z {url_of(args)} ({exc}). "
+            f"PREFLIGHT: brak odpowiedzi z {endpoint.host_header}{endpoint.path} ({exc}). "
             "Sprawdz, czy endpoint i port sa poprawne oraz czy serwer odpowiada."
         ) from exc
     probe_choices = probe_body.get("choices") or []
@@ -370,7 +447,6 @@ def main():
     guard = threading.Lock()
     counters = {"yes": 0, "no": 0, "uncertain": 0, "failed": 0, "skipped": len(done)}
     progress = Progress(len(items), len(done))
-    url = url_of(args)
 
     def judge(item):
         if STOP.is_set():
@@ -382,32 +458,27 @@ def main():
             body = None
             for transport_attempt in range(1, MAX_TRANSPORT_RETRIES + 1):
                 try:
-                    body = post_json(url, payload, args.timeout, args.api_key)
+                    body = endpoint.request(endpoint.path, payload, args.timeout, args.api_key)
                     break
-                except urllib.error.HTTPError as exc:
-                    detail = ""
-                    try:
-                        detail = exc.read().decode()[:400]
-                    except Exception:
-                        pass
+                except HttpStatusError as exc:
                     # 4xx (poza 429) to blad zapytania, nie awaria przejsciowa - ponawianie
                     # tylko zamaskowaloby go dlugim czekaniem.
                     if 400 <= exc.code < 500 and exc.code != 429:
                         print(
-                            f"HTTP {exc.code} od serwera dla itemu {item['item_id']}: {detail}",
+                            f"HTTP {exc.code} od serwera dla itemu {item['item_id']}: {exc.body}",
                             file=sys.stderr,
                             flush=True,
                         )
                         break
                     if transport_attempt == MAX_TRANSPORT_RETRIES:
                         print(
-                            f"blad HTTP {exc.code}, item {item['item_id']}: {detail}",
+                            f"blad HTTP {exc.code}, item {item['item_id']}: {exc.body}",
                             file=sys.stderr,
                             flush=True,
                         )
                     else:
                         time.sleep(min(30.0, 2.0**transport_attempt))
-                except (urllib.error.URLError, TimeoutError) as exc:
+                except (OSError, urllib.error.URLError, TimeoutError) as exc:
                     if transport_attempt == MAX_TRANSPORT_RETRIES:
                         print(
                             f"blad transportu, item {item['item_id']}: {exc}",
