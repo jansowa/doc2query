@@ -151,6 +151,33 @@ def get_json(url, timeout, api_key=None):
         return json.loads(response.read().decode())
 
 
+def url_of(args):
+    return args.base_url.rstrip("/") + "/chat/completions"
+
+
+def build_payload(item, args):
+    """Zamrozony payload; preflight i petla glowna musza uzywac tej samej funkcji."""
+    return {
+        "model": args.model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {"passage": item["passage"], "query": item["query"]},
+                    ensure_ascii=False,
+                    sort_keys=True,
+                ),
+            },
+        ],
+        "temperature": 0.0,
+        "seed": args.seed,
+        "max_tokens": args.max_tokens,
+        "response_format": {"type": "json_object"},
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
+
+
 def format_duration(seconds):
     seconds = int(max(0.0, seconds))
     hours, rest = divmod(seconds, 3600)
@@ -210,8 +237,9 @@ class Progress:
         if self.enabled:
             self.stream.write("\r" + line + " " * 4)
             self.stream.flush()
-        elif force or self.judged_now % 200 == 0:
+        elif force or self.judged_now <= 3 or self.judged_now % 25 == 0:
             # Bez terminala (nohup, tee do pliku) drukujemy pelne linie, nie \r.
+            # Pierwsze werdykty drukujemy od razu, zeby bylo widac, ze run zyje.
             print(line, file=self.stream, flush=True)
 
     def finish(self):
@@ -232,6 +260,14 @@ def parse_verdict(content):
 
 
 def main():
+    # Pod pipem (np. `| tee log.txt`) stdout jest buforowany blokowo, wiec bez tego
+    # pierwsze komunikaty siedza w buforze i run wyglada na zawieszony.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(line_buffering=True)
+        except AttributeError:  # Python < 3.7
+            pass
+
     parser = argparse.ArgumentParser(description=__doc__)
     # Adres endpointu jest parametrem operatorskim i NIE należy do repozytorium.
     parser.add_argument(
@@ -246,7 +282,7 @@ def main():
     parser.add_argument("--parallel", type=int, default=8)
     parser.add_argument("--seed", type=int, default=20260817)
     parser.add_argument("--max-tokens", type=int, default=24)
-    parser.add_argument("--timeout", type=float, default=300.0)
+    parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY", "dummy"))
     args = parser.parse_args()
 
@@ -267,7 +303,48 @@ def main():
                 "podaj --model: /v1/models zwrocil " + str(len(names)) + " modeli: " + str(names)
             )
         args.model = names[0]
-    print("model: " + str(args.model))
+    print("model: " + str(args.model), flush=True)
+    print("endpoint: " + args.base_url.rstrip("/") + "/chat/completions", flush=True)
+
+    # Preflight: jeden request zamrozonym payloadem PRZED wejsciem w petle. Bez tego
+    # odrzucenie pola przez serwer (np. chat_template_kwargs albo response_format) objawia
+    # sie jako wielogodzinne "zawieszenie" - kazdy item ponawiany z backoffem w kilku pasach.
+    probe = build_payload(items[0], args)
+    try:
+        probe_body = post_json(url_of(args), probe, min(args.timeout, 120.0), args.api_key)
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            detail = exc.read().decode()[:600]
+        except Exception:
+            pass
+        raise SystemExit(
+            f"PREFLIGHT: serwer odrzucil zamrozony payload (HTTP {exc.code}).\n"
+            f"Odpowiedz serwera: {detail}\n"
+            "Nie zmieniam payloadu po cichu, bo zamrozony protokol wymaga wylaczonego "
+            "thinkingu (chat_template_kwargs.enable_thinking=false) i odpowiedzi jako "
+            "obiekt JSON (response_format). Ktore pole odrzuca serwer, widac w komunikacie "
+            "powyzej - przeslij go, zamiast obchodzic problem lokalnie."
+        ) from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise SystemExit(
+            f"PREFLIGHT: brak odpowiedzi z {url_of(args)} ({exc}). "
+            "Sprawdz, czy endpoint i port sa poprawne oraz czy serwer odpowiada."
+        ) from exc
+    probe_choices = probe_body.get("choices") or []
+    probe_content = (
+        str((probe_choices[0].get("message") or {}).get("content") or "") if probe_choices else ""
+    )
+    try:
+        parse_verdict(probe_content)
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise SystemExit(
+            f"PREFLIGHT: serwer odpowiedzial, ale werdykt jest poza schematem ({exc}).\n"
+            f"Tresc odpowiedzi: {probe_content[:400]!r}\n"
+            "Jesli widac tu tok rozumowania, to znaczy ze thinking nie zostal wylaczony - "
+            "przeslij ten komunikat, zamiast podnosic --max-tokens."
+        ) from exc
+    print("preflight ok: serwer zwraca poprawny werdykt", flush=True)
 
     done = load_done(args.journal)
     # Wznowienie innym modelem uniewaznia caly journal przy imporcie, wiec lepiej
@@ -293,30 +370,12 @@ def main():
     guard = threading.Lock()
     counters = {"yes": 0, "no": 0, "uncertain": 0, "failed": 0, "skipped": len(done)}
     progress = Progress(len(items), len(done))
-    url = args.base_url.rstrip("/") + "/chat/completions"
+    url = url_of(args)
 
     def judge(item):
         if STOP.is_set():
             return
-        payload = {
-            "model": args.model,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": json.dumps(
-                        {"passage": item["passage"], "query": item["query"]},
-                        ensure_ascii=False,
-                        sort_keys=True,
-                    ),
-                },
-            ],
-            "temperature": 0.0,
-            "seed": args.seed,
-            "max_tokens": args.max_tokens,
-            "response_format": {"type": "json_object"},
-            "chat_template_kwargs": {"enable_thinking": False},
-        }
+        payload = build_payload(item, args)
         verdict = None
         usage = None
         for attempt in range(1, MAX_INVALID_RETRIES + 1):
@@ -325,9 +384,36 @@ def main():
                 try:
                     body = post_json(url, payload, args.timeout, args.api_key)
                     break
-                except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as exc:
+                except urllib.error.HTTPError as exc:
+                    detail = ""
+                    try:
+                        detail = exc.read().decode()[:400]
+                    except Exception:
+                        pass
+                    # 4xx (poza 429) to blad zapytania, nie awaria przejsciowa - ponawianie
+                    # tylko zamaskowaloby go dlugim czekaniem.
+                    if 400 <= exc.code < 500 and exc.code != 429:
+                        print(
+                            f"HTTP {exc.code} od serwera dla itemu {item['item_id']}: {detail}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                        break
                     if transport_attempt == MAX_TRANSPORT_RETRIES:
-                        print(f"blad transportu, item {item['item_id']}: {exc}", file=sys.stderr)
+                        print(
+                            f"blad HTTP {exc.code}, item {item['item_id']}: {detail}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                    else:
+                        time.sleep(min(30.0, 2.0**transport_attempt))
+                except (urllib.error.URLError, TimeoutError) as exc:
+                    if transport_attempt == MAX_TRANSPORT_RETRIES:
+                        print(
+                            f"blad transportu, item {item['item_id']}: {exc}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
                     else:
                         time.sleep(min(30.0, 2.0**transport_attempt))
             if body is None:
@@ -379,12 +465,22 @@ def main():
                 return
             judge(item)
 
+    def heartbeat():
+        # Pierwszy request na swiezym serwerze moze trwac dlugo (rozgrzewka, kolejka).
+        # Bez tego brak wyjscia byloby nieodrozniealny od zawieszenia.
+        while not STOP.is_set() and not finished.wait(15.0):
+            progress.render(force=True)
+
+    finished = threading.Event()
+    watchdog = threading.Thread(target=heartbeat, daemon=True)
+    watchdog.start()
     signal.signal(signal.SIGINT, _request_stop)
     signal.signal(signal.SIGTERM, _request_stop)
     with ThreadPoolExecutor(max_workers=max(1, args.parallel)) as pool:
         for future in [pool.submit(walk, bucket) for bucket in buckets]:
             future.result()
 
+    finished.set()
     progress.finish()
     remaining = len(items) - len(done) - progress.judged_now
     status = "PRZERWANE" if STOP.is_set() else "gotowe"
