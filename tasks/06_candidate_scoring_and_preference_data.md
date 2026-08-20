@@ -127,8 +127,39 @@ etykietach `answerable_a/b` audytu Groq.
   `scripts/import_task06_answerability_verdicts.py` liczący K1–K3 maszynowo,
   **11 testów CPU**). Pakiet: **1540 itemów**, 665 pasaży,
   `items_sha256 = 31ac2436c34ef55d…`; etykiety zostają lokalnie, więc zdalny
-  sędzia nie ma czego dostroić pod wynik. Status: **wagi przypięte, kalibracja
-  jeszcze nie uruchomiona** (czeka na run operatora na maszynie z GPU).
+  sędzia nie ma czego dostroić pod wynik. Status: **kalibracja WYKONANA, bramka K1–K3 PRZESZŁA** (2026-08-20).
+- **Sędzia odpowiadalności przyjęty** (`Qwen/Qwen3.8-27B-FP8`, vLLM 0.27.1 operatora,
+  prompt `task06-answerability-pl-v1`, dekodowanie `json_schema_enum`, 1540 werdyktów,
+  zero `out_of_schema`, wszystko przy pierwszej próbie): **K1** accuracy **0,8566**
+  (próg 0,85; n=809) i balanced accuracy **0,8878** (próg 0,75), przy `recall_no` 0,9429;
+  **K2** `ungrounded` → `no` w **180/180**, `good_specific` 0,1056 i `good_alternative`
+  0,1222 odrzuceń (cap 0,20); **K3** abstencja **0,0065** (cap 0,25). Status artefaktu:
+  `accepted_as_axis_a_answerability_signal`. Zapas K1 nad progiem jest mały (0,66 pp),
+  ale **przejście jest stabilne**: drugi, niezależny run tego samego przyrządu dał 0,8557.
+  Ten sam drugi journal dał przy okazji samodzielny wynik — **powtarzalność serwera to
+  0,9909** (14 różnic na 1540 mimo `temperature=0` i przypiętego seeda), co potwierdza
+  niedeterminizm continuous batchingu. Przegląd ręczny 34 werdyktów (zobowiązanie §5 ADR,
+  mógł kalibrację wyłącznie unieważnić — nie unieważnił) pokazał, że **referencja jest
+  słabszą stroną**: w 8 z 10 rozbieżności „sędzia `yes` / konsensus `no`" werdykt sędziego
+  jest bardziej obronny, a w 4 z 6 „nadmiernych odrzuceń" klas `good_*` błędna jest
+  etykieta z konstrukcji, nie sędzia. Kierunek obciążenia do uwzględnienia w V2-03:
+  `recall_no` 0,9429 wobec `recall_yes` 0,8328 znaczy, że filtr osi A będzie
+  **konserwatywny** — kosztem podaży, nie czystości. Raport:
+  [`task06_answerability_judge_v1_2026-08-20.md`](../reports/measurements/task06_answerability_judge_v1_2026-08-20.md).
+- **Paczkowanie zapytań ODRZUCONE bramką A/B** (amendment
+  [`..._batching_amendment_2026-08-20.md`](../reports/decisions/task06_answerability_judge_v1_batching_amendment_2026-08-20.md),
+  raport `reports/measurements/task06/judge_batching_ab_v1/`): **B1 zgodność 0,9052**
+  wobec progu 0,98 i **B2 dryf istotny** — jednostronna migracja w `uncertain`
+  (`yes→uncertain` 21 vs 2, p=0,0001; `no→uncertain` 19 vs 2, p=0,0002), abstencja rośnie
+  z 0,65% do 2,99%. Przy powtarzalności przyrządu 0,9909 to ~10× poza szumem. Do tego
+  **zysku wydajnościowego nie ma żadnego**: zmierzone 16,3 it/s paczkami wobec 19,1 i 17,0
+  it/s pojedynczo (pule pojedynczo trzymają 19,2–19,5 it/s) — serwer jest ograniczony
+  dekodowaniem, nie prefillem, więc wcześniejszy szacunek 3–5× przyspieszenia był błędny,
+  a wariant hybrydowy z wieloma pasażami opiera się na tej samej obalonej premisie.
+  `--batch-size` zostaje na 1.
+- Certyfikacja puli kandydatów (23 676 itemów w kohortach autoryzowanych v1+v2+v3,
+  148 619 w v4–v11) **w toku** przyrządem pojedynczym; bez niej nie da się zbudować par
+  osi A. ADR V2-03 czeka na podaż zmierzoną **po** certyfikacji.
 - **Krok 0 był zablokowany operatorsko do 2026-08-19.** Wznowienie audytu uruchomiono
   2026-08-17 18:20 UTC i wykonało **0 requestów**: dzienne budżety tokenów obu
   modeli są wyczerpane (`gpt-oss` 186 057, `qwen` 228 603 przy limicie 185 000),
