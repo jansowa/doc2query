@@ -693,6 +693,27 @@ def main() -> None:
         f"pasow: {args.parallel}, requestow do wyslania: {planned}",
         flush=True,
     )
+    if batched and planned:
+        # Paczka nigdy nie miesza pasazy, wiec licznosc jest ograniczona liczba zapytan do
+        # jednego pasazu. Bez tego komunikatu operator moglby podnosic --batch-size w
+        # nieskonczonosc, nie widzac, ze powyzej sufitu nic sie nie zmienia.
+        per_passage: dict[str, int] = {}
+        for item in pending:
+            per_passage[item["passage"]] = per_passage.get(item["passage"], 0) + 1
+        ceiling = max(per_passage.values())
+        print(
+            f"srednia licznosc paczki: {len(pending) / planned:.2f} "
+            f"(redukcja requestow {len(pending) / planned:.2f}x); "
+            f"max zapytan do jednego pasazu w tym pakiecie: {ceiling}",
+            flush=True,
+        )
+        if args.batch_size > ceiling:
+            print(
+                f"uwaga: --batch-size {args.batch_size} jest powyzej sufitu {ceiling}, "
+                "wiec podnoszenie go dalej nic nie zmieni. Na przepustowosc dziala "
+                "--parallel (nie zmienia przyrzadu, nie wymaga bramki A/B).",
+                flush=True,
+            )
 
     guard = threading.Lock()
     counters = {"yes": 0, "no": 0, "uncertain": 0, "failed": 0, "skipped": len(done)}
