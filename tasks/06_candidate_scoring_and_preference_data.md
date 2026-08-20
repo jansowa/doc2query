@@ -157,9 +157,26 @@ etykietach `answerable_a/b` audytu Groq.
   dekodowaniem, nie prefillem, więc wcześniejszy szacunek 3–5× przyspieszenia był błędny,
   a wariant hybrydowy z wieloma pasażami opiera się na tej samej obalonej premisie.
   `--batch-size` zostaje na 1.
-- Certyfikacja puli kandydatów (23 676 itemów w kohortach autoryzowanych v1+v2+v3,
-  148 619 w v4–v11) **w toku** przyrządem pojedynczym; bez niej nie da się zbudować par
-  osi A. ADR V2-03 czeka na podaż zmierzoną **po** certyfikacji.
+- **Certyfikacja puli WYKONANA i podaż osi A zmierzona** (2026-08-20,
+  `src/doc2query/preferences/axis_a_supply.py`, `scripts/measure_task06_axis_a_supply.py`,
+  7 testów CPU): 172 295 werdyktów przyrządem pojedynczym, **zero kandydatów bez
+  werdyktu**, zero `out_of_schema`. Podaż par osi A: **2 253 pary z kohort autoryzowanych**
+  (62,3% z 3 619 grup; v1 199, v2 270, v3 1 784) i **13 736 z v4–v11**, razem **15 989**
+  (61,5% z 25 992 grup). Trzy wnioski wchodzące do ADR V2-03: (a) podaż **przestaje być
+  wąskim gardłem** — v1.1 dawała po bramce audytu 122 pary akceptowalne wobec progu 1000,
+  oś A daje 2 253 z samych kohort autoryzowanych; (b) koszt konserwatywności sędziego jest
+  zmierzony i akceptowalny — zachowuje **79,5%** czystych `chosen` (79,7/75,5/80,1% w
+  v1/v2/v3, 79,1% w v4–v11), spójnie z kierunkiem `recall_no` 0,9429 vs `recall_yes`
+  0,8328; (c) naturalny `rejected` osi A istnieje w **96,9%** grup, co niezależnie
+  potwierdza pominięcie V2-04 (konstruowane rejected) — i to na zwalidowanym sygnale, a nie
+  na round-tripie, który audyt zdyskwalifikował. Ograniczenie różnorodności odrzuciło
+  **jedną** grupę (2 254 → 2 253), bo strony różnią się defektem, nie przestawieniem słów.
+  Raport:
+  [`task06_axis_a_supply_after_certification_2026-08-20.md`](../reports/measurements/task06_axis_a_supply_after_certification_2026-08-20.md).
+- **Następny krok: ADR V2-03.** Ma teraz komplet wsadu (pełny audyt v1 jako baseline
+  predykcji, przyjęty sędzia, zmierzona podaż osi A, cięcia osi B z inwentarza V2-00) i
+  jako jedyny może zamrozić kwoty, progi, tie-breaki oraz predykcje **przed** zbudowaniem
+  pierwszej pary v2.
 - **Krok 0 był zablokowany operatorsko do 2026-08-19.** Wznowienie audytu uruchomiono
   2026-08-17 18:20 UTC i wykonało **0 requestów**: dzienne budżety tokenów obu
   modeli są wyczerpane (`gpt-oss` 186 057, `qwen` 228 603 przy limicie 185 000),
