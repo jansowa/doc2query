@@ -234,6 +234,36 @@ class Endpoint:
             connection.close()
 
 
+VERDICT_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "answerability_verdict",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {"verdict": {"type": "string", "enum": list(VERDICTS)}},
+            "required": ["verdict"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+
+def response_format(decoding):
+    """Zamrozony wariant dekodowania; wybor jest zapisywany w kazdym wierszu journala.
+
+    `json_object` wymusza tylko poprawna skladnie JSON, wiec model moze zwrocic wartosc
+    poza przestrzenia decyzyjna (zmierzone: {"verdict": "verdict"}) i wtedy item traci
+    werdykt zamiast dostac `uncertain`. `json_schema_enum` domyka wartosc do zbioru
+    [yes, no, uncertain], czyli wymusza to, co kontrakt i tak zaklada.
+    """
+    if decoding == "json_object":
+        return {"type": "json_object"}
+    if decoding == "json_schema_enum":
+        return VERDICT_SCHEMA
+    raise SystemExit("nieznany wariant dekodowania: " + str(decoding))
+
+
 def build_payload(item, args):
     """Zamrozony payload; preflight i petla glowna musza uzywac tej samej funkcji."""
     return {
@@ -252,7 +282,7 @@ def build_payload(item, args):
         "temperature": 0.0,
         "seed": args.seed,
         "max_tokens": args.max_tokens,
-        "response_format": {"type": "json_object"},
+        "response_format": response_format(args.decoding),
         "chat_template_kwargs": {"enable_thinking": False},
     }
 
@@ -371,6 +401,12 @@ def main():
     )
     parser.add_argument("--connect-timeout", type=float, default=8.0)
     parser.add_argument(
+        "--decoding",
+        choices=("json_schema_enum", "json_object"),
+        default="json_schema_enum",
+        help="Ograniczenie dekodowania; enum domyka wartosc werdyktu do zbioru z kontraktu.",
+    )
+    parser.add_argument(
         "--invalid-retries",
         type=int,
         default=DEFAULT_INVALID_RETRIES,
@@ -437,6 +473,22 @@ def main():
     done = load_done(args.journal)
     # Wznowienie innym modelem uniewaznia caly journal przy imporcie, wiec lepiej
     # zatrzymac sie teraz niz po kilku godzinach liczenia.
+    # Wiersze zapisane przed amendmentem nie maja pola "decoding" - powstaly przy
+    # json_object, wiec traktujemy je jawnie, zeby wznowienie ich nie zmieszalo z enumem.
+    previous_decodings = {
+        str(row.get("decoding", "json_object_przed_amendmentem")) for row in done.values()
+    }
+    if previous_decodings and previous_decodings != {str(args.decoding)}:
+        raise SystemExit(
+            "journal "
+            + args.journal
+            + " zawiera werdykty wyprodukowane przy dekodowaniu "
+            + str(sorted(previous_decodings))
+            + ", a teraz uruchamiasz "
+            + str(args.decoding)
+            + ". Mieszanie ograniczen dekodowania w jednej kalibracji jest niedopuszczalne "
+            "- zacznij nowy journal (--journal INNA_NAZWA.jsonl)."
+        )
     previous_models = {str(row.get("model")) for row in done.values()} - {"None"}
     if previous_models and previous_models != {str(args.model)}:
         raise SystemExit(
@@ -534,6 +586,7 @@ def main():
                                     "prompt_version": PROMPT_VERSION,
                                     "model": args.model,
                                     "attempts": args.invalid_retries,
+                                    "decoding": args.decoding,
                                     "error": last_error,
                                     "content": last_content,
                                 },
@@ -552,6 +605,7 @@ def main():
                 "item_id": item["item_id"],
                 "verdict": verdict,
                 "attempt": attempt,
+                "decoding": args.decoding,
                 "prompt_version": PROMPT_VERSION,
                 "model": args.model,
                 "served_model": served,

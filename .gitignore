@@ -74,6 +74,7 @@ htmlcov/
 !/reports/decisions/task06_llm_cohort_gpu_scoring_amendment_2026-08-16.md
 !/reports/decisions/task06_answerability_proxy_v1.md
 !/reports/decisions/task06_answerability_judge_v1.md
+!/reports/decisions/task06_answerability_judge_v1_decoding_amendment_2026-08-20.md
 !/reports/plans/
 /reports/plans/*
 !/reports/plans/task05_d01_overnight_2026-07-26.md
