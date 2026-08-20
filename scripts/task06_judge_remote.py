@@ -43,11 +43,12 @@ from concurrent.futures import ThreadPoolExecutor
 PROMPT_VERSION = "task06-answerability-pl-v1"
 JOURNAL_SCHEMA = "task06-answerability-remote-verdict-v1"
 VERDICTS = ("yes", "no", "uncertain")
-# Przy temperature=0 i przypietym seedzie ta sama tresc requestu daje te sama odpowiedz,
-# wiec ponawianie identycznego zapytania jest bezcelowe - dokladnie to zmierzono w audycie
-# Groq (raport task06_dual_llm_pair_audit: defekty sedziow byly powtarzalne). Zostawiamy
-# jedna dodatkowa probe wylacznie na wypadek niedeterminizmu z continuous batchingu.
-MAX_INVALID_RETRIES = 2
+# Ile razy powtorzyc item, ktory wrocil poza schematem. W audycie Groq defekty sedziow byly
+# przy temperature=0 powtarzalne i ponawianie nie pomagalo, ale ten serwer zachowuje sie
+# inaczej: pod continuous batchingiem sklad batcha zmienia numeryke, wiec czesc itemow
+# wraca poprawnie przy kolejnej probie (widoczne w logu operatora: proba 1 i 2 poza
+# schematem, proba 3 poprawna). Dlatego ponawiamy, a liczbe prob mozna podniesc flaga.
+DEFAULT_INVALID_RETRIES = 3
 MAX_TRANSPORT_RETRIES = 5
 
 SYSTEM_PROMPT = (
@@ -369,6 +370,12 @@ def main():
         help="Ktora rodzine adresow probowac pierwsza (domyslnie IPv4).",
     )
     parser.add_argument("--connect-timeout", type=float, default=8.0)
+    parser.add_argument(
+        "--invalid-retries",
+        type=int,
+        default=DEFAULT_INVALID_RETRIES,
+        help="Ile prob na item, ktory wraca poza schematem (serwer nie jest deterministyczny).",
+    )
     args = parser.parse_args()
 
     if EXPECTED_SYSTEM_PROMPT_SHA256 != hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest():
@@ -460,7 +467,7 @@ def main():
         usage = None
         last_error = None
         last_content = ""
-        for attempt in range(1, MAX_INVALID_RETRIES + 1):
+        for attempt in range(1, args.invalid_retries + 1):
             body = None
             for transport_attempt in range(1, MAX_TRANSPORT_RETRIES + 1):
                 try:
@@ -506,7 +513,7 @@ def main():
             except (ValueError, json.JSONDecodeError) as exc:
                 last_error = str(exc)[:200]
                 last_content = content[:300]
-                if attempt == MAX_INVALID_RETRIES:
+                if attempt == args.invalid_retries:
                     print(
                         f"poza schematem po {attempt} probach, item {item['item_id']}: "
                         f"{last_error} | tresc: {last_content!r}",
@@ -526,7 +533,7 @@ def main():
                                     "item_id": item["item_id"],
                                     "prompt_version": PROMPT_VERSION,
                                     "model": args.model,
-                                    "attempts": MAX_INVALID_RETRIES,
+                                    "attempts": args.invalid_retries,
                                     "error": last_error,
                                     "content": last_content,
                                 },
@@ -544,6 +551,7 @@ def main():
                 "event": "verdict",
                 "item_id": item["item_id"],
                 "verdict": verdict,
+                "attempt": attempt,
                 "prompt_version": PROMPT_VERSION,
                 "model": args.model,
                 "served_model": served,
