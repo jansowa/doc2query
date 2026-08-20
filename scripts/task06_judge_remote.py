@@ -29,6 +29,7 @@ import argparse
 import hashlib
 import json
 import os
+import signal
 import sys
 import threading
 import time
@@ -54,6 +55,24 @@ SYSTEM_PROMPT = (
 )
 
 EXPECTED_SYSTEM_PROMPT_SHA256 = hashlib.sha256(SYSTEM_PROMPT.encode("utf-8")).hexdigest()
+
+# Ctrl-C musi zatrzymywac run szybko: watki robocze sa non-daemon, a ThreadPoolExecutor
+# czeka na nie przy wyjsciu z bloku `with`, wiec sam KeyboardInterrupt w watku glownym
+# NIE przerwalby liczenia. Flaga jest sprawdzana przed kazdym itemem.
+STOP = threading.Event()
+
+
+def _request_stop(signum, frame):  # sygnatura wymuszona przez modul signal
+    if STOP.is_set():
+        print("\ndrugie przerwanie: wychodze natychmiast", file=sys.stderr)
+        os._exit(130)
+    STOP.set()
+    print(
+        "\nprzerwanie: koncze rozpoczete requesty i zatrzymuje sie "
+        "(journal jest kompletny, wznowisz ta sama komenda)",
+        file=sys.stderr,
+        flush=True,
+    )
 
 
 def load_items(path):
@@ -132,6 +151,76 @@ def get_json(url, timeout, api_key=None):
         return json.loads(response.read().decode())
 
 
+def format_duration(seconds):
+    seconds = int(max(0.0, seconds))
+    hours, rest = divmod(seconds, 3600)
+    minutes, secs = divmod(rest, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+    return f"{minutes}:{secs:02d}"
+
+
+class Progress:
+    """Jednolinijkowy pasek postępu na stderr; stdout zostaje czysty dla logu.
+
+    Liczy postęp względem CAŁEGO pakietu (itemy z wcześniejszych uruchomień wchodzą do
+    licznika `done`), ale tempo i ETA liczy z bieżącego uruchomienia — po wznowieniu ETA
+    jest wtedy uczciwe, a nie zaniżone przez pracę zrobioną wcześniej.
+    """
+
+    BAR_WIDTH = 28
+
+    def __init__(self, total, already_done, stream=sys.stderr, min_interval=0.5):
+        self.total = total
+        self.already_done = already_done
+        self.stream = stream
+        self.min_interval = min_interval
+        self.counts = {"yes": 0, "no": 0, "uncertain": 0, "failed": 0}
+        self.started = time.time()
+        self.last_render = 0.0
+        self.enabled = stream is not None and stream.isatty()
+
+    def bump(self, key):
+        self.counts[key] = self.counts.get(key, 0) + 1
+        self.render()
+
+    @property
+    def judged_now(self):
+        return sum(self.counts.values())
+
+    def render(self, force=False):
+        now = time.time()
+        if not force and now - self.last_render < self.min_interval:
+            return
+        self.last_render = now
+        done = self.already_done + self.judged_now
+        share = done / self.total if self.total else 1.0
+        filled = round(share * self.BAR_WIDTH)
+        bar = "#" * filled + "-" * (self.BAR_WIDTH - filled)
+        elapsed = now - self.started
+        rate = self.judged_now / elapsed if elapsed > 0 and self.judged_now else 0.0
+        remaining = self.total - done
+        eta = format_duration(remaining / rate) if rate > 0 else "?"
+        line = (
+            f"[{bar}] {share * 100:5.1f}%  {done}/{self.total}  "
+            f"{rate:5.1f} it/s  minelo {format_duration(elapsed)}  ETA {eta}  "
+            f"yes {self.counts['yes']} no {self.counts['no']} "
+            f"unc {self.counts['uncertain']} fail {self.counts['failed']}"
+        )
+        if self.enabled:
+            self.stream.write("\r" + line + " " * 4)
+            self.stream.flush()
+        elif force or self.judged_now % 200 == 0:
+            # Bez terminala (nohup, tee do pliku) drukujemy pelne linie, nie \r.
+            print(line, file=self.stream, flush=True)
+
+    def finish(self):
+        self.render(force=True)
+        if self.enabled:
+            self.stream.write("\n")
+            self.stream.flush()
+
+
 def parse_verdict(content):
     payload = json.loads(content)
     if not isinstance(payload, dict):
@@ -181,16 +270,34 @@ def main():
     print("model: " + str(args.model))
 
     done = load_done(args.journal)
+    # Wznowienie innym modelem uniewaznia caly journal przy imporcie, wiec lepiej
+    # zatrzymac sie teraz niz po kilku godzinach liczenia.
+    previous_models = {str(row.get("model")) for row in done.values()} - {"None"}
+    if previous_models and previous_models != {str(args.model)}:
+        raise SystemExit(
+            "journal "
+            + args.journal
+            + " zawiera werdykty modelu "
+            + str(sorted(previous_models))
+            + ", a teraz uruchamiasz "
+            + str(args.model)
+            + ". Import odrzuca journal mieszajacy modele. Uzyj tego samego modelu albo "
+            "zacznij nowy journal (--journal INNA_NAZWA.jsonl)."
+        )
+    if done:
+        print(f"WZNAWIANIE: {len(done)} werdyktow z poprzednich uruchomien zostaje bez zmian")
     print(
         f"itemow: {len(items)}, juz ocenionych: {len(done)}, "
         f"do zrobienia: {len(items) - len(done)}, pasow: {args.parallel}"
     )
     guard = threading.Lock()
     counters = {"yes": 0, "no": 0, "uncertain": 0, "failed": 0, "skipped": len(done)}
-    started = time.time()
+    progress = Progress(len(items), len(done))
     url = args.base_url.rstrip("/") + "/chat/completions"
 
     def judge(item):
+        if STOP.is_set():
+            return
         payload = {
             "model": args.model,
             "messages": [
@@ -242,6 +349,7 @@ def main():
         with guard:
             if verdict is None:
                 counters["failed"] += 1
+                progress.bump("failed")
                 return
             row = {
                 "schema": JOURNAL_SCHEMA,
@@ -260,30 +368,33 @@ def main():
                 handle.flush()
                 os.fsync(handle.fileno())
             counters[verdict] += 1
-            total = counters["yes"] + counters["no"] + counters["uncertain"]
-            if total % 50 == 0:
-                elapsed = time.time() - started
-                remaining = len(items) - counters["skipped"] - total
-                per_item = elapsed / max(total, 1)
-                print(
-                    f"  {total}/{len(items) - counters['skipped']} ocenionych, "
-                    f"{per_item:.2f} s/item, ETA {remaining * per_item / 60:.1f} min",
-                    flush=True,
-                )
+            progress.bump(verdict)
 
     pending = [item for item in items if item["item_id"] not in done]
     buckets = lanes_by_passage(pending, max(1, args.parallel))
 
     def walk(bucket):
         for item in bucket:
+            if STOP.is_set():
+                return
             judge(item)
 
+    signal.signal(signal.SIGINT, _request_stop)
+    signal.signal(signal.SIGTERM, _request_stop)
     with ThreadPoolExecutor(max_workers=max(1, args.parallel)) as pool:
         for future in [pool.submit(walk, bucket) for bucket in buckets]:
             future.result()
 
-    print("gotowe: " + json.dumps(counters, ensure_ascii=False))
+    progress.finish()
+    remaining = len(items) - len(done) - progress.judged_now
+    status = "PRZERWANE" if STOP.is_set() else "gotowe"
+    print(f"{status}: " + json.dumps(counters, ensure_ascii=False))
     print("journal: " + os.path.abspath(args.journal))
+    if STOP.is_set() and remaining > 0:
+        print(
+            f"zostalo {remaining} itemow - uruchom te sama komende, zeby wznowic",
+            flush=True,
+        )
     if counters["failed"]:
         print(f"UWAGA: {counters['failed']} itemow bez werdyktu (fail-closed)", file=sys.stderr)
 
