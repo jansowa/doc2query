@@ -51,10 +51,40 @@ nietknięty** i nadal jest przyrządem odniesienia.
   stronie klienta i nigdy nie jest wysyłane.
 - **Schemat odpowiedzi** jest generowany per request, z `minItems == maxItems == N`,
   `id` jako liczba całkowita i `verdict` domknięty enumem `[yes, no, uncertain]`.
-- **Budżet wyjścia**: `12 · N + 20` tokenów. Po każdej odpowiedzi sprawdzane jest
-  `finish_reason`; wartość `length` to błąd paczki, nie do naprawy podniesieniem budżetu
-  w biegu.
+- **Budżet wyjścia**: patrz korekta w §2a. Po każdej odpowiedzi sprawdzane jest
+  `finish_reason`.
 - Bez zmian: `temperature = 0`, `seed = 20260817`, wyłączony thinking, model, pakiet.
+
+## 2a. Korekta budżetu wyjścia (2026-08-20, po pierwszym runie paczkowym)
+
+Pierwotnie zapisałem tu `12 · N + 20` tokenów i klauzulę, że `finish_reason=length` jest
+błędem paczki „nie do naprawy podniesieniem budżetu w biegu". **Liczba była błędna**:
+policzyłem ją dla zwięzłego JSON-a, a serwer formatuje odpowiedź z wcięciami — dla N=3 to
+193 znaki zamiast 119, przy budżecie 56 tokenów. Skutek zmierzony u operatora: paczki
+masowo kończyły się `length` i **spadały do fallbacku**, czyli na prompt pojedynczy.
+
+To nie jest drobiazg wydajnościowy, bo psuje samą bramkę A/B: journal „kandydata"
+wypełniał się wierszami przyrządu odniesienia, więc porównanie v1 vs v2 mierzyłoby v1
+przeciw v1.
+
+Zamrożona korekta:
+
+- budżet to `tokens_per_verdict · N + overhead`, domyślnie **40 · N + 48** (dla N=8 daje
+  368 tokenów wobec realnej potrzeby ~170, czyli ~2× zapasu). Oba składniki są
+  parametrami CLI, nie stałymi w kodzie;
+- przy `finish_reason=length` **ponowienie idzie z podwojonym budżetem** (z twardym
+  sufitem 4096), a dopiero jego niepowodzenie uruchamia fallback.
+
+Uzasadnienie odstąpienia od klauzuli „nie do naprawy w biegu": przy dekodowaniu zachłannym
+(`temperature = 0`) `max_tokens` **nie zmienia rozkładu werdyktów** — decyduje wyłącznie o
+tym, czy odpowiedź się zmieści. Truncation jest więc awarią wejścia/wyjścia, nie werdyktem
+modelu, i jej naprawa nie jest dostrajaniem przyrządu pod wynik. Odwrotnie: **za mały
+budżet aktywnie skaża pomiar**, bo systematycznie przenosi część itemów na inny przyrząd
+przez fallback. Intencja pierwotnej klauzuli — zakaz zaklejania naruszeń **kontraktu**
+(zbiór id, duplikaty, enum) podnoszeniem limitów — pozostaje w mocy i dotyczy §3.
+
+Journale sprzed tej korekty (z wysokim udziałem fallbacku) nie wchodzą do bramki A/B;
+zostają jako ślad, który tę korektę uzasadnia.
 
 ## 3. Walidacja odpowiedzi i fallback (zamrożone)
 

@@ -57,9 +57,14 @@ VERDICTS = ("yes", "no", "uncertain")
 # ratuje czesc przypadkow - zmierzone: proba 1 i 2 poza schematem, proba 3 poprawna.
 DEFAULT_INVALID_RETRIES = 3
 MAX_TRANSPORT_RETRIES = 5
-# Budzet wyjscia paczki: ~12 tokenow na werdykt + narzut struktury JSON.
-TOKENS_PER_VERDICT = 12
-BATCH_TOKEN_OVERHEAD = 20
+# Budzet wyjscia paczki. Pierwotne 12 tokenow na werdykt bylo policzone dla zwiezlego
+# JSON-a, a serwer formatuje odpowiedz z wcieciami: dla N=3 to 193 znaki zamiast 119, wiec
+# budzet nie mial szans i paczki masowo spadaly do fallbacku (czyli na prompt pojedynczy).
+# Teraz z zapasem, sterowalne z CLI, a przy finish_reason=length budzet jest podwajany i
+# request ponawiany - truncation jest awaria we/wy, nie werdyktem modelu.
+TOKENS_PER_VERDICT = 40
+BATCH_TOKEN_OVERHEAD = 48
+MAX_BATCH_TOKEN_BUDGET = 4096
 
 SYSTEM_PROMPT_SINGLE = (
     "Jesteś rygorystycznym polskim audytorem odpowiadalności. Otrzymasz pasaż i "
@@ -378,6 +383,12 @@ def build_payload(item, args):
     }
 
 
+def batch_token_budget(count, args, multiplier=1):
+    """Budzet wyjscia paczki; multiplier > 1 sluzy ponowieniu po finish_reason=length."""
+    budget = (args.tokens_per_verdict * count + args.batch_token_overhead) * multiplier
+    return min(budget, MAX_BATCH_TOKEN_BUDGET)
+
+
 def build_batch_payload(batch, args):
     """Payload paczkowy (prompt v2): jeden pasaz, N zapytan z lokalnymi id 1..N.
 
@@ -400,7 +411,7 @@ def build_batch_payload(batch, args):
         ],
         "temperature": 0.0,
         "seed": args.seed,
-        "max_tokens": TOKENS_PER_VERDICT * len(batch) + BATCH_TOKEN_OVERHEAD,
+        "max_tokens": batch_token_budget(len(batch), args),
         "response_format": response_format(args.decoding, len(batch)),
         "chat_template_kwargs": {"enable_thinking": False},
     }
@@ -562,6 +573,18 @@ def build_parser():
         choices=("json_schema_enum", "json_object"),
         default="json_schema_enum",
         help="Ograniczenie dekodowania; enum domyka wartosc werdyktu do zbioru z kontraktu.",
+    )
+    parser.add_argument(
+        "--tokens-per-verdict",
+        type=int,
+        default=TOKENS_PER_VERDICT,
+        help="Budzet wyjscia na jeden werdykt w paczce (odpowiedz jest formatowana z wcieciami).",
+    )
+    parser.add_argument(
+        "--batch-token-overhead",
+        type=int,
+        default=BATCH_TOKEN_OVERHEAD,
+        help="Staly narzut budzetu wyjscia paczki (opakowanie JSON).",
     )
     parser.add_argument(
         "--invalid-retries",
@@ -838,13 +861,18 @@ def main() -> None:
             "\0".join(item["item_id"] for item in batch).encode()
         ).hexdigest()[:16]
         expected = list(range(1, len(batch) + 1))
-        payload = build_batch_payload(batch, args)
         verdicts = None
         last_error = None
         last_content = ""
         usage = None
+        truncated = False
         # Kontrakt: 1 ponowienie calej paczki, potem rozbicie na pojedyncze requesty.
+        # Po truncation ponowienie idzie z PODWOJONYM budzetem - inaczej powtarzaloby
+        # dokladnie ten sam blad we/wy.
         for attempt in (1, 2):
+            payload = build_batch_payload(batch, args)
+            if truncated:
+                payload["max_tokens"] = batch_token_budget(len(batch), args, multiplier=2)
             body = post(payload, "paczka " + batch_id)
             if body is None:
                 last_error = "brak odpowiedzi serwera"
@@ -852,7 +880,8 @@ def main() -> None:
             usage = body.get("usage")
             content, finish = response_text(body)
             if finish == "length":
-                last_error = "finish_reason=length (budzet max_tokens za maly)"
+                truncated = True
+                last_error = f"finish_reason=length przy budzecie {payload['max_tokens']} tokenow"
                 last_content = content[:300]
             else:
                 try:

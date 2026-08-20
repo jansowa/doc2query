@@ -96,7 +96,14 @@ def test_batch_payload_sends_the_passage_once_with_local_ids(script: ModuleType)
         {"item_id": "a", "query": "pierwsze", "passage": "PASAZ"},
         {"item_id": "b", "query": "drugie", "passage": "PASAZ"},
     ]
-    args = SimpleNamespace(model="m", seed=1, max_tokens=24, decoding="json_schema_enum")
+    args = SimpleNamespace(
+        model="m",
+        seed=1,
+        max_tokens=24,
+        decoding="json_schema_enum",
+        tokens_per_verdict=40,
+        batch_token_overhead=48,
+    )
 
     payload = script.build_batch_payload(batch, args)
     user = json.loads(payload["messages"][1]["content"])
@@ -108,7 +115,10 @@ def test_batch_payload_sends_the_passage_once_with_local_ids(script: ModuleType)
     ].index('"queries"')  # pasaż przed zapytaniami => wspólny prefiks
     schema = payload["response_format"]["json_schema"]["schema"]["properties"]["verdicts"]
     assert schema["minItems"] == schema["maxItems"] == 2
-    assert payload["max_tokens"] == script.TOKENS_PER_VERDICT * 2 + script.BATCH_TOKEN_OVERHEAD
+    # Budzet liczony z argumentow, nie ze stalej: 40*2 + 48
+    assert payload["max_tokens"] == 128
+    # Po truncation ponowienie ma dostac podwojony budzet.
+    assert script.batch_token_budget(2, args, multiplier=2) == 256
 
 
 def test_batch_parsing_ignores_order_and_refuses_broken_contracts(script: ModuleType) -> None:
