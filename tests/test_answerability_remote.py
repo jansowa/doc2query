@@ -306,3 +306,33 @@ def test_candidate_pool_refuses_a_final_test_leak(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="final-test usage"):
         candidate_pool_items([cohort])
+
+
+def test_import_skips_out_of_schema_events_but_keeps_verdicts(tmp_path: Path) -> None:
+    """Odpowiedzi poza schematem zostają w journalu jako dowód, ale nie są werdyktami."""
+    items = [
+        _audit_item("a", "pasaż a", "chosen", (True, True)),
+        _audit_item("b", "pasaż b", "chosen", (True, True)),
+    ]
+    manifest = write_packet(items, tmp_path / "packet")
+    journal = tmp_path / "verdicts.jsonl"
+    _write_journal(
+        journal,
+        [
+            _verdict_row(items[0], "yes"),
+            {
+                "schema": REMOTE_JOURNAL_SCHEMA,
+                "event": "out_of_schema",
+                "item_id": items[1].item_id,
+                "prompt_version": "task06-answerability-pl-v1",
+                "model": "vendor/Judge-27B-FP8",
+                "attempts": 2,
+                "error": "werdykt poza schematem: 'verdict'",
+                "content": '{"verdict": "verdict"}',
+            },
+        ],
+    )
+
+    verdicts = load_remote_journal(journal, manifest, items)
+
+    assert set(verdicts) == {items[0].item_id}

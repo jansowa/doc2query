@@ -43,7 +43,11 @@ from concurrent.futures import ThreadPoolExecutor
 PROMPT_VERSION = "task06-answerability-pl-v1"
 JOURNAL_SCHEMA = "task06-answerability-remote-verdict-v1"
 VERDICTS = ("yes", "no", "uncertain")
-MAX_INVALID_RETRIES = 3
+# Przy temperature=0 i przypietym seedzie ta sama tresc requestu daje te sama odpowiedz,
+# wiec ponawianie identycznego zapytania jest bezcelowe - dokladnie to zmierzono w audycie
+# Groq (raport task06_dual_llm_pair_audit: defekty sedziow byly powtarzalne). Zostawiamy
+# jedna dodatkowa probe wylacznie na wypadek niedeterminizmu z continuous batchingu.
+MAX_INVALID_RETRIES = 2
 MAX_TRANSPORT_RETRIES = 5
 
 SYSTEM_PROMPT = (
@@ -454,6 +458,8 @@ def main():
         payload = build_payload(item, args)
         verdict = None
         usage = None
+        last_error = None
+        last_content = ""
         for attempt in range(1, MAX_INVALID_RETRIES + 1):
             body = None
             for transport_attempt in range(1, MAX_TRANSPORT_RETRIES + 1):
@@ -498,14 +504,39 @@ def main():
                 verdict = parse_verdict(content)
                 break
             except (ValueError, json.JSONDecodeError) as exc:
-                print(
-                    f"niepoprawna odpowiedz (proba {attempt}) dla "
-                    f"{item['item_id']}: {str(exc)[:120]}",
-                    file=sys.stderr,
-                )
+                last_error = str(exc)[:200]
+                last_content = content[:300]
+                if attempt == MAX_INVALID_RETRIES:
+                    print(
+                        f"poza schematem po {attempt} probach, item {item['item_id']}: "
+                        f"{last_error} | tresc: {last_content!r}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
         with guard:
             if verdict is None:
                 counters["failed"] += 1
+                if last_error is not None:
+                    with open(args.journal, "a", encoding="utf-8") as handle:
+                        handle.write(
+                            json.dumps(
+                                {
+                                    "schema": JOURNAL_SCHEMA,
+                                    "event": "out_of_schema",
+                                    "item_id": item["item_id"],
+                                    "prompt_version": PROMPT_VERSION,
+                                    "model": args.model,
+                                    "attempts": MAX_INVALID_RETRIES,
+                                    "error": last_error,
+                                    "content": last_content,
+                                },
+                                ensure_ascii=False,
+                                sort_keys=True,
+                            )
+                            + "\n"
+                        )
+                        handle.flush()
+                        os.fsync(handle.fileno())
                 progress.bump("failed")
                 return
             row = {
@@ -563,7 +594,12 @@ def main():
             flush=True,
         )
     if counters["failed"]:
-        print(f"UWAGA: {counters['failed']} itemow bez werdyktu (fail-closed)", file=sys.stderr)
+        print(
+            f"UWAGA: {counters['failed']} itemow bez werdyktu (fail-closed). Ich odpowiedzi "
+            "sa zapisane w journalu jako zdarzenia out_of_schema - import je pomija, ale "
+            "zostaja jako dowod. Ponowne uruchomienie sprobuje ich jeszcze raz.",
+            file=sys.stderr,
+        )
 
 
 if __name__ == "__main__":
