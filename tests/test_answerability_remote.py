@@ -225,3 +225,84 @@ def test_identity_records_that_the_pin_is_weaker_than_a_digest() -> None:
 
     assert identity["model"] == "vendor/Judge-27B-FP8"
     assert identity["digest_pinning"] == "weaker_than_ollama_path"
+
+
+def _cohort(directory: Path, rows: list[dict[str, Any]], eligible: list[dict[str, Any]]) -> None:
+    gate = directory / "diversity_gate"
+    scoring = directory / "d01_controlled" / "scoring"
+    gate.mkdir(parents=True)
+    scoring.mkdir(parents=True)
+    (gate / "group_verdicts.jsonl").write_text(
+        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in eligible), encoding="utf-8"
+    )
+    (scoring / "per_generation.jsonl").write_text(
+        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8"
+    )
+
+
+def _scored(candidate_id: str, group: str, query: str, passage: str) -> dict[str, Any]:
+    return {
+        "evaluation_id": candidate_id,
+        "evaluation_group_id": group,
+        "generated": query,
+        "positive": {"doc_id": "1", "text": passage},
+        "final_tests_used": [],
+    }
+
+
+def test_candidate_pool_takes_only_eligible_representatives(tmp_path: Path) -> None:
+    from doc2query.preferences.answerability_remote import candidate_pool_items
+
+    cohort = tmp_path / "same_prompt_expansion_v1"
+    _cohort(
+        cohort,
+        [
+            _scored("c1", "g1", "reprezentant", "pasaż g1"),
+            _scored("c2", "g1", "nie reprezentant", "pasaż g1"),
+            _scored("c3", "g2", "grupa odrzucona", "pasaż g2"),
+        ],
+        [
+            {"group_id": "g1", "eligible": True, "representative_candidate_ids": ["c1"]},
+            {"group_id": "g2", "eligible": False, "representative_candidate_ids": ["c3"]},
+        ],
+    )
+
+    items = candidate_pool_items([cohort])
+
+    assert [item.query for item in items] == ["reprezentant"]
+    assert items[0].metadata["source"] == "candidate_pool"
+    assert items[0].metadata["candidate_id"] == "c1"
+
+
+def test_candidate_pool_deduplicates_identical_query_passage_pairs(tmp_path: Path) -> None:
+    from doc2query.preferences.answerability_remote import candidate_pool_items
+
+    first = tmp_path / "same_prompt_expansion_v1"
+    second = tmp_path / "same_prompt_expansion_v2"
+    for name, candidate in ((first, "c1"), (second, "c2")):
+        _cohort(
+            name,
+            [_scored(candidate, "g1", "to samo pytanie", "ten sam pasaż")],
+            [{"group_id": "g1", "eligible": True, "representative_candidate_ids": [candidate]}],
+        )
+
+    items = candidate_pool_items([first, second])
+
+    # Ten sam (zapytanie, pasaż) to jeden werdykt: item_id jest hashem treści.
+    assert len(items) == 1
+
+
+def test_candidate_pool_refuses_a_final_test_leak(tmp_path: Path) -> None:
+    from doc2query.preferences.answerability_remote import candidate_pool_items
+
+    cohort = tmp_path / "same_prompt_expansion_v1"
+    row = _scored("c1", "g1", "pytanie", "pasaż")
+    row["final_tests_used"] = ["test"]
+    _cohort(
+        cohort,
+        [row],
+        [{"group_id": "g1", "eligible": True, "representative_candidate_ids": ["c1"]}],
+    )
+
+    with pytest.raises(ValueError, match="final-test usage"):
+        candidate_pool_items([cohort])

@@ -35,6 +35,7 @@ from doc2query.preferences.answerability_judge import (
     PROMPT_VERSION,
     SYSTEM_PROMPT,
     JudgeItem,
+    judge_item_id,
 )
 from doc2query.training.dpo import file_sha256
 from doc2query.utils.records import read_durable_jsonl_prefix, read_records, write_json
@@ -254,6 +255,56 @@ def apply_acceptance_criteria(
         "manual_review_required": True,
         "manual_review_can_only_invalidate": True,
     }
+
+
+def candidate_pool_items(cohort_dirs: Sequence[Path]) -> list[JudgeItem]:
+    """Every diversity-gate representative of every eligible group, as judge items.
+
+    This is **precomputation of a per-candidate measurement**, not policy: it certifies
+    answerability for the pool a pair may later be drawn from, exactly as the frozen
+    scoring pass already computed ``pool_margin`` for the same candidates before any pair
+    policy existed.  It builds no pair, freezes no threshold and orders nothing.
+
+    Candidate identity stays local: the packet keys items by ``sha256(prompt, query,
+    passage)``, so verdicts join back here without the packet ever carrying a candidate ID.
+    """
+    items: dict[str, JudgeItem] = {}
+    for cohort_dir in cohort_dirs:
+        gate_path = cohort_dir / "diversity_gate" / "group_verdicts.jsonl"
+        scoring_path = cohort_dir / "d01_controlled" / "scoring" / "per_generation.jsonl"
+        for path in (gate_path, scoring_path):
+            if not path.is_file():
+                raise ValueError(f"missing cohort input: {path}")
+        allowed: set[str] = set()
+        for verdict in read_records(gate_path):
+            if bool(verdict["eligible"]):
+                allowed.update(str(value) for value in verdict["representative_candidate_ids"])
+        for row in read_records(scoring_path):
+            candidate_id = str(row["evaluation_id"])
+            if candidate_id not in allowed:
+                continue
+            if row.get("final_tests_used") != []:
+                raise ValueError("scored candidate declares final-test usage")
+            query = str(row["generated"])
+            passage = str(cast(Mapping[str, Any], row["positive"])["text"])
+            item_id = judge_item_id(query, passage)
+            items.setdefault(
+                item_id,
+                JudgeItem(
+                    item_id=item_id,
+                    query=query,
+                    passage=passage,
+                    metadata={
+                        "source": "candidate_pool",
+                        "cohort_id": cohort_dir.name,
+                        "candidate_id": candidate_id,
+                        "group_id": str(row["evaluation_group_id"]),
+                    },
+                ),
+            )
+    if not items:
+        raise ValueError("the candidate pool is empty")
+    return [items[item_id] for item_id in sorted(items)]
 
 
 def packet_items_preview(packet_dir: Path) -> list[dict[str, Any]]:
