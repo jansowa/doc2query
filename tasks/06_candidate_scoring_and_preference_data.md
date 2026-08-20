@@ -205,6 +205,39 @@ etykietach `answerable_a/b` audytu Groq.
   czytnik audytu Groq stratyfikuje po `primary_margin_gap_band`, którego eksport v2
   celowo nie produkuje — uruchomienie V2-05 wymaga czytnikowej adaptacji osobnym
   amendmentem, bez zmiany promptu, rubryki, modeli ani reguł decyzyjnych.
+- **Pary v2 ZBUDOWANE i ślepy eksport zamrożony** (2026-08-20, po zamrożeniu ADR):
+  **2 278 par** z kohort autoryzowanych (v1 204, v2 274, v3 1 800; 62,9% z 3 619 grup
+  `eligible`), **oś A 2 086 / oś B 192**. Dwie kontrole zgodności wychodzą dokładnie:
+  2 278 = zmierzone 2 253 pary osi A + 25 grup parowalnych wyłącznie na osi B, a rozkład
+  werdyktów reprezentantów jest identyczny z pomiarem podaży (`yes` 10 804 / `no` 12 804 /
+  `uncertain` 68) przy **zero** kandydatach bez werdyktu. Dominująca przyczyna braku pary:
+  brak dopuszczalnego `chosen` (1 300 grup) — koszt wymogu „czysty **i** `yes`”; brak
+  defektowego `rejected` tylko w 83 grupach. **Wynik negatywny: oś B nie dowiozła kwoty
+  250 par — dała 192.** Przyczyną nie jest cięcie overlapu, ale zamrożona reguła
+  przypisania osi: hasz daje kolejność prób, więc oś A (parowalna często) absorbuje
+  większość grup parowalnych na obu osiach — 954 pary (41,9%) powstały na osi zapasowej, a
+  z ~359 grup parowalnych na osi B do B trafiła nieco ponad połowa. Reguły nie zmieniono,
+  cięcia nie ruszono, kwoty nie obniżono; zadziałała prerejestrowana realokacja (oś A
+  kwota efektywna 308, oś B 192), więc próbka ma **500 par**, `shortfall_pair_count=0`,
+  `development_gate_met=true` — ale predykcja P4 będzie mierzona na 192 parach osi B.
+  **Degradacja marginesu jest zmierzona, nie tylko zadeklarowana**: 617 par (27,1%) ma
+  `primary_margin_delta < 0`, czyli `chosen` o **niższym** marginesie niż `rejected` —
+  polityka v1, wymagająca przewagi ≥ 1,0, nie zbudowałaby żadnej z nich; mediana delty
+  +1,12…+1,43 pokazuje, że i w parach zgodnych kierunkowo zapas nad progiem v1 był mały.
+  Zdjęcie weta shadow też jest wycenione: `shadow_agrees` w 73,1% par, więc v1 unieważniłaby
+  **613 par (26,9%)** — wzrostu podaży nie wolno przypisywać samemu sygnałowi defektu.
+  Rozkład etykiet: `judge_unanswerable` 68,9%, `weak_corpus_round_trip` 45,0%,
+  `high_lexical_overlap` 8,4%, `copy_risk` 4,1%; `possible_ambiguous_query` jest
+  praktycznie stałą (99,6%), więc **nie nadaje się** na wymiar slice'owania w audycie
+  (zapisane przed audytem). Cięcia osi B trzymają się w danych (`chosen` p75 0,045–0,051
+  wobec pułapu 0,0556; `rejected` minimum dokładnie 0,0857). Ślepy eksport w **nowym**
+  katalogu `artifacts/task06/preference_audit_v3_defect_pairs/`: 500 par, 12 strat
+  (`cohort_id × axis × requested_form`, **bez** pasm marginesu), ziarno 20260820,
+  orientacja 250/250, **500/500 zobowiązań zweryfikowanych**, dokładnie pięć dozwolonych
+  pól ślepych (ten sam zestaw co v1), zero wycieku `chosen`/`rejected`/osi/werdyktów do
+  ślepych rekordów; eksporty v1 i v2 nietknięte. Audytu v2 **nie uruchomiono**, predykcje
+  pozostają nieodczytane. Raport:
+  [`task06_defect_pairs_v2_2026-08-20.md`](../reports/measurements/task06_defect_pairs_v2_2026-08-20.md).
 - **Krok 0 był zablokowany operatorsko do 2026-08-19.** Wznowienie audytu uruchomiono
   2026-08-17 18:20 UTC i wykonało **0 requestów**: dzienne budżety tokenów obu
   modeli są wyczerpane (`gpt-oss` 186 057, `qwen` 228 603 przy limicie 185 000),

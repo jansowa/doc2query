@@ -1,0 +1,377 @@
+{
+  "adr": "reports/decisions/task06_defect_pair_policy_v2.md",
+  "audit_completed": false,
+  "audit_export": {
+    "audit_ids_fingerprint": "2b1ad9b69714d88032e829f3be8d2693d401dd629193c3d9a55d1f568e63a38a",
+    "axis_quotas": [
+      {
+        "allocated": 308,
+        "axis": "A",
+        "effective_quota": 308,
+        "population": 2086,
+        "quota": 250,
+        "shortfall": 0
+      },
+      {
+        "allocated": 192,
+        "axis": "B",
+        "effective_quota": 192,
+        "population": 192,
+        "quota": 250,
+        "shortfall": 0
+      }
+    ],
+    "blind_fields": [
+      "audit_id",
+      "passage",
+      "query_a",
+      "query_b",
+      "orientation_commitment"
+    ],
+    "contract": "task06-defect-pair-audit-blind-export-v2",
+    "development_gate_met": true,
+    "manifest_fingerprint": "1564b7a6ae8ecf5561fa7a927153456afc4d83f539310cd247ba2cf359b2bfb5",
+    "margin_used_for_stratification": false,
+    "orientation_balance": {
+      "A": 250,
+      "B": 250
+    },
+    "orientation_commitment_salt": "task06-defect-pair-audit-blind-export-v2:20260820",
+    "population_axis_counts": {
+      "A": 2086,
+      "B": 192
+    },
+    "population_pair_count": 2278,
+    "sampled_pair_count": 500,
+    "seed": 20260820,
+    "shortfall_pair_count": 0,
+    "status": "blind_export_frozen_not_reviewed",
+    "target_pair_count": 500
+  },
+  "contract": "task06-defect-pairs-v2",
+  "final_tests_used": [],
+  "orientation_commitments_verified": 500,
+  "pairs_used_for_training": false,
+  "per_cohort": {
+    "same_prompt_expansion_v1": {
+      "axis_pair_counts": {
+        "A": 189,
+        "B": 15
+      },
+      "candidate_verdict_counts": {
+        "no": 877,
+        "uncertain": 7,
+        "yes": 1122
+      },
+      "candidates_without_verdict": 0,
+      "chosen_content_jaccard": {
+        "A": {
+          "count": 189,
+          "max": 0.23076923076923078,
+          "min": 0.0,
+          "p25": 0.03225806451612903,
+          "p50": 0.058823529411764705,
+          "p75": 0.08108108108108109
+        },
+        "B": {
+          "count": 15,
+          "max": 0.05405405405405406,
+          "min": 0.027777777777777776,
+          "p25": 0.03225806451612903,
+          "p50": 0.03571428571428571,
+          "p75": 0.05
+        }
+      },
+      "failure_reason_counts": {
+        "group_not_gate_eligible": 138,
+        "no_admissible_chosen": 139,
+        "no_axis_defect_rejected": 28
+      },
+      "gate_eligible_group_count": 362,
+      "group_count": 500,
+      "manifest_fingerprint": "d39ff38f57a39b6775edbda53afc7b7ef293cac374cd3b5cc8cf721b07b11cae",
+      "pair_count": 204,
+      "pair_ids_fingerprint": "57c8a47d87a226ee08dd7cfd03dbee93b76c979813b4a86abb844a63d10f0851",
+      "pair_rate_among_gate_eligible": 0.56353591160221,
+      "pairs_built_on_fallback_axis": 96,
+      "per_axis_failure_counts": {
+        "A:no_admissible_chosen": 130,
+        "A:no_axis_defect_rejected": 31,
+        "B:no_admissible_chosen": 181,
+        "B:no_axis_defect_rejected": 70
+      },
+      "preferred_axis_counts": {
+        "A": 178,
+        "B": 184
+      },
+      "primary_margin_delta": {
+        "count": 204,
+        "max": 12.819689750671387,
+        "min": -7.185960441827774,
+        "p25": -0.011017322540283203,
+        "p50": 1.1238458156585693,
+        "p75": 2.617826461791992
+      },
+      "primary_margin_delta_negative_share": 0.2549019607843137,
+      "rejected_content_jaccard": {
+        "A": {
+          "count": 189,
+          "max": 0.14285714285714285,
+          "min": 0.0,
+          "p25": 0.017543859649122806,
+          "p50": 0.03571428571428571,
+          "p75": 0.06896551724137931
+        },
+        "B": {
+          "count": 15,
+          "max": 0.14814814814814814,
+          "min": 0.08695652173913043,
+          "p25": 0.09523809523809523,
+          "p50": 0.10344827586206896,
+          "p75": 0.125
+        }
+      },
+      "rejected_defect_label_counts": {
+        "copy_risk": 5,
+        "high_lexical_overlap": 15,
+        "judge_rank_disagreement": 23,
+        "judge_unanswerable": 123,
+        "lower_primary_margin": 152,
+        "possible_ambiguous_query": 200,
+        "shadow_agrees": 139,
+        "weak_corpus_round_trip": 101
+      },
+      "scoring_sha256": "02fb85e9713b10ee835ff1ffbc316d1efea2963a077ece962a6b76bd09f4a54e",
+      "verdict_journal_sha256": [
+        "fe675f07935c4b70e4bc21212ea9eee0b1b3566de44753106bc0841651f339c1"
+      ]
+    },
+    "same_prompt_expansion_v2": {
+      "axis_pair_counts": {
+        "A": 244,
+        "B": 30
+      },
+      "candidate_verdict_counts": {
+        "no": 1728,
+        "uncertain": 9,
+        "yes": 1394
+      },
+      "candidates_without_verdict": 0,
+      "chosen_content_jaccard": {
+        "A": {
+          "count": 244,
+          "max": 0.22727272727272727,
+          "min": 0.0,
+          "p25": 0.03333333333333333,
+          "p50": 0.058823529411764705,
+          "p75": 0.08695652173913043
+        },
+        "B": {
+          "count": 30,
+          "max": 0.05555555555555555,
+          "min": 0.0,
+          "p25": 0.02857142857142857,
+          "p50": 0.04,
+          "p75": 0.05128205128205128
+        }
+      },
+      "failure_reason_counts": {
+        "group_not_gate_eligible": 34,
+        "near_duplicate_query_pair": 1,
+        "no_admissible_chosen": 191,
+        "no_axis_defect_rejected": 6
+      },
+      "gate_eligible_group_count": 466,
+      "group_count": 500,
+      "manifest_fingerprint": "2a3a0e0a776dead72d6a4ec86ab277d9e25ad18468d029d57a9dd7adc787bd72",
+      "pair_count": 274,
+      "pair_ids_fingerprint": "9d40f9228896aedfe6896a8a82bd39be4c397017fadff0a6ebfb6ff14d134675",
+      "pair_rate_among_gate_eligible": 0.5879828326180258,
+      "pairs_built_on_fallback_axis": 102,
+      "per_axis_failure_counts": {
+        "A:near_duplicate_query_pair": 1,
+        "A:no_admissible_chosen": 185,
+        "A:no_axis_defect_rejected": 7,
+        "B:no_admissible_chosen": 235,
+        "B:no_axis_defect_rejected": 58
+      },
+      "preferred_axis_counts": {
+        "A": 224,
+        "B": 242
+      },
+      "primary_margin_delta": {
+        "count": 274,
+        "max": 11.06539535522461,
+        "min": -9.99920704960823,
+        "p25": -0.015585899353027344,
+        "p50": 1.4264960289001465,
+        "p75": 3.7758073806762695
+      },
+      "primary_margin_delta_negative_share": 0.25547445255474455,
+      "rejected_content_jaccard": {
+        "A": {
+          "count": 244,
+          "max": 0.26666666666666666,
+          "min": 0.0,
+          "p25": 0.022222222222222223,
+          "p50": 0.03508771929824561,
+          "p75": 0.06666666666666667
+        },
+        "B": {
+          "count": 30,
+          "max": 0.25,
+          "min": 0.08571428571428572,
+          "p25": 0.09523809523809523,
+          "p50": 0.1111111111111111,
+          "p75": 0.13513513513513514
+        }
+      },
+      "rejected_defect_label_counts": {
+        "copy_risk": 11,
+        "high_lexical_overlap": 30,
+        "judge_rank_disagreement": 55,
+        "judge_unanswerable": 193,
+        "lower_primary_margin": 204,
+        "possible_ambiguous_query": 274,
+        "shadow_agrees": 208,
+        "weak_corpus_round_trip": 118
+      },
+      "scoring_sha256": "f7a1fa67ef1d8f036cf9e019c75cf05a3578a8fb8675a693d43271ad3632ed02",
+      "verdict_journal_sha256": [
+        "fe675f07935c4b70e4bc21212ea9eee0b1b3566de44753106bc0841651f339c1"
+      ]
+    },
+    "same_prompt_expansion_v3": {
+      "axis_pair_counts": {
+        "A": 1653,
+        "B": 147
+      },
+      "candidate_verdict_counts": {
+        "no": 10199,
+        "uncertain": 52,
+        "yes": 8288
+      },
+      "candidates_without_verdict": 0,
+      "chosen_content_jaccard": {
+        "A": {
+          "count": 1653,
+          "max": 0.3076923076923077,
+          "min": 0.0,
+          "p25": 0.034482758620689655,
+          "p50": 0.06060606060606061,
+          "p75": 0.08695652173913043
+        },
+        "B": {
+          "count": 147,
+          "max": 0.05555555555555555,
+          "min": 0.0,
+          "p25": 0.02857142857142857,
+          "p50": 0.03571428571428571,
+          "p75": 0.045454545454545456
+        }
+      },
+      "failure_reason_counts": {
+        "group_not_gate_eligible": 209,
+        "no_admissible_chosen": 970,
+        "no_axis_defect_rejected": 49
+      },
+      "gate_eligible_group_count": 2791,
+      "group_count": 3000,
+      "manifest_fingerprint": "815c4875e1bd7fabf7a043e64f2d8d104e40f44143cf47b74dbb43801510bd87",
+      "pair_count": 1800,
+      "pair_ids_fingerprint": "535fdd290513ec7d3cc2d1c14fff2002e92510ff7bad12ae095353de9dbc9960",
+      "pair_rate_among_gate_eligible": 0.6449301325689717,
+      "pairs_built_on_fallback_axis": 756,
+      "per_axis_failure_counts": {
+        "A:no_admissible_chosen": 942,
+        "A:no_axis_defect_rejected": 57,
+        "B:no_admissible_chosen": 1338,
+        "B:no_axis_defect_rejected": 401
+      },
+      "preferred_axis_counts": {
+        "A": 1388,
+        "B": 1403
+      },
+      "primary_margin_delta": {
+        "count": 1800,
+        "max": 17.929400622844696,
+        "min": -11.12410295009613,
+        "p25": -0.13724708557128906,
+        "p50": 1.3704237937927246,
+        "p75": 3.6557064056396484
+      },
+      "primary_margin_delta_negative_share": 0.275,
+      "rejected_content_jaccard": {
+        "A": {
+          "count": 1653,
+          "max": 0.26666666666666666,
+          "min": 0.0,
+          "p25": 0.020833333333333332,
+          "p50": 0.037037037037037035,
+          "p75": 0.06666666666666667
+        },
+        "B": {
+          "count": 147,
+          "max": 0.23529411764705882,
+          "min": 0.08571428571428572,
+          "p25": 0.09523809523809523,
+          "p50": 0.10526315789473684,
+          "p75": 0.125
+        }
+      },
+      "rejected_defect_label_counts": {
+        "copy_risk": 77,
+        "high_lexical_overlap": 147,
+        "judge_rank_disagreement": 323,
+        "judge_unanswerable": 1254,
+        "lower_primary_margin": 1305,
+        "possible_ambiguous_query": 1796,
+        "shadow_agrees": 1318,
+        "weak_corpus_round_trip": 805
+      },
+      "scoring_sha256": "ba566953c995f66e21940ef20b77d3af6e4714b5f57cfa1e45784523df9f5821",
+      "verdict_journal_sha256": [
+        "fe675f07935c4b70e4bc21212ea9eee0b1b3566de44753106bc0841651f339c1"
+      ]
+    }
+  },
+  "policy_id": "task06-defect-pair-policy-v2.0",
+  "pooled": {
+    "axis_pair_counts": {
+      "A": 2086,
+      "B": 192
+    },
+    "candidate_verdict_counts": {
+      "no": 12804,
+      "uncertain": 68,
+      "yes": 10804
+    },
+    "failure_reason_counts": {
+      "group_not_gate_eligible": 381,
+      "near_duplicate_query_pair": 1,
+      "no_admissible_chosen": 1300,
+      "no_axis_defect_rejected": 83
+    },
+    "gate_eligible_group_count": 3619,
+    "group_count": 4000,
+    "negative_primary_margin_delta_share": 0.2708516242317823,
+    "pair_count": 2278,
+    "pair_rate_among_gate_eligible": 0.6294556507322465,
+    "pairs_built_on_fallback_axis": 954,
+    "pairs_with_negative_primary_margin_delta": 617,
+    "rejected_defect_label_counts": {
+      "copy_risk": 93,
+      "high_lexical_overlap": 192,
+      "judge_rank_disagreement": 401,
+      "judge_unanswerable": 1570,
+      "lower_primary_margin": 1661,
+      "possible_ambiguous_query": 2270,
+      "shadow_agrees": 1665,
+      "weak_corpus_round_trip": 1024
+    }
+  },
+  "schema": "task06-defect-pairs-v2-aggregate-v1",
+  "status": "defect_pairs_built_not_audited",
+  "task07_training_authorized": false,
+  "thresholds_frozen_here": false
+}
