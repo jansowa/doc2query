@@ -173,10 +173,38 @@ etykietach `answerable_a/b` audytu Groq.
   **jedną** grupę (2 254 → 2 253), bo strony różnią się defektem, nie przestawieniem słów.
   Raport:
   [`task06_axis_a_supply_after_certification_2026-08-20.md`](../reports/measurements/task06_axis_a_supply_after_certification_2026-08-20.md).
-- **Następny krok: ADR V2-03.** Ma teraz komplet wsadu (pełny audyt v1 jako baseline
-  predykcji, przyjęty sędzia, zmierzona podaż osi A, cięcia osi B z inwentarza V2-00) i
-  jako jedyny może zamrozić kwoty, progi, tie-breaki oraz predykcje **przed** zbudowaniem
-  pierwszej pary v2.
+- **ADR V2-03 ZAMROŻONY 2026-08-20, przed zbudowaniem pierwszej pary v2**
+  ([`task06_defect_pair_policy_v2.md`](../reports/decisions/task06_defect_pair_policy_v2.md),
+  config `configs/preferences/task06_defect_pair_policy_v2.yaml`, moduł
+  `src/doc2query/preferences/pair_policy_v2.py` + eksport
+  `pair_audit_export_v2.py`, 32 testy CPU). Zamrożone: **osie A i B** (oś C poza
+  wydaniem — V2-02 nie dowiozło kryterium, więc słaby filtr focusa z v1 **zdjęto**, a
+  `focus_accuracy` jest wyłącznie etykietą); definicje bajtowo zgodne ze zmierzoną
+  podażą (`chosen` = czysty **i** werdykt `yes`; `rejected` osi A = `no` **albo** brak
+  rt@100; `uncertain` blokuje `chosen` i nie jest defektem); **cięcie osi B p75
+  `content_jaccard ≥ 0,0857`** dla `rejected` i **p50 ≤ 0,0556** dla `chosen`
+  (uzasadnienie: p90 przy dwóch nieznanych mnożnikach zawężających — filtr sędziego
+  79,5% i ograniczenie do 13,9% grup — groziło zejściem poniżej kwoty 250 par osi B);
+  **kwoty 250/250** w próbce 500 par z realokacją niewykorzystanej kwoty i jawnym
+  raportem niedoboru; **deterministyczne przypisanie osi haszem grupy** (kolejność prób,
+  nie priorytet, nie licznik), max 1 para na prompt; **tie-break DivPO przyjęty**
+  (`chosen` najbardziej odrębny, `rejected` najbardziej typowy, remisy po
+  `candidate_index`); margines primary **wyłącznie** sanity `pool_margin > 0`
+  (`margin_used_for_ordering=false`, pasma marginesu **usunięte** ze strat próbki);
+  **veto shadow zdjęte** z uzasadnieniem (sprawdzało zgodność z porządkiem marginesowym,
+  którego v2 nie ma) — z jawnym zapisem, że wzrost liczby par względem v1 **nie jest**
+  miarą jakości; konstruowane rejected pominięte (`constructed_rejected=false`, cap 0%);
+  werdykty czytane z journala przypiętego po SHA-256 (`fe675f07…`, 23 676 rekordów),
+  brak werdyktu = przerwanie runu. **Predykcje wiążące** (bramka fail-closed V2-05):
+  P1 nieodpowiadalne `chosen` **≤ 5%** u każdego sędziego (wyprowadzone z czystości
+  filtra: 17,7% × (1 − `recall_no` 0,9429) = 1,01%, próg z ~5× zapasem — nie z ambicji);
+  P2 `consensus_supports_automatic` **≥ 30%** z dolną granicą CI powyżej 24,4%
+  (rozkład baseline'u 0,348 × 0,701 przy drugim czynniku podniesionym do 0,85 ze
+  slice'ów defektowych); P3 `consensus_contradicts_automatic` **≤ 3,1%**; P4 kontrast
+  osi ≥ +20 pp jako test mechanizmu. Remisy raportowane **bez progu**. Znany dług:
+  czytnik audytu Groq stratyfikuje po `primary_margin_gap_band`, którego eksport v2
+  celowo nie produkuje — uruchomienie V2-05 wymaga czytnikowej adaptacji osobnym
+  amendmentem, bez zmiany promptu, rubryki, modeli ani reguł decyzyjnych.
 - **Krok 0 był zablokowany operatorsko do 2026-08-19.** Wznowienie audytu uruchomiono
   2026-08-17 18:20 UTC i wykonało **0 requestów**: dzienne budżety tokenów obu
   modeli są wyczerpane (`gpt-oss` 186 057, `qwen` 228 603 przy limicie 185 000),

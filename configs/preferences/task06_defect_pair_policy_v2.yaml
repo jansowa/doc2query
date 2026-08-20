@@ -1,0 +1,184 @@
+# Polityka par zakotwiczonych w defektach — Task 06, wydanie v2.0.
+#
+# Zamrożona prospektywnie przez ADR reports/decisions/task06_defect_pair_policy_v2.md
+# PRZED zbudowaniem pierwszej pary v2. Margines primary NIE jest kluczem
+# porządkującym; jest wyłącznie warunkiem sanity po stronie chosen.
+# Oś C jest poza tym wydaniem (V2-02 nie dowiozło kryterium akceptacji).
+schema_version: 1
+contract: task06-defect-pair-policy-v2
+policy_id: task06-defect-pair-policy-v2.0
+status: frozen_before_pair_read
+adr: reports/decisions/task06_defect_pair_policy_v2.md
+
+pairing:
+  max_pairs_per_group: 1
+  require_exact_same_prompt: true
+  require_diversity_gate_eligible: true
+  restrict_to_gate_representatives: true
+  # Bajtowo to samo ograniczenie, co w polityce v1/v1.1.
+  max_normalized_query_jaccard: 0.85
+  # Kolejność prób osi wynika z hasza grupy, nie z priorytetu ani z licznika kwot.
+  axis_assignment: deterministic_hash_of_group_id
+  axis_assignment_salt: "task06-defect-pair-policy-v2:axis"
+
+# Primary NIE porządkuje. Jedyna rola: sanity po stronie chosen.
+primary:
+  judge: sdadas/polish-reranker-roberta-v3
+  signal: pool_margin
+  role: chosen_side_sanity_only
+  min_chosen_margin_exclusive: 0.0
+  used_for_ordering: false
+  used_for_tie_break: false
+
+# Shadow: veto zdjęte (patrz §8 ADR). Komponenty nadal zapisywane w rekordzie.
+shadow:
+  judge: BAAI/bge-reranker-v2-m3
+  role: recorded_only_never_selection_never_veto
+  veto_on_margin_inversion: false
+  veto_on_rank_inversion: false
+
+# Sygnał odpowiadalności: przyjęty bramką K1-K3 sędzia V2-01.
+answerability:
+  judge_contract: task06-answerability-judge-v1
+  adr: reports/decisions/task06_answerability_judge_v1.md
+  join_key: judge_item_id
+  # Werdykty odczytywane z zamrożonego journala, nigdy generowane w budowie par.
+  verdict_journals:
+    - path: artifacts/task06/answerability_verdicts/verdicts_pool_authorized_single.jsonl
+      sha256: fe675f07935c4b70e4bc21212ea9eee0b1b3566de44753106bc0841651f339c1
+      record_count: 23676
+  chosen_required_verdict: "yes"
+  # `uncertain` blokuje chosen i NIE jest defektem (§3 ADR V2-01).
+  uncertain_blocks_chosen: true
+  uncertain_is_defect: false
+  # Brak werdyktu dla reprezentanta grupy `eligible` przerywa cały run.
+  missing_verdict_is_fatal: true
+
+corpus_round_trip:
+  role: independent_filter
+  chosen_required_field: corpus_round_trip_at_20
+  axis_a_defect_field: corpus_round_trip_at_100
+  axis_b_rejected_required_field: corpus_round_trip_at_100
+
+format:
+  require_format_valid: true
+  forbid_prefix: true
+  forbid_metacomment: true
+  forbid_multiple_query: true
+  forbid_empty: true
+  # Bajtowo ten sam guard, co w v1; format.py pozostaje nietknięty.
+  supplementary_lead_in_guard: task06_lead_in_guard_v1
+
+# Kontrakt kopiowania odziedziczony bez zmian z Task 05.
+copy_risk:
+  inherited_from: task05-d01-copy-semantic-quality-v1
+  minimum_query_words: 4
+  copy_density: 0.6
+  normalized_lcs: 0.8
+  longest_copied_ngram: 3.0
+  query_to_passage_length_ratio: 0.3838827838827845
+  reject_chosen_on_copy_risk: true
+  reject_rejected_on_copy_risk: false
+
+# Warunek bezwładny: na tych kohortach entity_preservation jest stałą 1,0
+# z konstrukcji (SimplePolishNormalizer nie ekstrahuje encji). Zostaje wyłącznie
+# dla bajtowej ciągłości ze zmierzoną podażą 2253 par.
+entity_preservation:
+  role: inherited_inert_check
+  required_chosen_value: 1.0
+  measured_constant_on_these_cohorts: 1.0
+  claimed_as_hallucination_filter: false
+
+# Oś C jest poza wydaniem, a etykiety focusa są zmierzenie zepsute (V2-02),
+# więc słaby filtr focusa z v1 zostaje ZDJĘTY; focus_accuracy jest tylko etykietą.
+focus:
+  role: reported_label_only
+  reject_chosen_on_zero_focus_accuracy: false
+  abstention_penalized: false
+
+axes:
+  - id: A
+    name: answerability_and_grounding
+    priority: 1
+    chosen_requires_judge_yes: true
+    rejected_defects:
+      - judge_unanswerable
+      - weak_corpus_round_trip
+  - id: B
+    name: lexical_easiness
+    priority: 2
+    chosen_requires_judge_yes: true
+    rejected_requires_judge_yes: true
+    rejected_requires_round_trip_100: true
+    overlap_signal: content_jaccard
+    # Kandydaci cięcia z inwentarza V2-00: p50 0.0556, p75 0.0857, p90 0.1212.
+    # Zamrożone: p75 jako cięcie górne, p50 jako pułap chosen (§4.1 ADR).
+    rejected_min_overlap: 0.0857
+    chosen_max_overlap: 0.0556
+    rejected_defects:
+      - high_lexical_overlap
+  - id: C
+    name: focus_compliance
+    priority: 3
+    in_release: false
+    reason: >-
+      V2-02 nie dowiozło kryterium akceptacji (abstencja focusa spadła o ~1 pp,
+      wąskim gardłem jest scorer leksykalny); podaż na starych etykietach = 0.
+      Oś wraca w v2.1 po mocniejszym przypisywaczu i osobnym ADR.
+
+# Wariant DivPO przyjęty (§7 ADR): chosen najbardziej odrębny, rejected
+# najbardziej typowy w grupie. Nie jest kluczem jakości i nie używa marginesu.
+tie_break:
+  variant: divpo
+  signal: mean_normalized_query_jaccard_to_group_representatives
+  chosen_selection: minimum
+  rejected_selection: maximum
+  deterministic_fallback:
+    - candidate_index
+    - candidate_id
+
+# Konstruowane rejected pominięte: naturalny rejected osi A jest w 96,9% grup.
+constructed_rejected:
+  enabled: false
+  max_share: 0.0
+
+excluded_signals:
+  - name: pool_margin_as_ordering_key
+    reason: >-
+      Audyt v1 na 500 parach: pasma marginesu płaskie u lepiej obsadzonego qwen
+      (0,693/0,730/0,700), a zgodność z automatem 0,708-0,718 wobec 0,879 między
+      sędziami. Margines zostaje wyłącznie warunkiem sanity chosen.
+  - name: total_score
+    reason: Nie istnieje zamrożona, skalibrowana funkcja wag; polityka jej nie tworzy.
+  - name: shadow_pool_margin_as_ranking_key
+    reason: Shadow jest zapisywany do analizy, nigdy nie wybiera i nie unieważnia pary.
+  - name: entity_preservation_as_hallucination_filter
+    reason: >-
+      Zmierzona stała 1,0 z konstrukcji na tych kohortach (backend bez ekstrakcji
+      encji); warunek zostaje bezwładny i nie wolno go tak nazywać.
+
+# Deterministyczna, stratyfikowana próbka do rozwojowego audytu dual-LLM v2.
+audit_sample:
+  target_pair_count: 500
+  axis_quotas:
+    A: 250
+    B: 250
+  axis_quota_fallback: reallocate_unused_quota_to_other_axis
+  seed: 20260820
+  strata:
+    - cohort_id
+    - axis
+    - requested_form
+  allocation: proportional_largest_remainder
+  ordering: pair_id
+  orientation: deterministic_counterbalanced_committed_before_review
+  output_dir: artifacts/task06/preference_audit_v3_defect_pairs
+
+# Te same trzy kohorty, na których zmierzono podaż osi A (2253 pary).
+# v4-v11 dopiero po pozytywnym audycie v2.
+authorized_cohorts:
+  - same_prompt_expansion_v1
+  - same_prompt_expansion_v2
+  - same_prompt_expansion_v3
+
+final_tests_used: []

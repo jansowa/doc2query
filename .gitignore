@@ -76,6 +76,7 @@ htmlcov/
 !/reports/decisions/task06_answerability_judge_v1.md
 !/reports/decisions/task06_answerability_judge_v1_decoding_amendment_2026-08-20.md
 !/reports/decisions/task06_answerability_judge_v1_batching_amendment_2026-08-20.md
+!/reports/decisions/task06_defect_pair_policy_v2.md
 !/reports/plans/
 /reports/plans/*
 !/reports/plans/task05_d01_overnight_2026-07-26.md
@@ -115,6 +116,7 @@ htmlcov/
 !/reports/measurements/task04_m03_probe_convergence_calibration_2026-08-16.md
 !/reports/measurements/task06_dual_llm_pair_audit_2026-08-17.md
 !/reports/measurements/task06_defect_inventory_and_focus_v2_2026-08-17.md
+!/reports/measurements/task06_defect_pairs_v2_2026-08-20.md
 !/reports/measurements/task04/
 /reports/measurements/task04/*
 !/reports/measurements/task04/probe_within_arm_variance_v1.json
@@ -139,6 +141,9 @@ htmlcov/
 !/reports/measurements/task06/d01b_hybrid_handoff_v1/
 /reports/measurements/task06/d01b_hybrid_handoff_v1/*
 !/reports/measurements/task06/d01b_hybrid_handoff_v1/preflight.json
+!/reports/measurements/task06/defect_pairs_v2/
+/reports/measurements/task06/defect_pairs_v2/*
+!/reports/measurements/task06/defect_pairs_v2/summary.json
 
 # Editors and OS
 .idea/
