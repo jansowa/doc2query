@@ -76,3 +76,64 @@ def test_verdict_parsing_refuses_anything_outside_the_schema(script: ModuleType)
     for bad in ('{"verdict": "maybe"}', "[]", '{"other": "yes"}'):
         with pytest.raises(ValueError):
             script.parse_verdict(bad)
+
+
+def test_batches_never_mix_passages_and_respect_the_cap(script: ModuleType) -> None:
+    items = [{"item_id": f"i{n}", "query": f"q{n}", "passage": "P1"} for n in range(9)]
+    items += [{"item_id": f"j{n}", "query": f"r{n}", "passage": "P2"} for n in range(2)]
+
+    batches = script.batches_in_lane(items, 4)
+
+    assert [len(batch) for batch in batches] == [4, 4, 1, 2]
+    for batch in batches:
+        assert len({item["passage"] for item in batch}) == 1
+
+
+def test_batch_payload_sends_the_passage_once_with_local_ids(script: ModuleType) -> None:
+    from types import SimpleNamespace
+
+    batch = [
+        {"item_id": "a", "query": "pierwsze", "passage": "PASAZ"},
+        {"item_id": "b", "query": "drugie", "passage": "PASAZ"},
+    ]
+    args = SimpleNamespace(model="m", seed=1, max_tokens=24, decoding="json_schema_enum")
+
+    payload = script.build_batch_payload(batch, args)
+    user = json.loads(payload["messages"][1]["content"])
+
+    assert user["passage"] == "PASAZ"  # pasaż raz, nie N razy
+    assert user["queries"] == [{"id": 1, "query": "pierwsze"}, {"id": 2, "query": "drugie"}]
+    assert payload["messages"][1]["content"].index('"passage"') < payload["messages"][1][
+        "content"
+    ].index('"queries"')  # pasaż przed zapytaniami => wspólny prefiks
+    schema = payload["response_format"]["json_schema"]["schema"]["properties"]["verdicts"]
+    assert schema["minItems"] == schema["maxItems"] == 2
+    assert payload["max_tokens"] == script.TOKENS_PER_VERDICT * 2 + script.BATCH_TOKEN_OVERHEAD
+
+
+def test_batch_parsing_ignores_order_and_refuses_broken_contracts(script: ModuleType) -> None:
+    shuffled = json.dumps({"verdicts": [{"id": 2, "verdict": "no"}, {"id": 1, "verdict": "yes"}]})
+
+    assert script.parse_batch_verdicts(shuffled, [1, 2]) == {1: "yes", 2: "no"}
+
+    for broken, reason in (
+        ('{"verdicts": [{"id": 1, "verdict": "yes"}]}', "id nie zgadza"),
+        ('{"verdicts": [{"id": 1, "verdict": "yes"}, {"id": 1, "verdict": "no"}]}', "zduplikowane"),
+        (
+            '{"verdicts": [{"id": 1, "verdict": "verdict"}, {"id": 2, "verdict": "no"}]}',
+            "schematem",
+        ),
+        ('{"inne": []}', "brak tablicy"),
+    ):
+        with pytest.raises(script.BatchError, match=reason):
+            script.parse_batch_verdicts(broken, [1, 2])
+
+
+def test_single_and_batched_prompts_have_distinct_pinned_hashes(script: ModuleType) -> None:
+    assert (
+        script.PROMPT_SHA256[script.PROMPT_VERSION_SINGLE]
+        != (script.PROMPT_SHA256[script.PROMPT_VERSION_BATCHED])
+    )
+    assert script.EXPECTED_SYSTEM_PROMPT_SHA256 == (
+        "74d3ee07757decbdf5655e1878c070f66bf05c90a60bf4dc5f56b1c520cfee84"
+    )

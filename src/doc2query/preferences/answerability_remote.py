@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -43,6 +44,13 @@ from doc2query.utils.records import read_durable_jsonl_prefix, read_records, wri
 PACKET_SCHEMA = "task06-answerability-packet-v1"
 REMOTE_JOURNAL_SCHEMA = "task06-answerability-remote-verdict-v1"
 VERDICTS = frozenset({"yes", "no", "uncertain"})
+VERDICT_ORDER = ("yes", "no", "uncertain")
+# Wersje promptu, ktore wolno zaimportowac. `-v2-batched` ocenia N zapytan jednego pasazu
+# w jednym requescie; jego dopuszczenie do kalibracji wymaga przejscia bramki A/B
+# (amendment do ADR V2-01), a import zawsze raportuje rozbicie po wersjach.
+PROMPT_VERSION_SINGLE = PROMPT_VERSION
+PROMPT_VERSION_BATCHED = "task06-answerability-pl-v2-batched"
+KNOWN_PROMPT_VERSIONS = frozenset({PROMPT_VERSION_SINGLE, PROMPT_VERSION_BATCHED})
 
 
 def build_packet_rows(items: Sequence[JudgeItem]) -> tuple[list[dict[str, Any]], list[str]]:
@@ -108,8 +116,9 @@ def load_remote_journal(
             continue
         if str(event.get("schema")) != REMOTE_JOURNAL_SCHEMA:
             raise ValueError(f"unexpected remote journal schema: {event.get('schema')!r}")
-        if str(event.get("prompt_version")) != PROMPT_VERSION:
-            raise ValueError("remote journal was produced with a different prompt version")
+        version = str(event.get("prompt_version"))
+        if version not in KNOWN_PROMPT_VERSIONS:
+            raise ValueError(f"remote journal has an unknown prompt version: {version!r}")
         item_id = str(event["item_id"])
         if item_id not in known:
             raise ValueError(f"remote journal contains an item outside the packet: {item_id}")
@@ -124,6 +133,31 @@ def load_remote_journal(
     if len(models) > 1:
         raise ValueError(f"remote journal mixes judge models: {sorted(models)}")
     return verdicts
+
+
+def journal_provenance(verdicts: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+    """Rozbicie werdyktow po wersji promptu, paczkowaniu i fallbacku.
+
+    Kalibracja liczona na mieszance przyrzadow bylaby nieinterpretowalna, wiec te liczby
+    musza byc widoczne w raporcie, a nie tylko w journalu.
+    """
+    versions: Counter[str] = Counter()
+    batch_sizes: Counter[str] = Counter()
+    fallback = 0
+    for row in verdicts.values():
+        versions[str(row.get("prompt_version"))] += 1
+        batch_sizes[str(row.get("batch_size"))] += 1
+        if bool(row.get("fallback")):
+            fallback += 1
+    total = sum(versions.values())
+    return {
+        "verdicts": total,
+        "by_prompt_version": dict(sorted(versions.items())),
+        "by_batch_size": dict(sorted(batch_sizes.items())),
+        "fallback_verdicts": fallback,
+        "fallback_share": fallback / total if total else None,
+        "single_instrument": len(versions) <= 1,
+    }
 
 
 def remote_identity(verdicts: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
@@ -315,3 +349,151 @@ def packet_items_preview(packet_dir: Path) -> list[dict[str, Any]]:
         {"item_id": row["i"], "query": row["q"], "passage": passages[int(row["p"])]}
         for row in rows[1:]
     ]
+
+
+# Progi bramki A/B zamrozone w amendmencie o paczkowaniu (reports/decisions/
+# task06_answerability_judge_v1_batching_amendment_2026-08-20.md).
+MINIMUM_BATCH_AGREEMENT = 0.98
+DRIFT_SIGNIFICANCE = 0.05
+
+
+def _binomial_two_sided_p(successes: int, trials: int) -> float:
+    """Dokladny dwustronny test znakowy przy p=0.5; bez zaleznosci zewnetrznych.
+
+    Uzywany do wykrycia **niesymetrycznych** migracji werdyktow: jesli przejscia
+    yes->no i no->yes rownowaza sie, to szum przyrzadu; jesli jedna strona dominuje,
+    to dryf systematyczny i bramka musi go zlapac.
+    """
+    if trials == 0:
+        return 1.0
+    coefficients = [math.comb(trials, k) for k in range(trials + 1)]
+    total = float(sum(coefficients))
+    observed = coefficients[successes]
+    tail = sum(value for value in coefficients if value <= observed)
+    return min(1.0, tail / total)
+
+
+def compare_journal_verdicts(
+    baseline: Mapping[str, Mapping[str, Any]], candidate: Mapping[str, Mapping[str, Any]]
+) -> dict[str, Any]:
+    """Porownaj dwa journale per item: zgodnosc, macierz przejsc, test dryfu.
+
+    `baseline` to przyrzad, na ktorym zamrozono kryteria (pojedyncze requesty),
+    `candidate` to wariant paczkowy. Porownanie obejmuje wylacznie itemy obecne w obu.
+    """
+    shared = sorted(set(baseline) & set(candidate))
+    matrix: Counter[tuple[str, str]] = Counter()
+    for item_id in shared:
+        matrix[(str(baseline[item_id]["verdict"]), str(candidate[item_id]["verdict"]))] += 1
+    agreed = sum(count for (left, right), count in matrix.items() if left == right)
+    agreement = agreed / len(shared) if shared else None
+    drift = []
+    for index, left in enumerate(VERDICT_ORDER):
+        for right in VERDICT_ORDER[index + 1 :]:
+            forward = matrix[(left, right)]
+            backward = matrix[(right, left)]
+            p_value = _binomial_two_sided_p(forward, forward + backward)
+            drift.append(
+                {
+                    "pair": f"{left}->{right} vs {right}->{left}",
+                    "forward": forward,
+                    "backward": backward,
+                    "p_value": p_value,
+                    "significant": (forward + backward) > 0 and p_value < DRIFT_SIGNIFICANCE,
+                }
+            )
+    shares = {
+        "baseline": {
+            verdict: sum(count for (left, _), count in matrix.items() if left == verdict)
+            / len(shared)
+            if shared
+            else None
+            for verdict in VERDICT_ORDER
+        },
+        "candidate": {
+            verdict: sum(count for (_, right), count in matrix.items() if right == verdict)
+            / len(shared)
+            if shared
+            else None
+            for verdict in VERDICT_ORDER
+        },
+    }
+    systematic_drift = any(entry["significant"] for entry in drift)
+    accepted = bool(
+        agreement is not None and agreement >= MINIMUM_BATCH_AGREEMENT and not systematic_drift
+    )
+    return {
+        "schema": "task06-answerability-batching-ab-v1",
+        "compared_items": len(shared),
+        "baseline_only": len(set(baseline) - set(candidate)),
+        "candidate_only": len(set(candidate) - set(baseline)),
+        "agreement": agreement,
+        "minimum_agreement": MINIMUM_BATCH_AGREEMENT,
+        "transition_matrix": {
+            f"{left}->{right}": count for (left, right), count in sorted(matrix.items())
+        },
+        "verdict_shares": shares,
+        "drift_tests": drift,
+        "drift_significance_level": DRIFT_SIGNIFICANCE,
+        "systematic_drift": systematic_drift,
+        "accepted": accepted,
+        "status": "batching_accepted" if accepted else "batching_rejected_keep_single_requests",
+        "final_tests_used": [],
+    }
+
+
+def render_ab_report(result: Mapping[str, Any], provenance: Mapping[str, Any]) -> str:
+    """Raport markdown; bramka musi byc czytelna bez zagladania do JSON-a."""
+    lines = [
+        "# Bramka A/B: paczkowanie zapytań sędziego odpowiadalności",
+        "",
+        f"Porównanych itemów: **{result['compared_items']}** "
+        f"(tylko baseline: {result['baseline_only']}, tylko kandydat: {result['candidate_only']}).",
+        "",
+        f"- zgodność werdyktów per item: **{result['agreement']:.4f}** "
+        f"(próg {result['minimum_agreement']})",
+        f"- dryf systematyczny: **{'TAK' if result['systematic_drift'] else 'nie'}** "
+        f"(test znakowy na parach klas, poziom istotnosci "
+        f"{result['drift_significance_level']})",
+        f"- werdykt bramki: **{result['status']}**",
+        "",
+        "## Macierz przejść (baseline → kandydat)",
+        "",
+        "| przejście | liczba |",
+        "|---|---|",
+    ]
+    lines += [f"| `{key}` | {value} |" for key, value in result["transition_matrix"].items()]
+    lines += ["", "## Rozkład werdyktów", "", "| klasa | baseline | kandydat |", "|---|---|---|"]
+    for verdict in VERDICT_ORDER:
+        base = result["verdict_shares"]["baseline"][verdict]
+        cand = result["verdict_shares"]["candidate"][verdict]
+        lines.append(f"| {verdict} | {base:.4f} | {cand:.4f} |")
+    lines += [
+        "",
+        "## Testy dryfu",
+        "",
+        "| para | w jedną stronę | w drugą | p | istotny |",
+        "|---|---|---|---|---|",
+    ]
+    for entry in result["drift_tests"]:
+        lines.append(
+            f"| `{entry['pair']}` | {entry['forward']} | {entry['backward']} | "
+            f"{entry['p_value']:.4f} | {'TAK' if entry['significant'] else 'nie'} |"
+        )
+    lines += [
+        "",
+        "## Proweniencja journala kandydata",
+        "",
+        f"- werdyktów: {provenance['verdicts']}",
+        f"- wersje promptu: {provenance['by_prompt_version']}",
+        f"- liczności paczek: {provenance['by_batch_size']}",
+        f"- werdykty z fallbacku: {provenance['fallback_verdicts']} "
+        f"({(provenance['fallback_share'] or 0):.4f})",
+        "",
+        "Fallback produkuje wiersze promptem pojedynczym, więc wysoki udział fallbacku",
+        "oznacza, że kandydat jest w praktyce mieszanką przyrządów — to trzeba czytać razem",
+        "z werdyktem bramki, a nie zamiast niego.",
+        "",
+        "`final_tests_used=[]`, `used_for_pair_building=false`.",
+    ]
+    return "\n".join(lines) + "\n"

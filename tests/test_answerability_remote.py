@@ -117,7 +117,7 @@ def test_journal_import_refuses_mixed_models_and_wrong_prompt(tmp_path: Path) ->
 
     other = tmp_path / "prompt.jsonl"
     _write_journal(other, [_verdict_row(items[0], "yes", prompt_version="inna-wersja")])
-    with pytest.raises(ValueError, match="different prompt version"):
+    with pytest.raises(ValueError, match="unknown prompt version"):
         load_remote_journal(other, manifest, items)
 
 
@@ -336,3 +336,97 @@ def test_import_skips_out_of_schema_events_but_keeps_verdicts(tmp_path: Path) ->
     verdicts = load_remote_journal(journal, manifest, items)
 
     assert set(verdicts) == {items[0].item_id}
+
+
+def _verdict_map(pairs: dict[str, str], **extra: Any) -> dict[str, dict[str, Any]]:
+    return {
+        item_id: {"verdict": verdict, "prompt_version": "task06-answerability-pl-v1", **extra}
+        for item_id, verdict in pairs.items()
+    }
+
+
+def test_ab_gate_accepts_when_agreement_is_high_and_drift_symmetric() -> None:
+    from doc2query.preferences.answerability_remote import compare_journal_verdicts
+
+    baseline = _verdict_map({f"i{n}": "yes" for n in range(100)})
+    candidate = dict(baseline)
+    # dwie zmiany w przeciwnych kierunkach: szum, nie dryf
+    candidate["i0"] = {**candidate["i0"], "verdict": "no"}
+    baseline["i1"] = {**baseline["i1"], "verdict": "no"}
+
+    result = compare_journal_verdicts(baseline, candidate)
+
+    assert result["compared_items"] == 100
+    assert result["agreement"] == pytest.approx(0.98)
+    assert result["systematic_drift"] is False
+    assert result["accepted"] is True
+
+
+def test_ab_gate_rejects_when_agreement_below_threshold() -> None:
+    from doc2query.preferences.answerability_remote import compare_journal_verdicts
+
+    baseline = _verdict_map({f"i{n}": "yes" for n in range(100)})
+    candidate = dict(baseline)
+    for index in range(5):
+        candidate[f"i{index}"] = {**candidate[f"i{index}"], "verdict": "uncertain"}
+
+    result = compare_journal_verdicts(baseline, candidate)
+
+    assert result["agreement"] == pytest.approx(0.95)
+    assert result["accepted"] is False
+    assert result["status"] == "batching_rejected_keep_single_requests"
+
+
+def test_ab_gate_catches_one_sided_drift_even_at_high_agreement() -> None:
+    """Kluczowy przypadek: zgodność zdaje próg, ale migracje idą tylko w jedną stronę."""
+    from doc2query.preferences.answerability_remote import compare_journal_verdicts
+
+    baseline = _verdict_map({f"i{n}": "yes" for n in range(1000)})
+    candidate = dict(baseline)
+    for index in range(15):  # 98,5% zgodności, ale wszystkie zmiany yes->no
+        candidate[f"i{index}"] = {**candidate[f"i{index}"], "verdict": "no"}
+
+    result = compare_journal_verdicts(baseline, candidate)
+
+    assert result["agreement"] >= 0.98
+    assert result["systematic_drift"] is True
+    assert result["accepted"] is False
+
+
+def test_provenance_exposes_a_mixed_instrument() -> None:
+    from doc2query.preferences.answerability_remote import journal_provenance
+
+    verdicts = {
+        "a": {"prompt_version": "task06-answerability-pl-v2-batched", "batch_size": 4},
+        "b": {"prompt_version": "task06-answerability-pl-v1", "batch_size": 4, "fallback": True},
+    }
+
+    provenance = journal_provenance(verdicts)
+
+    assert provenance["single_instrument"] is False
+    assert provenance["fallback_verdicts"] == 1
+    assert provenance["fallback_share"] == pytest.approx(0.5)
+
+
+def test_import_accepts_batched_prompt_version(tmp_path: Path) -> None:
+    items = [_audit_item("a", "pasaż a", "chosen", (True, True))]
+    manifest = write_packet(items, tmp_path / "packet")
+    journal = tmp_path / "verdicts.jsonl"
+    _write_journal(
+        journal,
+        [_verdict_row(items[0], "yes", prompt_version="task06-answerability-pl-v2-batched")],
+    )
+
+    verdicts = load_remote_journal(journal, manifest, items)
+
+    assert set(verdicts) == {items[0].item_id}
+
+
+def test_import_still_refuses_an_unknown_prompt_version(tmp_path: Path) -> None:
+    items = [_audit_item("a", "pasaż a", "chosen", (True, True))]
+    manifest = write_packet(items, tmp_path / "packet")
+    journal = tmp_path / "verdicts.jsonl"
+    _write_journal(journal, [_verdict_row(items[0], "yes", prompt_version="cos-innego-v9")])
+
+    with pytest.raises(ValueError, match="unknown prompt version"):
+        load_remote_journal(journal, manifest, items)
