@@ -26,9 +26,10 @@ import random
 import time
 from collections import Counter, deque
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, TypeAlias, cast
 
 from doc2query.evaluation.groq_audits import HttpResult, _http_transport, load_api_key
 from doc2query.evaluation.retrieval import percentile
@@ -44,6 +45,14 @@ from doc2query.preferences.pair_audit_export import (
     load_blind_export_manifest,
 )
 from doc2query.utils.records import JsonlWriter, read_durable_jsonl_prefix, read_records, write_json
+
+if TYPE_CHECKING:  # pragma: no cover - tylko dla typów
+    # Import wyłącznie typowy: `pair_audit_export_v2` prowadzi przez `pair_policy_v2` do
+    # `answerability_judge`, który importuje helpery z tego modułu, więc import
+    # modułowy zamknąłby cykl. Runtime'owy import siedzi w `load_export_manifest`.
+    from doc2query.preferences.pair_audit_export_v2 import DefectBlindExportManifest
+
+ExportManifest: TypeAlias = "BlindExportManifest | DefectBlindExportManifest"
 
 LEDGER_SCHEMA = "task06-groq-pair-audit-ledger-v1"
 RESULT_SCHEMA = "task06-groq-pair-audit-result-v1"
@@ -620,7 +629,56 @@ def _role_fields(rating: Mapping[str, Any], automatic: str) -> dict[str, dict[st
     }
 
 
-def _load_sample(export_dir: Path, manifest: BlindExportManifest) -> dict[str, dict[str, Any]]:
+@dataclass(frozen=True)
+class ExportReadAdapter:
+    """Which key fields a blind export supplies, per its frozen contract.
+
+    Amendment `reports/decisions/task06_groq_audit_reader_axis_amendment_2026-08-21.md`:
+    the v1 export stratifies the descriptive slices by primary-margin band, the v2 export
+    by defect **axis**, because policy v2 does not order pairs by margin and therefore
+    publishes no band.  Only these *reporting* dimensions differ — the prompt, rubric,
+    models, budgets and every decision rule are shared and untouched.
+    """
+
+    slice_field: str
+    label_field: str
+    slice_analysis_key: str
+    decided_slice_analysis_key: str
+    label_analysis_key: str
+
+
+_V1_ADAPTER = ExportReadAdapter(
+    slice_field="primary_margin_gap_band",
+    label_field="rejected_failure_types",
+    slice_analysis_key="agreement_by_primary_margin_gap_band",
+    decided_slice_analysis_key="decided_agreement_by_primary_margin_gap_band",
+    label_analysis_key="agreement_by_rejected_failure_type",
+)
+_V2_ADAPTER = ExportReadAdapter(
+    slice_field="axis",
+    label_field="rejected_defect_labels",
+    slice_analysis_key="agreement_by_axis",
+    decided_slice_analysis_key="decided_agreement_by_axis",
+    label_analysis_key="agreement_by_rejected_defect_label",
+)
+
+
+def load_export_manifest(path: Path) -> tuple[ExportManifest, ExportReadAdapter]:
+    """Validate a blind export manifest with the model its own contract pins."""
+    from doc2query.preferences.pair_audit_export_v2 import (
+        EXPORT_CONTRACT as V2_EXPORT_CONTRACT,
+    )
+    from doc2query.preferences.pair_audit_export_v2 import (
+        load_defect_blind_export_manifest,
+    )
+
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if str(raw.get("contract")) == V2_EXPORT_CONTRACT:
+        return load_defect_blind_export_manifest(path), _V2_ADAPTER
+    return load_blind_export_manifest(path), _V1_ADAPTER
+
+
+def _load_sample(export_dir: Path, manifest: ExportManifest) -> dict[str, dict[str, Any]]:
     """Read the sampled pair records so judge answers can be crossed with the pipeline."""
     path = export_dir / str(manifest.sample["path"])
     if not path.is_file():
@@ -633,7 +691,7 @@ def _load_sample(export_dir: Path, manifest: BlindExportManifest) -> dict[str, d
 
 def analyze_pair_audit(*, export_dir: Path, output_dir: Path) -> dict[str, Any]:
     """Join blind ratings with the unblinding key and report every required agreement."""
-    manifest = load_blind_export_manifest(export_dir / "manifest.json")
+    manifest, adapter = load_export_manifest(export_dir / "manifest.json")
     key = {str(row["audit_id"]): row for row in read_records(export_dir / "machine_key.jsonl")}
     sample = _load_sample(export_dir, manifest)
     ratings = collect_ratings(output_dir)
@@ -665,8 +723,8 @@ def analyze_pair_audit(*, export_dir: Path, output_dir: Path) -> dict[str, Any]:
             "pair_id": key_row["pair_id"],
             "cohort_id": key_row["cohort_id"],
             "automatic_chosen_option": automatic,
-            "primary_margin_gap_band": key_row["primary_margin_gap_band"],
-            "rejected_failure_types": list(key_row["rejected_failure_types"]),
+            adapter.slice_field: key_row[adapter.slice_field],
+            adapter.label_field: list(key_row[adapter.label_field]),
             "ratings": {},
         }
         decided: dict[str, str] = {}
@@ -688,7 +746,7 @@ def analyze_pair_audit(*, export_dir: Path, output_dir: Path) -> dict[str, Any]:
             if preference in DECIDED_PREFERENCES:
                 by_confidence[model].setdefault(bucket, []).append(preference == automatic)
                 by_band_per_model[model].setdefault(
-                    str(key_row["primary_margin_gap_band"]), []
+                    str(key_row[adapter.slice_field]), []
                 ).append(preference == automatic)
             pair = sample[str(key_row["pair_id"])]
             for role, answers in _role_fields(rating, automatic).items():
@@ -722,9 +780,9 @@ def analyze_pair_audit(*, export_dir: Path, output_dir: Path) -> dict[str, Any]:
                 "consensus_supports_automatic" if agrees else "consensus_contradicts_automatic"
             )
             inter_model.append(True)
-            for label in row["rejected_failure_types"] or ["unclassified"]:
+            for label in row[adapter.label_field] or ["unclassified"]:
                 by_failure.setdefault(label, []).append(agrees)
-            by_band.setdefault(str(row["primary_margin_gap_band"]), []).append(agrees)
+            by_band.setdefault(str(row[adapter.slice_field]), []).append(agrees)
         row["eligible_for_automatic_acceptance"] = (
             row["consensus"] == "consensus_supports_automatic"
         )
@@ -737,6 +795,7 @@ def analyze_pair_audit(*, export_dir: Path, output_dir: Path) -> dict[str, Any]:
         "contract": CONTRACT,
         "status": "complete" if len(rated) == manifest.sampled_pair_count else "incomplete",
         "export_policy_id": manifest.policy_id,
+        "export_contract": manifest.contract,
         "export_audit_ids_fingerprint": manifest.audit_ids_fingerprint,
         "sampled_pair_count": manifest.sampled_pair_count,
         "development_gate_met": manifest.development_gate_met,
@@ -761,7 +820,7 @@ def analyze_pair_audit(*, export_dir: Path, output_dir: Path) -> dict[str, Any]:
         # oba modele rozstrzygnęły zgodnie. Ten slice patrzy na wszystkie
         # rozstrzygnięte oceny osobno dla każdego modelu, więc jest lepiej
         # obsadzony; ocen dwóch modeli nie wolno łączyć, bo dotyczą tych samych par.
-        "decided_agreement_by_primary_margin_gap_band": {
+        adapter.decided_slice_analysis_key: {
             model: {
                 band: _proportion_ci(values)
                 for band, values in sorted(by_band_per_model[model].items())
@@ -793,10 +852,10 @@ def analyze_pair_audit(*, export_dir: Path, output_dir: Path) -> dict[str, Any]:
         "out_of_schema_reason_codes": {
             model: dict(sorted(out_of_schema[model].items())) for model in models
         },
-        "agreement_by_rejected_failure_type": {
+        adapter.label_analysis_key: {
             label: _proportion_ci(values) for label, values in sorted(by_failure.items())
         },
-        "agreement_by_primary_margin_gap_band": {
+        adapter.slice_analysis_key: {
             label: _proportion_ci(values) for label, values in sorted(by_band.items())
         },
         "human_evidence_claimed": False,
@@ -825,7 +884,7 @@ def run_pair_audit(
 ) -> dict[str, Any]:
     """Run or resume the dual-LLM audit of an already frozen blind export."""
     config = load_llm_audit_config(config_path)
-    manifest = load_blind_export_manifest(export_dir / "manifest.json")
+    manifest, _ = load_export_manifest(export_dir / "manifest.json")
     if manifest.sampled_pair_count != int(config["pair_count"]):
         raise ValueError(
             f"the frozen audit contract pins {config['pair_count']} pairs but the export holds "

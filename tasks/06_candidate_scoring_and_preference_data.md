@@ -238,6 +238,28 @@ etykietach `answerable_a/b` audytu Groq.
   ślepych rekordów; eksporty v1 i v2 nietknięte. Audytu v2 **nie uruchomiono**, predykcje
   pozostają nieodczytane. Raport:
   [`task06_defect_pairs_v2_2026-08-20.md`](../reports/measurements/task06_defect_pairs_v2_2026-08-20.md).
+- **Amendment czytnika audytu autoryzowany i wykonany 2026-08-21**
+  ([`task06_groq_audit_reader_axis_amendment_2026-08-21.md`](../reports/decisions/task06_groq_audit_reader_axis_amendment_2026-08-21.md)),
+  spisany **przed** pierwszym requestem audytu v2. Właściciel wybrał adaptację czytnika
+  (nie duplikat pliku) z warunkiem: bez zmiany promptu, rubryki, modeli, limitów i reguł
+  decyzyjnych. Przed decyzją przejrzano **każde** użycie brakujących pól (linie 668–669,
+  691, 725–727, 764, 799): wchodzą wyłącznie do kopii w wierszu wyniku i dwóch tabelek
+  przekrojowych, **nie** do żadnej oceny, werdyktu konsensusu, licznika `consensus_*`,
+  bramki ani predykcji. Zmiany są trzy i wszystkie mechaniczne: (1) dyspozytor manifestu
+  walidujący eksport modelem jego własnego kontraktu (używane są tylko pola obecne w obu
+  wersjach); (2) wymiar przekroju zależny od kontraktu — v1 `primary_margin_gap_band`,
+  v2 **`axis`** (wymuszone konstrukcyjnie: pasm marginesu w v2 nie ma, osi w v1 nie ma);
+  (3) nazwa pola etykiet — v1 `rejected_failure_types`, v2 `rejected_defect_labels`.
+  Nazwy kluczy w analizie idą za kontraktem eksportu, więc **ścieżka v1 pozostaje
+  odtwarzalna**: wszystkie dotychczasowe klucze zachowują nazwy i wartości, a jedyna
+  różnica to jeden nowy klucz opisowy `export_contract` (zapisane wprost, zamiast
+  twierdzenia o bajtowej identyczności). Cykl importów przerwano lokalnym importem w
+  czytniku, bez dotykania `answerability_judge`. 38 testów pliku audytu przechodzi, w tym
+  trzy nowe: przekrój po osi dla eksportu v2, niezmienione klucze dla v1 oraz to, że
+  kontrakt `pair_count=500` obowiązuje v2 bez zmian. Sprawdzono na obu rzeczywistych
+  eksportach, że czytnik ładuje właściwy manifest i wybiera właściwy przekrój. Audytu v2
+  nadal **nie uruchomiono** — to następny krok i osobny koszt (2–3 okna dziennych budżetów
+  Groq).
 - **Krok 0 był zablokowany operatorsko do 2026-08-19.** Wznowienie audytu uruchomiono
   2026-08-17 18:20 UTC i wykonało **0 requestów**: dzienne budżety tokenów obu
   modeli są wyczerpane (`gpt-oss` 186 057, `qwen` 228 603 przy limicie 185 000),

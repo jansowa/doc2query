@@ -277,6 +277,192 @@ def _analysis_for(
     return analyze_pair_audit(export_dir=export, output_dir=output)
 
 
+def _export_v2(tmp_path: Path, *, pair_count: int = 8) -> Path:
+    """Write a v2 (defect-anchored) blind export by hand, with axis instead of margin band.
+
+    Amendment `task06_groq_audit_reader_axis_amendment_2026-08-21.md`: the reader must
+    accept this shape without any change to the prompt, rubric, models or decision rules.
+    """
+    export = tmp_path / "export_v2"
+    export.mkdir()
+    blind, key, sample = [], [], []
+    for index in range(pair_count):
+        axis = "A" if index % 2 == 0 else "B"
+        blind.append(
+            {
+                "audit_id": _audit_id(index),
+                "passage": f"Pasaż numer {index} o wirusach oddechowych.",
+                "query_a": f"zapytanie a {index}",
+                "query_b": f"zapytanie b {index}",
+                "orientation_commitment": f"{index:064d}",
+            }
+        )
+        key.append(
+            {
+                "audit_id": _audit_id(index),
+                "pair_id": f"pair-{index:04d}",
+                "cohort_id": "same_prompt_expansion_v1",
+                "group_id": f"group-{index}",
+                "axis": axis,
+                "automatic_chosen_option": _automatic_option(index),
+                "orientation_commitment": f"{index:064d}",
+                "chosen_verdict": "yes",
+                "rejected_verdict": "no" if axis == "A" else "yes",
+                "rejected_defect_labels": (
+                    ["judge_unanswerable"] if axis == "A" else ["high_lexical_overlap"]
+                ),
+                "requested_form": "full_question",
+                "requested_intent": "fact_lookup",
+                "split": "train",
+            }
+        )
+        sample.append(
+            {
+                "pair_id": f"pair-{index:04d}",
+                "cohort_id": "same_prompt_expansion_v1",
+                "axis": axis,
+                "chosen": f"zapytanie chosen {index}",
+                "rejected": f"zapytanie rejected {index}",
+                "chosen_components": {"format_valid": True, "corpus_round_trip_at_20": 1.0},
+                "rejected_components": {"format_valid": True, "corpus_round_trip_at_20": 0.0},
+            }
+        )
+    for name, rows in (
+        ("blind_pairs.jsonl", blind),
+        ("machine_key.jsonl", key),
+        ("sample.jsonl", sample),
+    ):
+        with (export / name).open("w", encoding="utf-8") as handle:
+            for row in rows:
+                handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+    half = pair_count // 2
+    manifest: dict[str, Any] = {
+        "schema_version": 1,
+        "contract": "task06-defect-pair-audit-blind-export-v2",
+        "status": "blind_export_frozen_not_reviewed",
+        "policy_id": "task06-defect-pair-policy-v2.0",
+        "policy_sha256": "a" * 64,
+        "source_cohorts": ["same_prompt_expansion_v1"],
+        "source_pair_manifest_sha256": {"same_prompt_expansion_v1": "b" * 64},
+        "population_pair_count": pair_count,
+        "population_axis_counts": {"A": pair_count - half, "B": half},
+        "target_pair_count": pair_count,
+        "sampled_pair_count": pair_count,
+        "shortfall_pair_count": 0,
+        "development_gate_met": True,
+        "axis_quotas": [
+            {
+                "axis": "A",
+                "quota": pair_count - half,
+                "effective_quota": pair_count - half,
+                "population": pair_count - half,
+                "allocated": pair_count - half,
+                "shortfall": 0,
+            },
+            {
+                "axis": "B",
+                "quota": half,
+                "effective_quota": half,
+                "population": half,
+                "allocated": half,
+                "shortfall": 0,
+            },
+        ],
+        "axis_quota_shortfall": {"A": 0, "B": 0},
+        "seed": 20260820,
+        "strata": [
+            {
+                "cohort_id": "same_prompt_expansion_v1",
+                "axis": "A",
+                "requested_form": "full_question",
+                "population": pair_count - half,
+                "allocated": pair_count - half,
+            },
+            {
+                "cohort_id": "same_prompt_expansion_v1",
+                "axis": "B",
+                "requested_form": "full_question",
+                "population": half,
+                "allocated": half,
+            },
+        ],
+        "orientation_commitment_salt": "salt",
+        "orientation_balance": {"A": half, "B": pair_count - half},
+        "audit_ids_fingerprint": "c" * 64,
+        "blind_pairs": {
+            "path": "blind_pairs.jsonl",
+            "sha256": "d" * 64,
+            "record_count": pair_count,
+        },
+        "machine_key": {
+            "path": "machine_key.jsonl",
+            "sha256": "e" * 64,
+            "record_count": pair_count,
+        },
+        "sample": {"path": "sample.jsonl", "sha256": "f" * 64, "record_count": pair_count},
+        "report": {"path": "report.json", "sha256": "0" * 64, "record_count": 1},
+        "blind_fields": [
+            "audit_id",
+            "passage",
+            "query_a",
+            "query_b",
+            "orientation_commitment",
+        ],
+        "margin_used_for_stratification": False,
+        "ratings_collected": False,
+        "human_evidence_claimed": False,
+        "task07_training_authorized": False,
+        "final_tests_used": [],
+    }
+    manifest["manifest_fingerprint"] = canonical_fingerprint(manifest)
+    (export / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    return export
+
+
+def test_v2_export_is_read_and_sliced_by_axis_not_by_margin_band(tmp_path: Path) -> None:
+    export = _export_v2(tmp_path)
+    output = tmp_path / "audit"
+    for model in MODELS:
+        _write_ledger(
+            output, model, [_rating(index, _automatic_option(index)) for index in range(8)]
+        )
+
+    analysis = analyze_pair_audit(export_dir=export, output_dir=output)
+
+    assert analysis["export_contract"] == "task06-defect-pair-audit-blind-export-v2"
+    assert analysis["consensus_counts"] == {"consensus_supports_automatic": 8}
+    assert sorted(analysis["agreement_by_axis"]) == ["A", "B"]
+    assert analysis["agreement_by_axis"]["A"]["count"] == 4
+    assert sorted(analysis["agreement_by_rejected_defect_label"]) == [
+        "high_lexical_overlap",
+        "judge_unanswerable",
+    ]
+    assert "agreement_by_primary_margin_gap_band" not in analysis
+    assert "agreement_by_rejected_failure_type" not in analysis
+    for model in MODELS:
+        assert sorted(analysis["decided_agreement_by_axis"][model]) == ["A", "B"]
+
+
+def test_v1_export_keeps_its_frozen_slice_keys_after_the_amendment(tmp_path: Path) -> None:
+    """Ścieżka v1 pozostaje odtwarzalna: te same nazwy kluczy, te same wartości."""
+    analysis = _analysis_for(tmp_path, {model: _automatic_option for model in MODELS})
+
+    assert analysis["export_contract"] == "task06-preference-audit-blind-export-v1"
+    assert sorted(analysis["agreement_by_primary_margin_gap_band"]) == ["[1.0,2.0)", "[2.0,4.0)"]
+    assert analysis["agreement_by_rejected_failure_type"]["lower_primary_margin"]["rate"] == 1.0
+    assert "agreement_by_axis" not in analysis
+    assert "agreement_by_rejected_defect_label" not in analysis
+
+
+def test_v2_export_still_faces_the_frozen_pair_count_contract(tmp_path: Path) -> None:
+    """Amendment dotyczy tylko czytania pól; kontrakt 500 par obowiązuje bez zmian."""
+    export = _export_v2(tmp_path, pair_count=8)
+    clock = _Clock()
+
+    with pytest.raises(ValueError, match="owner amendment is required"):
+        _run(tmp_path, _Recorder(clock), clock, export=export)
+
+
 def test_export_smaller_than_the_frozen_contract_is_refused(tmp_path: Path) -> None:
     """447 par z kohort v1+v2 nie mogą wejść do audytu pinującego 500 par."""
     export = _export(tmp_path, pair_count=447)
