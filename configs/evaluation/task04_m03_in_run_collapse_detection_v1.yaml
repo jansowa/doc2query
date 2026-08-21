@@ -1,0 +1,63 @@
+# M-03: detekcja zapadnięcia probe W TRAKCIE runu i automatyczny reseed.
+#
+# Kontrakt zamrożony prospektywnie, przed pierwszym nowym runem. ADR:
+# reports/decisions/task04_m03_in_run_collapse_detection_v1.md
+#
+# Ścieżka jest domyślnie wyłączona: bez `--collapse-detection-config` probe
+# zachowuje się dokładnie tak jak przed zmianą (te same pliki, te same klucze,
+# to samo zużycie RNG), więc zamknięte pomiary pozostają odtwarzalne.
+schema_version: 1
+contract: task04-m03-in-run-collapse-detection-v1
+detector_id: task04-m03-in-run-collapse-detection-v1
+status: frozen_before_first_new_run
+adr: reports/decisions/task04_m03_in_run_collapse_detection_v1.md
+
+# Poziom straty nadal NIE jest guardrailem zbieżności (zmierzone r = -0.199).
+# Kierunek straty jest wyłącznie tanim fail-fastem przerywającym przebieg;
+# o zbieżności ukończonego runu orzeka wyłącznie guardrail M-03.
+loss_based_guardrail_permitted: false
+
+persistence:
+  loss_curve_file: training_loss_curve.jsonl
+  interim_evaluation_file: training_interim_evaluation.jsonl
+  attempt_journal_file: collapse_detection_journal.jsonl
+
+interim_evaluation:
+  # Zbiór pośredni pochodzi WYŁĄCZNIE z par treningowych runu: decyzja o
+  # przerwaniu nie może być podjęta na zbiorze, na którym zapada decyzja o
+  # ramieniu, ani na metryce decyzyjnej.
+  source: training_rows_holdin
+  metric: train_holdin_recall_at_100
+  interval_steps: 256
+  first_check_step: 256
+  corpus_documents: 2048
+  queries: 128
+  retrieval_depth: 100
+  encode_batch_size: 16
+  restore_rng_state: true
+
+rules:
+  # Reguła właściwa: ta sama stała min_chance_multiple co w zamrożonym
+  # guardrailu M-03, przeniesiona na korpus pośredni (4.0 * 100/2048 = 0.1953).
+  # Podłoga medianowa M-03 jest w trakcie pojedynczego runu niedostępna z
+  # definicji, więc używana jest tylko część niezależna od ramienia.
+  retrieval_floor:
+    rule_id: interim_recall_below_chance_floor
+    min_chance_multiple: 4.0
+  # Tani fail-fast. Okienkowe uogólnienie zmierzonej reguły końcowej
+  # `last_loss >= first_loss` (czułość 2/5, fałszywe alarmy 0/22); czułość i
+  # swoistość wariantu okienkowego NIE są zmierzone.
+  loss_direction:
+    rule_id: loss_direction_non_decreasing
+    window_steps: 64
+  # Przerwanie dopiero po dwóch KOLEJNYCH trafieniach tej samej reguły, więc
+  # najwcześniejsze przerwanie przy budżecie 1024 kroków to krok 512.
+  consecutive_hits_required: 2
+
+reseed:
+  max_attempts: 3
+  seed_stride: 1000
+  on_exhausted: fail_run_with_status_collapse_unresolved
+  provenance_required: true
+
+final_tests_used: []
