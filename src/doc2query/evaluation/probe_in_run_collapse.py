@@ -201,9 +201,14 @@ def interim_recall(
     scores = query_vectors.to(torch.float32) @ document_vectors.to(torch.float32).T
     positives = torch.tensor(list(positive_positions), dtype=torch.long)
     positive_scores = scores.gather(1, positives.unsqueeze(1))
-    # Rank by strictly better scores, so ties never inflate the signal.
-    better = (scores > positive_scores).sum(dim=1)
-    return float((better < depth).to(torch.float32).mean())
+    # Ties are resolved pessimistically, which is the whole point of this signal: a fully
+    # collapsed encoder maps every text onto one vector, so every score ties.  Counting only
+    # strictly better documents would score that degenerate case as a perfect recall and
+    # blind the detector to the failure it exists to catch.
+    strictly_better = (scores > positive_scores).sum(dim=1)
+    tied = (scores == positive_scores).sum(dim=1) - 1
+    worst_case_rank = strictly_better + tied
+    return float((worst_case_rank < depth).to(torch.float32).mean())
 
 
 @dataclass

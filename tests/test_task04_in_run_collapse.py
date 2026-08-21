@@ -154,16 +154,17 @@ def test_interim_set_is_deterministic_and_capped() -> None:
     assert build_interim_evaluation_set(list(reversed(rows)), contract) == evaluation_set
 
 
-def test_interim_recall_counts_only_strictly_better_documents() -> None:
+def test_interim_recall_breaks_ties_pessimistically() -> None:
     documents = torch.eye(4)
     queries = torch.eye(4)[[0, 1]]
     assert interim_recall(queries, documents, [0, 1], depth=1) == pytest.approx(1.0)
     assert interim_recall(queries, documents, [2, 3], depth=1) == pytest.approx(0.0)
     assert interim_recall(queries, documents, [2, 3], depth=4) == pytest.approx(1.0)
-    # A degenerate encoder maps everything onto one vector: every score ties, so no
-    # document is strictly better and the positive is still inside a deep enough cut.
+    # A degenerate encoder maps everything onto one vector: every score ties, and the
+    # pessimistic tie-break must report that as a failure, not as a perfect recall.
     collapsed = torch.ones(4, 4)
-    assert interim_recall(collapsed[:2], collapsed, [2, 3], depth=1) == pytest.approx(1.0)
+    assert interim_recall(collapsed[:2], collapsed, [2, 3], depth=1) == pytest.approx(0.0)
+    assert interim_recall(collapsed[:2], collapsed, [2, 3], depth=4) == pytest.approx(1.0)
 
 
 def test_detector_requires_two_consecutive_hits() -> None:
@@ -218,7 +219,7 @@ class _TinyBackbone(torch.nn.Module):
         self.projection = torch.nn.Linear(1, 2)
 
     def forward(self, values: torch.Tensor) -> torch.Tensor:
-        return self.projection(values)
+        return cast(torch.Tensor, self.projection(values))
 
     def save_pretrained(self, path: Path, *, safe_serialization: bool) -> None:
         assert safe_serialization
@@ -232,10 +233,7 @@ class _TinyEncoder(torch.nn.Module):
         self.backbone = _TinyBackbone()
 
     def forward(self, encoded: dict[str, torch.Tensor]) -> torch.Tensor:
-        return cast(
-            torch.Tensor,
-            torch.nn.functional.normalize(self.backbone(encoded["values"]), dim=-1),
-        )
+        return torch.nn.functional.normalize(self.backbone(encoded["values"]), dim=-1)
 
 
 class _TinyTokenizer:
@@ -369,7 +367,7 @@ def test_interim_evaluation_restores_the_rng_state(
     torch.manual_seed(1234)
     before = torch.get_rng_state().clone()
     embedder_probe._interim_recall_now(
-        model,
+        cast(embedder_probe.MeanPoolEncoder, model),
         _TinyTokenizer(),
         build_interim_evaluation_set(rows, contract.interim_evaluation),
         detection=contract,

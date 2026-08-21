@@ -69,7 +69,17 @@ treningowych runu**, nie na zbiorze ewaluacyjnym:
 - zapytania: **128** pierwszych wierszy po `example_id`, których pozytyw leży w
   tym korpusie;
 - metryka: Recall@100 pozytywu w korpusie pośrednim, dokładny iloczyn skalarny
-  na znormalizowanych wektorach.
+  na znormalizowanych wektorach, **z pesymistycznym rozstrzyganiem remisów**
+  (rank = liczba dokumentów o score ściśle wyższym plus liczba remisujących).
+
+Uzupełnienie doprecyzowujące, dopisane 2026-08-21 przed uruchomieniem pierwszego
+runu z **włączoną** detekcją (uruchomiony był wtedy wyłącznie run kontrolny z
+detekcją wyłączoną, który tej semantyki nie używa): pesymistyczne remisy są
+konieczne, a nie kosmetyczne. Całkowicie zapadnięty enkoder odwzorowuje każdy
+tekst na jeden wektor, więc **wszystkie** score'y remisują; przy optymistycznym
+liczeniu tylko ściśle lepszych dokumentów taki run dostałby Recall@100 równy
+1,0 i detektor byłby ślepy dokładnie na awarię, dla której powstał. Progów to
+nie zmienia.
 
 Powód użycia danych treningowych, a nie ewaluacyjnych, jest dokładnie ten sam,
 dla którego ADR M-03 nie filtruje po metryce decyzyjnej: **żadna decyzja o
