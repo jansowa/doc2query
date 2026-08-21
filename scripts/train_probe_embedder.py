@@ -13,6 +13,10 @@ import yaml
 
 from doc2query.evaluation.corpus import load_corpus_index
 from doc2query.evaluation.embedder_probe import ProbeRecipe, run_probe_experiment
+from doc2query.evaluation.probe_in_run_collapse import (
+    ProbeCollapseUnresolved,
+    load_collapse_detection,
+)
 from doc2query.evaluation.probe_negatives import ProbeNegativeBlocker
 from doc2query.evaluation.statistical_contract import StatisticalContract
 from doc2query.reranker.base import FrozenRerankerConfig
@@ -100,12 +104,19 @@ def main() -> None:
         help="Atomically save a resumable rolling training checkpoint every N steps (0 disables).",
     )
     parser.add_argument(
+        "--collapse-detection-config",
+        type=Path,
+        help=(
+            "Frozen M-03 in-run collapse detection contract; omitted means the pre-2026-08-21 "
+            "behaviour with no interim evaluation, no extra artifact and no reseed."
+        ),
+    )
+    parser.add_argument(
         "--evaluation-encode-batch-size",
         type=int,
         default=64,
         help=(
-            "Execution-only batch size for corpus/query encoding; "
-            "does not alter the frozen recipe."
+            "Execution-only batch size for corpus/query encoding; does not alter the frozen recipe."
         ),
     )
     parser.add_argument(
@@ -132,6 +143,11 @@ def main() -> None:
     if not isinstance(raw, dict):
         raise ValueError("probe recipe must be a YAML mapping")
     recipe = ProbeRecipe.from_dict(raw)
+    collapse_detection = (
+        load_collapse_detection(args.collapse_detection_config)
+        if args.collapse_detection_config is not None
+        else None
+    )
     statistical_contract = StatisticalContract.load(args.comparison_contract)
     recipe_updates: dict[str, Any] = {}
     if args.smoke_steps is not None:
@@ -184,8 +200,7 @@ def main() -> None:
                     "P-03 BLOCKED: primary judge config does not match calibration provenance"
                 )
             print(
-                f"[probe] loading primary judge for negative filtering on "
-                f"{judge_config.device}",
+                f"[probe] loading primary judge for negative filtering on {judge_config.device}",
                 flush=True,
             )
             primary = load_frozen_reranker(judge_config)
@@ -212,7 +227,21 @@ def main() -> None:
             evaluation_encode_batch_size=args.evaluation_encode_batch_size,
             retrieval_query_batch_size=args.retrieval_query_batch_size,
             retrieval_device=args.retrieval_device,
+            collapse_detection=collapse_detection,
         )
+    except ProbeCollapseUnresolved as exc:
+        unresolved = {
+            "schema_version": 1,
+            "status": "collapse_unresolved",
+            "contract": "task04-m03-in-run-collapse-detection-v1",
+            "reason": str(exc),
+            "requested_seed": recipe.seed,
+            "attempts": exc.attempts,
+            "final_tests_used": [],
+        }
+        write_json(args.output_dir / "collapse_unresolved.json", unresolved)
+        print(json.dumps(unresolved, ensure_ascii=False, indent=2, sort_keys=True))
+        raise SystemExit(3) from exc
     except ProbeNegativeBlocker as exc:
         blocker = {
             "schema_version": 1,

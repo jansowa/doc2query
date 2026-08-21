@@ -35,6 +35,15 @@ from doc2query.evaluation.native_holdout import (
     holdout_set_status,
     load_holdout_records,
 )
+from doc2query.evaluation.probe_in_run_collapse import (
+    CollapseDetector,
+    InRunCollapseDetection,
+    InterimEvaluationSet,
+    ProbeCollapseDetected,
+    ProbeCollapseUnresolved,
+    build_interim_evaluation_set,
+    interim_recall,
+)
 from doc2query.evaluation.probe_negatives import (
     NegativeCandidate,
     NegativeRecipe,
@@ -442,6 +451,77 @@ def _tokenize(
     return {key: value.to(device) for key, value in encoded.items()}
 
 
+def _write_jsonl_atomically(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    with temporary.open("w", encoding="utf-8") as writer:
+        for row in rows:
+            writer.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+        writer.flush()
+        os.fsync(writer.fileno())
+    os.replace(temporary, path)
+
+
+def _read_jsonl_rows(path: Path) -> list[dict[str, Any]]:
+    if not path.is_file():
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        value = json.loads(line)
+        if not isinstance(value, dict):
+            raise ValueError(f"{path}: journal rows must be JSON objects")
+        rows.append(value)
+    return rows
+
+
+def _interim_recall_now(
+    model: MeanPoolEncoder,
+    tokenizer: Any,
+    evaluation_set: InterimEvaluationSet,
+    *,
+    detection: InRunCollapseDetection,
+    max_length: int,
+    device: torch.device,
+) -> float:
+    """Score the held-in interim set without perturbing the training trajectory."""
+    interim = detection.interim_evaluation
+    torch_rng_state = torch.get_rng_state()
+    cuda_rng_state = torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
+    was_training = model.training
+    model.eval()
+    try:
+
+        def encode(texts: list[str]) -> torch.Tensor:
+            chunks = [
+                _encode(
+                    model,
+                    tokenizer,
+                    texts[start : start + interim.encode_batch_size],
+                    max_length=max_length,
+                    device=device,
+                )
+                for start in range(0, len(texts), interim.encode_batch_size)
+            ]
+            return torch.cat(chunks)
+
+        documents = encode(evaluation_set.documents)
+        queries = encode(evaluation_set.queries)
+        return interim_recall(
+            queries,
+            documents,
+            evaluation_set.positive_positions,
+            depth=interim.retrieval_depth,
+        )
+    finally:
+        if was_training:
+            model.train()
+        if interim.restore_rng_state:
+            torch.set_rng_state(torch_rng_state)
+            if cuda_rng_state is not None:
+                torch.cuda.set_rng_state_all(cuda_rng_state)
+
+
 def train_probe(
     rows: list[dict[str, Any]],
     *,
@@ -454,6 +534,7 @@ def train_probe(
     negative_audit_rows: Sequence[dict[str, Any]],
     statistical_contract: StatisticalContract,
     checkpoint_interval_steps: int = 0,
+    collapse_detection: InRunCollapseDetection | None = None,
 ) -> dict[str, Any]:
     if not rows:
         raise ValueError("probe training set is empty")
@@ -477,8 +558,13 @@ def train_probe(
             )
         return resumed_summary
     checkpoint_path = output_dir / "training_checkpoint.pt"
+    loss_curve_path: Path | None = None
+    interim_path: Path | None = None
+    if collapse_detection is not None:
+        loss_curve_path = output_dir / collapse_detection.persistence.loss_curve_file
+        interim_path = output_dir / collapse_detection.persistence.interim_evaluation_file
     existing = set(output_dir.iterdir()) if output_dir.exists() else set()
-    unexpected = existing - {checkpoint_path}
+    unexpected = existing - {checkpoint_path, loss_curve_path, interim_path}
     if unexpected:
         raise FileExistsError(f"probe output contains non-resumable artifacts: {output_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -552,6 +638,39 @@ def train_probe(
             f"resumed training at step {completed_before_resume}/{recipe.max_steps} "
             f"from {checkpoint_path}"
         )
+    detector: CollapseDetector | None = None
+    interim_set: InterimEvaluationSet | None = None
+    interim_rows: list[dict[str, Any]] = []
+    if collapse_detection is not None and loss_curve_path is not None and interim_path is not None:
+        interim_set = build_interim_evaluation_set(rows, collapse_detection.interim_evaluation)
+        detector = CollapseDetector(
+            contract=collapse_detection,
+            chance_level=interim_set.chance_level(
+                collapse_detection.interim_evaluation.retrieval_depth
+            ),
+        )
+        # Replay the journals of the resumed prefix so no row is duplicated or lost.
+        interim_rows = [
+            row
+            for row in _read_jsonl_rows(interim_path)
+            if int(row.get("step", 0)) <= completed_before_resume
+        ]
+        for row in interim_rows:
+            detector.observe(
+                step=int(row["step"]),
+                recall=float(row["train_holdin_recall_at_100"]),
+                losses=losses[: int(row["step"])],
+            )
+        _write_jsonl_atomically(interim_path, interim_rows)
+        _write_jsonl_atomically(
+            loss_curve_path,
+            [{"step": step, "loss": loss} for step, loss in enumerate(losses, start=1)],
+        )
+        _stage(
+            f"in-run collapse detection enabled ({collapse_detection.detector_id}): "
+            f"interim recall@{collapse_detection.interim_evaluation.retrieval_depth} on "
+            f"{len(interim_set.documents)} held-in documents, floor {detector.floor:.6f}"
+        )
     started = time.perf_counter()
     optimizer.zero_grad(set_to_none=True)
     report_every = max(1, recipe.max_steps // 20)
@@ -609,7 +728,49 @@ def train_probe(
             torch.save(checkpoint, temporary_checkpoint)
             os.replace(temporary_checkpoint, checkpoint_path)
             _stage(f"training checkpoint saved at step {completed_steps}")
+        if (
+            detector is not None
+            and interim_set is not None
+            and loss_curve_path is not None
+            and interim_path is not None
+            and detector.should_check(completed_steps, recipe.max_steps)
+        ):
+            interim_started = time.perf_counter()
+            recall = _interim_recall_now(
+                model,
+                tokenizer,
+                interim_set,
+                detection=detector.contract,
+                max_length=recipe.max_length,
+                device=device,
+            )
+            observation = detector.observe(step=completed_steps, recall=recall, losses=losses)
+            observation["seconds"] = time.perf_counter() - interim_started
+            observation["seed"] = recipe.seed
+            interim_rows.append(observation)
+            _write_jsonl_atomically(interim_path, interim_rows)
+            _write_jsonl_atomically(
+                loss_curve_path,
+                [{"step": step, "loss": loss} for step, loss in enumerate(losses, start=1)],
+            )
+            _stage(
+                f"interim check at step {completed_steps}: "
+                f"recall={recall:.6f} floor={detector.floor:.6f} "
+                f"below_floor={observation['below_floor']} "
+                f"loss_non_decreasing={observation['loss_non_decreasing']}"
+            )
+            if observation["collapse_detected"]:
+                _stage(
+                    f"collapse detected at step {completed_steps} by {observation['rule']}; "
+                    "aborting this attempt before the expensive evaluation"
+                )
+                raise ProbeCollapseDetected(observation)
     _stage("training complete; saving model")
+    if loss_curve_path is not None:
+        _write_jsonl_atomically(
+            loss_curve_path,
+            [{"step": step, "loss": loss} for step, loss in enumerate(losses, start=1)],
+        )
     adapter_dir = output_dir / "model"
     model.backbone.save_pretrained(adapter_dir, safe_serialization=True)
     tokenizer.save_pretrained(adapter_dir)
@@ -661,6 +822,130 @@ def train_probe(
     return summary
 
 
+PROMOTED_ATTEMPT_ARTIFACTS = (
+    "model",
+    "train_summary.json",
+    "negative_audit.jsonl",
+    "training_loss_curve.jsonl",
+    "training_interim_evaluation.jsonl",
+)
+
+
+def _promote_attempt(attempt_dir: Path, output_dir: Path) -> None:
+    """Move the accepted attempt's artifacts up, keeping collapsed attempts as evidence."""
+    for name in PROMOTED_ATTEMPT_ARTIFACTS:
+        source = attempt_dir / name
+        target = output_dir / name
+        if not source.exists():
+            continue
+        if target.exists():
+            raise FileExistsError(f"cannot promote probe attempt artifact over {target}")
+        os.replace(source, target)
+
+
+def train_probe_with_collapse_reseed(
+    rows: list[dict[str, Any]],
+    *,
+    recipe: ProbeRecipe,
+    output_dir: Path,
+    collapse_detection: InRunCollapseDetection,
+    query_source: QuerySource,
+    train_fingerprint: str,
+    negative_contract: Mapping[str, Any],
+    false_negative_report: Mapping[str, Any],
+    negative_audit_rows: Sequence[dict[str, Any]],
+    statistical_contract: StatisticalContract,
+    checkpoint_interval_steps: int = 0,
+) -> tuple[dict[str, Any], ProbeRecipe]:
+    """Train under the frozen in-run detector, reseeding deterministically on collapse.
+
+    Every attempt — collapsed or accepted — is journalled before anything else happens, so
+    the number of attempts and the seeds they used can never be hidden from a later reader.
+    Exhausting the frozen attempt budget fails the run instead of reporting a result.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    journal_path = output_dir / collapse_detection.persistence.attempt_journal_file
+    journal = _read_jsonl_rows(journal_path)
+    already_collapsed = {
+        int(row["attempt_index"]) for row in journal if row.get("outcome") == "collapsed"
+    }
+    attempts_root = output_dir / "collapse_attempts"
+    for attempt_index in range(collapse_detection.reseed.max_attempts):
+        if attempt_index in already_collapsed:
+            continue
+        seed = collapse_detection.attempt_seed(recipe.seed, attempt_index)
+        attempt_recipe = recipe
+        if seed != recipe.seed:
+            attempt_recipe = ProbeRecipe.from_dict(asdict(recipe) | {"seed": seed})
+        attempt_dir = attempts_root / f"attempt-{attempt_index:02d}-seed-{seed}"
+        started = time.time()
+        entry = {
+            "attempt_index": attempt_index,
+            "requested_seed": recipe.seed,
+            "seed": seed,
+            "attempt_dir": str(attempt_dir),
+            "started_at": started,
+        }
+        try:
+            summary = train_probe(
+                rows,
+                recipe=attempt_recipe,
+                output_dir=attempt_dir,
+                query_source=query_source,
+                train_fingerprint=train_fingerprint,
+                negative_contract=negative_contract,
+                false_negative_report=false_negative_report,
+                negative_audit_rows=negative_audit_rows,
+                statistical_contract=statistical_contract,
+                checkpoint_interval_steps=checkpoint_interval_steps,
+                collapse_detection=collapse_detection,
+            )
+        except ProbeCollapseDetected as exc:
+            observation = exc.observation
+            journal.append(
+                entry
+                | {
+                    "outcome": "collapsed",
+                    "rule": observation.get("rule"),
+                    "detected_at_step": observation.get("step"),
+                    "train_holdin_recall_at_100": observation.get("train_holdin_recall_at_100"),
+                    "floor": observation.get("floor"),
+                    "below_floor": observation.get("below_floor"),
+                    "loss_non_decreasing": observation.get("loss_non_decreasing"),
+                    "finished_at": time.time(),
+                    "seconds": time.time() - started,
+                }
+            )
+            _write_jsonl_atomically(journal_path, journal)
+            (attempt_dir / "training_checkpoint.pt").unlink(missing_ok=True)
+            remaining = collapse_detection.reseed.max_attempts - attempt_index - 1
+            _stage(
+                f"attempt {attempt_index} (seed {seed}) collapsed; "
+                f"{remaining} reseed attempt(s) left"
+            )
+            continue
+        if not any(row.get("attempt_index") == attempt_index for row in journal):
+            journal.append(
+                entry | {"outcome": "completed", "finished_at": time.time()},
+            )
+            _write_jsonl_atomically(journal_path, journal)
+        _promote_attempt(attempt_dir, output_dir)
+        provenance = collapse_detection.reference() | {
+            "enabled": True,
+            "requested_seed": recipe.seed,
+            "effective_seed": seed,
+            "accepted_attempt_index": attempt_index,
+            "attempt_count": attempt_index + 1,
+            "detection_count": sum(1 for row in journal if row.get("outcome") == "collapsed"),
+            "attempts": journal,
+            "final_tests_used": [],
+        }
+        summary = dict(summary) | {"collapse_detection": provenance}
+        write_json(output_dir / "train_summary.json", summary)
+        return summary, attempt_recipe
+    raise ProbeCollapseUnresolved(journal)
+
+
 def _resumable_train_summary(
     output_dir: Path,
     *,
@@ -693,6 +978,20 @@ def _resumable_train_summary(
             "probe resume identity mismatch in train_summary.json: " + ", ".join(mismatches)
         )
     return raw
+
+
+def _reseeded_recipe(output_dir: Path, recipe: ProbeRecipe) -> ProbeRecipe:
+    """Recover the effective seed of an already promoted, possibly reseeded attempt."""
+    summary_path = output_dir / "train_summary.json"
+    if not summary_path.is_file():
+        return recipe
+    raw = json.loads(summary_path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError("probe resume train_summary.json must contain a JSON object")
+    seed = int(raw.get("recipe", {}).get("seed", recipe.seed))
+    if seed == recipe.seed:
+        return recipe
+    return ProbeRecipe.from_dict(asdict(recipe) | {"seed": seed})
 
 
 def _completed_train_summary(
@@ -1495,12 +1794,20 @@ def run_probe_experiment(
     evaluation_encode_batch_size: int = 64,
     retrieval_query_batch_size: int = 512,
     retrieval_device: str = "auto",
+    collapse_detection: InRunCollapseDetection | None = None,
 ) -> dict[str, Any]:
     calibration = recipe.negative_recipe.load_calibration()
+    # The negative contract stays pinned to the *requested* recipe, so a reseeded run keeps
+    # the same pair-selection provenance; the effective seed lives in recipe_fingerprint.
     negative_contract = recipe.negative_recipe.manifest(calibration) | {
         "probe_recipe_version": recipe.recipe_version,
         "probe_recipe_fingerprint": recipe.fingerprint,
     }
+    requested_recipe = recipe
+    if collapse_detection is not None:
+        # A reseeded run trained under a different seed than the one requested; recover it
+        # from the promoted summary so a resumed invocation stays identity-checked.
+        recipe = _reseeded_recipe(output_dir, recipe)
     train_summary = _completed_train_summary(
         output_dir,
         recipe=recipe,
@@ -1532,18 +1839,33 @@ def run_probe_experiment(
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             _stage("released primary judge CUDA memory before probe training")
-        train_summary = train_probe(
-            pairs,
-            recipe=recipe,
-            output_dir=output_dir,
-            query_source=query_source,
-            train_fingerprint=train_fingerprint,
-            negative_contract=negative_contract,
-            false_negative_report=false_negative_report,
-            negative_audit_rows=negative_audit_rows,
-            statistical_contract=statistical_contract,
-            checkpoint_interval_steps=checkpoint_interval_steps,
-        )
+        if collapse_detection is None:
+            train_summary = train_probe(
+                pairs,
+                recipe=recipe,
+                output_dir=output_dir,
+                query_source=query_source,
+                train_fingerprint=train_fingerprint,
+                negative_contract=negative_contract,
+                false_negative_report=false_negative_report,
+                negative_audit_rows=negative_audit_rows,
+                statistical_contract=statistical_contract,
+                checkpoint_interval_steps=checkpoint_interval_steps,
+            )
+        else:
+            train_summary, recipe = train_probe_with_collapse_reseed(
+                pairs,
+                recipe=requested_recipe,
+                output_dir=output_dir,
+                collapse_detection=collapse_detection,
+                query_source=query_source,
+                train_fingerprint=train_fingerprint,
+                negative_contract=negative_contract,
+                false_negative_report=false_negative_report,
+                negative_audit_rows=negative_audit_rows,
+                statistical_contract=statistical_contract,
+                checkpoint_interval_steps=checkpoint_interval_steps,
+            )
     else:
         report = train_summary.get("possible_false_negative_report")
         if not isinstance(report, Mapping):
@@ -1704,6 +2026,12 @@ def run_probe_experiment(
         # entry above remains authoritative for whether this is dev or translated.
         "corpus_retrieval": retrieval,
     }
+    if collapse_detection is not None:
+        # Never hide how many attempts this result took, nor which seed produced it.
+        provenance = train_summary.get("collapse_detection")
+        if not isinstance(provenance, Mapping):
+            raise ValueError("an in-run detection run must carry collapse_detection provenance")
+        result["collapse_detection"] = dict(provenance)
     write_json(output_dir / "result.json", result)
     build_embedder_report(
         result,
