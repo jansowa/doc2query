@@ -6,6 +6,50 @@
 
 `IMPLEMENTED`
 
+Aktualizacja 2026-08-22 (detekcja zapadnięcia probe w trakcie runu i automatyczny
+reseed): prospektywny ADR
+[`task04_m03_in_run_collapse_detection_v1.md`](../reports/decisions/task04_m03_in_run_collapse_detection_v1.md)
+zamrożono **przed pierwszym nowym runem**; zamraża on utrwalanie pełnej krzywej
+straty i pośredniej ewaluacji retrievalowej co 256 kroków, regułę detekcji,
+politykę reseedu, rachunek porównywalności oraz kryteria akceptacji A1–A5.
+Implementacja (`src/doc2query/evaluation/probe_in_run_collapse.py`, haki w
+`embedder_probe.py`, flaga `--collapse-detection-config`, 16 testów CPU) jest
+**domyślnie wyłączona**. Raport:
+[`task04_m03_in_run_collapse_detection_2026-08-21.md`](../reports/measurements/task04_m03_in_run_collapse_detection_2026-08-21.md).
+
+- **Wszystkie pięć kryteriów przeszło.** Run kontrolny z wyłączoną flagą
+  odtworzył zamrożony S47 **bit w bit**, więc niedeterminizm GPU okazał się
+  zerowy i kryterium identyczności trajektorii (A4) rozstrzygnęło się przy
+  dopuszczalnej różnicy 0 — run z detekcją dał te same cyfry. S48 i S51 z
+  detekcją również odtworzyły co do cyfry zamrożone wartości serii wariancji.
+- **Detekcja zadziałała dwa razy pod rząd na seedzie 50:** próby 50 i 1050
+  przerwano na kroku 512 (recall pośredni 0,422 i 0,141 przy podłodze 0,521),
+  przyjęto dopiero seed 2050. Separacja jest czysta: zapadnięte 0,141–0,422,
+  zdrowe 0,844–0,977, bez przypadku pośredniego na 15 kontrolach. Zapadnięty
+  przebieg kosztuje 99 s zamiast ~1500 s, a koszt własny mechanizmu to ~10 s na
+  run (~0,7% runu).
+- **Kierunek straty wypadł słabiej niż reguła retrievalowa:** przeoczył
+  zapadnięcie seeda 1050 (strata malejąca przy recallu 0,141). Potwierdza to
+  podział ról z ADR — `loss_based_guardrail_permitted=false` zostaje w mocy.
+- **Zero fałszywych alarmów na trzech zdrowych seedach**, ale to 0/3 runów i
+  0/9 kontroli: górna granica 95% CI odsetka fałszywych alarmów to ~0,63, więc
+  swoistość **nie jest** wykazana.
+- **Cena reseedu jest już widoczna:** przyjęty seed 2050 dał `corpus_ndcg_at_10`
+  0,0832, powyżej całego zakresu serii zamrożonej (0,0475–0,0582), a sd serii
+  wzrosło do 0,0152 wobec 0,0046. Reseed warunkuje rozkład seedów, więc średnich
+  tej serii nie wolno czytać jako oszacowania ramienia W06, a detekcja musi być
+  włączana symetrycznie w obu ramionach porównania.
+
+Podłoga wyszła 0,521 zamiast zakładanych 0,195, bo pula pośrednia ma 768, a nie
+2048 unikalnych pasaży (K=4 zapytania na pasaż); zamrożona reguła „2048 albo
+wszystkie, jeśli jest ich mniej" zadziałała dokładnie jak zapisano, a
+trudniejsze kryterium i tak przeszło. Zamknięte pomiary (M-03, confirm TriviaQA,
+sweep budżetu, seria wariancji) **nie są przeliczane ani unieważniane**, ich
+artefakty pozostają nietknięte, a mieszanie runów o różnym ustawieniu detekcji w
+jednym porównaniu jest zabronione. Guardrail M-03 pozostaje jedynym organem
+orzekającym o zbieżności ukończonego runu. `task07_training_authorized=false`,
+`final_tests_used=[]`.
+
 Aktualizacja 2026-08-17 (metrologia przyrządu probe, diagnostyka): pięć
 replikatów **tego samego** ramienia W06 (identyczne wejście i hiperparametry co
 zadania M-03, różny tylko seed 47–51) zmierzyło własności samego przyrządu, bez
