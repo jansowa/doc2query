@@ -79,6 +79,7 @@ htmlcov/
 !/reports/decisions/task06_defect_pair_policy_v2.md
 !/reports/decisions/task06_groq_audit_reader_axis_amendment_2026-08-21.md
 !/reports/decisions/task04_m03_in_run_collapse_detection_v1.md
+!/reports/decisions/task04_m03_in_run_collapse_shadow_mode_amendment_2026-08-22.md
 !/reports/plans/
 /reports/plans/*
 !/reports/plans/task05_d01_overnight_2026-07-26.md
@@ -150,6 +151,10 @@ htmlcov/
 !/reports/measurements/task04/in_run_collapse_detection_v1/
 /reports/measurements/task04/in_run_collapse_detection_v1/*
 !/reports/measurements/task04/in_run_collapse_detection_v1/summary.json
+!/reports/measurements/task04_m03_collapse_detector_specificity_2026-08-23.md
+!/reports/measurements/task04/shadow_collapse_detector_v1/
+/reports/measurements/task04/shadow_collapse_detector_v1/*
+!/reports/measurements/task04/shadow_collapse_detector_v1/summary.json
 
 # Editors and OS
 .idea/

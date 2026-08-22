@@ -88,6 +88,10 @@ class InRunCollapseDetection(StrictModel):
     status: Literal["frozen_before_first_new_run"]
     adr: str = Field(min_length=1)
     loss_based_guardrail_permitted: Literal[False]
+    # "shadow_observe_only" liczy i zapisuje kontrole pośrednie, ale nigdy nie przerywa
+    # runu; służy wyłącznie do zmierzenia czułości i swoistości detektora wobec
+    # zamrożonego guardraila M-03 na runach, które kończą się normalnie.
+    mode: Literal["abort_and_reseed", "shadow_observe_only"] = "abort_and_reseed"
     persistence: PersistenceContract
     interim_evaluation: InterimEvaluationContract
     rules: RuleContract
@@ -109,6 +113,7 @@ class InRunCollapseDetection(StrictModel):
             "consecutive_hits_required": self.rules.consecutive_hits_required,
             "max_attempts": self.reseed.max_attempts,
             "seed_stride": self.reseed.seed_stride,
+            "mode": self.mode,
             "loss_based_guardrail_permitted": False,
         }
 

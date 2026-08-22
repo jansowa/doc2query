@@ -759,7 +759,12 @@ def train_probe(
                 f"below_floor={observation['below_floor']} "
                 f"loss_non_decreasing={observation['loss_non_decreasing']}"
             )
-            if observation["collapse_detected"]:
+            if observation["collapse_detected"] and detector.contract.mode == "shadow_observe_only":
+                _stage(
+                    f"shadow mode: collapse would have been detected at step "
+                    f"{completed_steps} by {observation['rule']}; the run continues"
+                )
+            elif observation["collapse_detected"]:
                 _stage(
                     f"collapse detected at step {completed_steps} by {observation['rule']}; "
                     "aborting this attempt before the expensive evaluation"

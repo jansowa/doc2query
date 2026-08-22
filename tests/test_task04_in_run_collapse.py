@@ -524,3 +524,44 @@ def test_reseeded_recipe_is_recovered_from_a_promoted_summary(tmp_path: Path) ->
     )
     assert embedder_probe._reseeded_recipe(output, recipe).seed == 1047
     assert embedder_probe._reseeded_recipe(tmp_path / "missing", recipe).seed == 47
+
+
+def test_shadow_mode_observes_without_aborting(
+    tmp_path: Path,
+    tiny_probe: tuple[list[dict[str, Any]], dict[str, Any]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rows, keywords = tiny_probe
+    monkeypatch.setattr(embedder_probe, "_interim_recall_now", lambda *_args, **_kwargs: 0.0)
+    output = tmp_path / "probe"
+    summary = train_probe(
+        rows,
+        recipe=_recipe(),
+        output_dir=output,
+        collapse_detection=_test_contract(mode="shadow_observe_only"),
+        **keywords,
+    )
+    # The run completes and keeps the would-be detection as an observation only.
+    assert summary["steps"] == 8
+    assert (output / "model" / "model.safetensors").is_file()
+    interim = [
+        json.loads(line)
+        for line in (output / "training_interim_evaluation.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert [row["step"] for row in interim] == [2, 4, 6]
+    assert [row["collapse_detected"] for row in interim] == [False, True, True]
+
+
+def test_frozen_shadow_contract_differs_only_in_mode() -> None:
+    abort = load_collapse_detection(FROZEN_CONTRACT)
+    shadow = load_collapse_detection(
+        Path("configs/evaluation/task04_m03_in_run_collapse_detection_shadow_v1.yaml")
+    )
+    assert abort.mode == "abort_and_reseed"
+    assert shadow.mode == "shadow_observe_only"
+    assert shadow.rules == abort.rules
+    assert shadow.interim_evaluation == abort.interim_evaluation
+    assert shadow.reseed == abort.reseed
+    assert shadow.loss_based_guardrail_permitted is False
