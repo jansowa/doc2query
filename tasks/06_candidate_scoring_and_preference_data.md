@@ -6,6 +6,47 @@
 
 `IN PROGRESS`
 
+Aktualizacja 2026-08-23 (audyt par v2 ukończony; **bramka V2-05 niedowieziona**):
+ślepy audyt dual-LLM 500 par v2 zakończył się statusem `complete` (250/250
+requestów u obu sędziów, dwa okna dziennych budżetów Groq, bez zmiany promptu,
+rubryki, modeli ani limitów). Raport:
+[`task06_defect_pairs_v2_audit_2026-08-23.md`](../reports/measurements/task06_defect_pairs_v2_audit_2026-08-23.md).
+
+- **P1 FAIL** (nieodpowiadalne `chosen` ≤ 5% u każdego sędziego): `gpt-oss`
+  4,80% przechodzi, `qwen` **5,20%** nie.
+- **P2 PASS**: `consensus_supports_automatic` **30,80%**, CI [26,78%; 35,05%].
+- **P3 FAIL**: `consensus_contradicts_automatic` **3,20%** wobec progu 3,1%.
+- **P4 PASS z ogromnym zapasem**: kontrast osi **+45,9 pp** i **+56,7 pp** wobec
+  progu +20 pp.
+
+Obie porażki są **o jedną parę** (25/500 i 15/500 by przeszły), a CI obu
+wielkości zawiera próg — co tnie w obie strony i pokazuje, że n=500 nie ma mocy
+rozstrzygać na tym poziomie. Progów **nie** obniżono, cięcia osi B, kwot ani
+rubryki **nie** zmieniono, audytu **nie** powtórzono na nowej próbce. Zgodnie z
+§11 ADR pary v2 **nie zastępują niczego, nie idą do żadnego treningu, a polityka
+wraca do projektowania**.
+
+Wynik jest negatywny wobec bramki, **nie** wobec kierunku. v2 poprawiła każdy
+mierzony wymiar wobec v1: nieodpowiadalne `chosen` 16,6%/18,8% → **4,8%/5,2%**
+(3,5×), zgodność z automatem 0,718/0,708 → **0,886/0,778**, zgodność między
+modelami 0,879 → **0,983**, wykluczone 75,6% → **69,2%**, konsensus wspiera
+24,4% → **30,8%**, przeczy 6,2% → **3,2%**. Mechanizm osi defektowych jest
+potwierdzony: nieodpowiadalne `rejected` to 49,0% w osi A wobec 3,1% w osi B
+(`gpt-oss`) i 63,0% wobec 6,3% (`qwen`).
+
+**Oś B jest słabym ogniwem:** zgodność konsensusu z automatem to 0,974 w osi A
+(n=154) wobec **0,250** w osi B (n=16); etykieta `high_lexical_overlap` również
+0,250. Łatwość leksykalna nie jest dla sędziów powodem uznania zapytania za
+gorsze, co w połączeniu z niedoborem podaży osi B (192 wobec kwoty 250) podważa
+hipotezę tej osi — przy zastrzeżeniu, że n=16 rozstrzygniętych par to przesłanka
+do projektu, nie rozstrzygnięcie. Remisy wzrosły u `gpt-oss` (63,2%), u `qwen`
+bez zmian (34,2%); abstencja konsensusu 65,4%.
+
+Decyzja o v2.1 albo o przeprojektowaniu samej reguły decyzyjnej (z jawnym
+rachunkiem mocy próby) należy do właściciela i wymaga nowego prospektywnego ADR
+**przed** jakimkolwiek kolejnym odczytem. Audyt nie jest human evidence.
+`task07_training_authorized=false`, `final_tests_used=[]`.
+
 Aktualizacja 2026-08-17 (kierunek polityki par v2, decyzja właściciela):
 właściciel — po zapoznaniu się z wynikami dnia 1 audytu dual-LLM — zatwierdził
 kierunkowo przejście z porządkowania par marginesem primary na **pary

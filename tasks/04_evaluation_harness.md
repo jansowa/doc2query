@@ -6,6 +6,32 @@
 
 `IMPLEMENTED`
 
+Aktualizacja 2026-08-23 (charakterystyka detektora na 20 seedach): amendment
+[`task04_m03_in_run_collapse_shadow_mode_amendment_2026-08-22.md`](../reports/decisions/task04_m03_in_run_collapse_shadow_mode_amendment_2026-08-22.md)
+dodał **tryb obserwacyjny** (kontrole liczone i zapisywane, run nigdy nie
+przerywany), bo w trybie przerywającym nie istnieje prawda odniesienia dla
+fałszywego alarmu. Seria 20 runów jednego ramienia (seedy 52–71). Raport:
+[`task04_m03_collapse_detector_specificity_2026-08-23.md`](../reports/measurements/task04_m03_collapse_detector_specificity_2026-08-23.md).
+
+- **Zero fałszywych alarmów na 19 zdrowych runach** (95% CI [0; 0,176]) wobec
+  0/3 poprzednio; jedno zapadnięcie (seed 64, `recall@100` i `ndcg@10` dokładnie
+  **0,000000**) wykryte na kroku 512, czyli przed całą ewaluacją.
+- **Wymóg dwóch kolejnych trafień zarobił na siebie natychmiast:** dwa zdrowe
+  runy (55, 57) miały pojedyncze trafienie na kroku 256 i wróciły do normy;
+  wariant z jednym trafieniem dałby **2/19 = 10,5%** fałszywych alarmów.
+- **Kierunek straty nie trafił ani razu**, także na zapadniętym seedzie 64 —
+  łącznie 1 z 3 zapadnięć w obu seriach. `loss_based_guardrail_permitted=false`
+  pozostaje w mocy.
+- **Odsetek zapadnięć 1/20 = 5,0%**, CI [0,1%; 24,9%]; nie zastępuje szacunku
+  18,5% z mieszanki konfiguracji, bo przedział jest zbyt szeroki.
+- **Rozdzielczość przyrządu skorygowana w dół:** na 19 zbieżnych runach sd
+  `corpus_ndcg_at_10` = **0,0142** (nie 0,0046 z n=4), zakres 0,0388–0,0897.
+  Półszerokość 95% CI to 0,0160 przy n=3 i 0,0124 przy n=5. Dla statystyki
+  decyzyjnej liczy się sd **par** (0,0126): 0,0110 przy 5 parach, 0,0078 przy 10.
+  Minimum 5 par z M-03 leży **na granicy** progu `+0,01`; komfort zaczyna się
+  przy ~10 parach. To twarda przesłanka kosztowa dla Task 07.
+- Koszt kontroli: ~10 s na run (~0,7% runu). Okno 8,2 h GPU, bez awarii.
+
 Aktualizacja 2026-08-22 (detekcja zapadnięcia probe w trakcie runu i automatyczny
 reseed): prospektywny ADR
 [`task04_m03_in_run_collapse_detection_v1.md`](../reports/decisions/task04_m03_in_run_collapse_detection_v1.md)
