@@ -1,0 +1,260 @@
+# Polityka par zakotwiczonych w defektach — Task 06, wydanie v2.1 (jedna oś).
+#
+# Zamrożona prospektywnie przez ADR reports/decisions/task06_defect_pair_policy_v2_1.md
+# PRZED zbudowaniem pierwszej pary v2.1 i przed pierwszym nowym requestem Groq.
+#
+# Różnice wobec v2.0 są dokładnie trzy i wszystkie wynikają z tego ADR:
+#   1. oś B wypada z polityki (trzy niezależne sygnały przeciw), więc znikają
+#      hasz przypisania osi, kwoty 250/250, realokacja i pułap content_jaccard
+#      po stronie chosen — definicja chosen wraca bajtowo do osi A z v2.0;
+#   2. próbka audytowa ma 800 par i stratyfikuje po etykiecie defektu, nie po osi;
+#   3. reguła decyzyjna bramki jest przedziałowa (Clopper-Pearson), a nie punktowa
+#      — progi bez zmian, patrz sekcja `decision_rule`.
+# Margines primary nadal nie porządkuje niczego. Oś C nadal poza wydaniem.
+schema_version: 1
+contract: task06-defect-pair-policy-v2-1
+policy_id: task06-defect-pair-policy-v2.1
+status: frozen_before_pair_read
+adr: reports/decisions/task06_defect_pair_policy_v2_1.md
+supersedes_policy_id: task06-defect-pair-policy-v2.0
+
+pairing:
+  max_pairs_per_group: 1
+  require_exact_same_prompt: true
+  require_diversity_gate_eligible: true
+  restrict_to_gate_representatives: true
+  # Bajtowo to samo ograniczenie, co w politykach v1/v1.1/v2.0.
+  max_normalized_query_jaccard: 0.85
+  # Jedna oś, więc nie ma czego przypisywać haszem ani realokować kwotą.
+  single_axis: A
+
+# Primary NIE porządkuje. Jedyna rola: sanity po stronie chosen.
+primary:
+  judge: sdadas/polish-reranker-roberta-v3
+  signal: pool_margin
+  role: chosen_side_sanity_only
+  min_chosen_margin_exclusive: 0.0
+  used_for_ordering: false
+  used_for_tie_break: false
+
+# Shadow: veto zdjęte w v2.0 i pozostaje zdjęte. Komponenty nadal zapisywane.
+shadow:
+  judge: BAAI/bge-reranker-v2-m3
+  role: recorded_only_never_selection_never_veto
+  veto_on_margin_inversion: false
+  veto_on_rank_inversion: false
+
+# Sygnał odpowiadalności: ten sam przyjęty bramką K1-K3 sędzia V2-01,
+# ten sam journal przypięty tym samym SHA-256. Wagi i digest bez zmian.
+answerability:
+  judge_contract: task06-answerability-judge-v1
+  adr: reports/decisions/task06_answerability_judge_v1.md
+  join_key: judge_item_id
+  verdict_journals:
+    - path: artifacts/task06/answerability_verdicts/verdicts_pool_authorized_single.jsonl
+      sha256: fe675f07935c4b70e4bc21212ea9eee0b1b3566de44753106bc0841651f339c1
+      record_count: 23676
+  chosen_required_verdict: "yes"
+  uncertain_blocks_chosen: true
+  uncertain_is_defect: false
+  missing_verdict_is_fatal: true
+
+corpus_round_trip:
+  role: independent_filter
+  chosen_required_field: corpus_round_trip_at_20
+  axis_a_defect_field: corpus_round_trip_at_100
+
+format:
+  require_format_valid: true
+  forbid_prefix: true
+  forbid_metacomment: true
+  forbid_multiple_query: true
+  forbid_empty: true
+  supplementary_lead_in_guard: task06_lead_in_guard_v1
+
+copy_risk:
+  inherited_from: task05-d01-copy-semantic-quality-v1
+  minimum_query_words: 4
+  copy_density: 0.6
+  normalized_lcs: 0.8
+  longest_copied_ngram: 3.0
+  query_to_passage_length_ratio: 0.3838827838827845
+  reject_chosen_on_copy_risk: true
+  reject_rejected_on_copy_risk: false
+
+entity_preservation:
+  role: inherited_inert_check
+  required_chosen_value: 1.0
+  measured_constant_on_these_cohorts: 1.0
+  claimed_as_hallucination_filter: false
+
+focus:
+  role: reported_label_only
+  reject_chosen_on_zero_focus_accuracy: false
+  abstention_penalized: false
+
+# Jedyna oś wydania. Definicje bajtowo takie, jakimi zmierzono podaż 2253 par
+# osi A po certyfikacji puli (raport task06_axis_a_supply_after_certification).
+axis:
+  id: A
+  name: answerability_and_grounding
+  chosen_requires_judge_yes: true
+  rejected_defects:
+    - judge_unanswerable
+    - weak_corpus_round_trip
+
+# Oś B: wypadła z polityki. Zapis jawny, żeby nie dało się jej cicho wrócić.
+retired_axes:
+  - id: B
+    name: lexical_easiness
+    retired_by: reports/decisions/task06_defect_pair_policy_v2_1.md
+    evidence:
+      - Zgodnosc konsensusu z automatem 0.250 (n=16) wobec 0.974 (n=154) w osi A.
+      - Podaz 192 pary wobec kwoty 250, mimo prerejestrowanej realokacji.
+      - Trzy czwarte sprzecznosci P3 przy 38.4% probki (P3 os A 1.30%, os B 6.25%).
+    return_requires: >-
+      Walidacja etykiety defektu na wzor bramki K1-K3 sedziego odpowiadalnosci.
+      Nowe ciecie tej samej cechy NIE jest walidacja.
+  - id: C
+    name: focus_compliance
+    retired_by: reports/decisions/task06_defect_pair_policy_v2.md
+    evidence:
+      - V2-02 nie dowiozlo kryterium akceptacji (abstencja focusa spadla o ~1 pp).
+      - Podaz osi C na starych etykietach wynosila 0.
+    return_requires: Mocniejszy przypisywacz focusa i osobny prospektywny ADR.
+
+tie_break:
+  variant: divpo
+  signal: mean_normalized_query_jaccard_to_group_representatives
+  chosen_selection: minimum
+  rejected_selection: maximum
+  deterministic_fallback:
+    - candidate_index
+    - candidate_id
+
+constructed_rejected:
+  enabled: false
+  max_share: 0.0
+
+excluded_signals:
+  - name: pool_margin_as_ordering_key
+    reason: >-
+      Audyty v1 i v2: pasma marginesu plaskie wobec zgodnosci sedziow; margines
+      zostaje wylacznie warunkiem sanity po stronie chosen.
+  - name: total_score
+    reason: Nie istnieje zamrozona, skalibrowana funkcja wag; polityka jej nie tworzy.
+  - name: shadow_pool_margin_as_ranking_key
+    reason: Shadow jest zapisywany do analizy, nigdy nie wybiera i nie uniewaznia pary.
+  - name: entity_preservation_as_hallucination_filter
+    reason: >-
+      Zmierzona stala 1.0 z konstrukcji na tych kohortach; warunek zostaje
+      bezwladny i nie wolno go tak nazywac.
+  - name: content_jaccard_as_defect_signal
+    reason: >-
+      Os B wypadla: sedziowie nie uznaja wyzszego pokrycia leksykalnego za powod
+      gorszej jakosci zapytania (zgodnosc 0.250). Cecha zostaje raportowana.
+
+# Deterministyczna, stratyfikowana probka bramkowa. Liczebnosc wynika z rachunku
+# mocy w §4-5 ADR (P3 moc 0.964, P2 1.000, P4' ~1.000 przy zalozeniach osi A),
+# nie z zaokraglenia.
+audit_sample:
+  target_pair_count: 800
+  seed: 20260823
+  strata:
+    - cohort_id
+    - rejected_defect_label
+    - requested_form
+  # Para nosi kilka etykiet raportowych, a strata musi byc jednowartosciowa:
+  # bierzemy pierwsza obecna z tej zamrozonej listy priorytetow.
+  defect_label_priority:
+    - judge_unanswerable
+    - weak_corpus_round_trip
+    - copy_risk
+    - possible_ambiguous_query
+    - wrong_focus
+    - judge_rank_disagreement
+    - shadow_agrees
+    - lower_primary_margin
+  allocation: proportional_largest_remainder
+  ordering: pair_id
+  orientation: deterministic_counterbalanced_committed_before_review
+  output_dir: artifacts/task06/preference_audit_v4_defect_pairs_v2_1
+  minimum_pair_count_to_start: 500
+
+# Komorka kotwic zlotych: naturalne zapytanie splitu train wobec chosen v2.1,
+# z grup ROZLACZNYCH z komorka bramkowa. NIEBRAMKOWA (§6 ADR): nie wchodzi do
+# reguly decyzyjnej w zadnym kierunku, nie relabeluje i nie filtruje zadnej pary
+# naturalnej, nie dotyka progu source_en_score, nie jest human evidence.
+anchor_cell:
+  enabled: true
+  target_pair_count: 300
+  minimum_pair_count: 200
+  seed: 20260823
+  gating_role: none_calibration_only
+  natural_query_source: frozen_train_split_cohort_records
+  relabels_natural_pairs: false
+  output_dir: artifacts/task06/preference_audit_v4_defect_pairs_v2_1_gold_anchors
+
+# Regula decyzyjna bramki V2.1-05. Progi identyczne z v2.0; zmienia sie sposob
+# wnioskowania (caly przedzial wobec progu) i rola P1.
+decision_rule:
+  interval: clopper_pearson_exact
+  alpha: 0.05
+  sided: one_sided
+  verdicts:
+    - pass
+    - fail
+    - inconclusive
+  inconclusive_is_fail_closed: true
+  multiplicity_correction: none_intersection_union_test
+  escalation_permitted: false
+  predictions:
+    - id: P1
+      quantity: unanswerable_chosen_share
+      threshold: 0.05
+      direction: at_most
+      role: guardrail
+      fail_requires: lower_bound_above_threshold
+      per_judge: true
+      confirmatory_power_at_n800: [0.388, 0.762]
+    - id: P2
+      quantity: consensus_supports_automatic_share
+      threshold: 0.30
+      direction: at_least
+      role: confirmatory
+      pass_requires: lower_bound_at_or_above_threshold
+      per_judge: false
+      planning_assumption: 0.487
+      power_at_n800: 1.0
+    - id: P3
+      quantity: consensus_contradicts_automatic_share
+      threshold: 0.031
+      direction: at_most
+      role: confirmatory
+      pass_requires: upper_bound_at_or_below_threshold
+      per_judge: false
+      planning_assumption: 0.013
+      power_at_n800: 0.964
+    - id: P4_prime
+      quantity: paired_unanswerable_contrast_rejected_minus_chosen
+      threshold: 0.20
+      direction: at_least
+      role: confirmatory
+      pass_requires: bootstrap_lower_bound_at_or_above_threshold
+      bootstrap_replicates: 10000
+      bootstrap_seed: 20260823
+      per_judge: true
+      planning_assumption: [0.451, 0.598]
+    - id: P5
+      quantity: tie_share
+      role: reported_only
+      threshold: null
+
+# Te same trzy kohorty, na ktorych zmierzono podaz osi A (2253 pary).
+# v4-v11 pozostaja zamkniete do pozytywnej bramki V2.1-05.
+authorized_cohorts:
+  - same_prompt_expansion_v1
+  - same_prompt_expansion_v2
+  - same_prompt_expansion_v3
+
+final_tests_used: []

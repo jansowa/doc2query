@@ -1,0 +1,79 @@
+{
+  "api": {
+    "include_reasoning": false,
+    "max_completion_tokens_per_pair": 180,
+    "response_format": "json_object",
+    "temperature": 0.0,
+    "timeout_seconds": 120,
+    "url": "https://api.groq.com/openai/v1/chat/completions"
+  },
+  "assignment": "every_pair_reviewed_by_both_models",
+  "batch_size": 2,
+  "blind_order_policy": "deterministic_counterbalanced_orientation_committed_before_review",
+  "contract": "task06-groq-dual-llm-preference-audit-v1",
+  "disagreement_policy": "exclude_from_automatic_acceptance",
+  "final_tests_used": [],
+  "human_evidence_claimed": false,
+  "limits_per_model": {
+    "minimum_seconds_between_requests": 4.0,
+    "requests_per_day": 1000,
+    "requests_per_minute": 30,
+    "safety_requests_per_day": 950,
+    "safety_requests_per_minute": 14,
+    "safety_tokens_per_day": 185000,
+    "safety_tokens_per_minute": 7600,
+    "tokens_per_day": 200000,
+    "tokens_per_minute": 8000
+  },
+  "models": [
+    {
+      "completion_token_overhead": 320,
+      "model_id": "openai/gpt-oss-120b",
+      "reasoning_effort": "low",
+      "reviewer_id": "groq-gpt-oss-120b-task06-v1"
+    },
+    {
+      "completion_token_overhead": 0,
+      "model_id": "qwen/qwen3.6-27b",
+      "reasoning_effort": "none",
+      "reviewer_id": "groq-qwen3.6-27b-task06-v1"
+    }
+  ],
+  "owner_waiver": "manual_500_pair_review_replaced_by_dual_llm_audit_2026-08-12; n=800 wynika z rachunku mocy w reports/decisions/task06_defect_pair_policy_v2_1.md",
+  "pair_count": 800,
+  "prompt_version": "task06-blind-pairwise-polish-v1",
+  "quota_scheduler": {
+    "automatic_next_day_wakeup": false,
+    "global_request_serialization": true,
+    "on_model_quota_exhausted": "defer_model_and_switch_to_other",
+    "persist_not_before_timestamp": true,
+    "respect_retry_after_header": true,
+    "resume_on_next_operator_run": true,
+    "when_both_models_deferred": "stop_cleanly_incomplete_quota_deferred"
+  },
+  "required_outputs": [
+    "per_model_ratings",
+    "pairwise_consensus",
+    "model_agreement_with_ci",
+    "automatic_selector_agreement_with_ci",
+    "disagreement_slices",
+    "position_balance"
+  ],
+  "resume_policy": {
+    "ambiguous_transport_resend_requires_operator": true,
+    "durable_per_model_ledger": true,
+    "rate_limit_and_daily_token_caps_required": true,
+    "reuse_task05_groq_transport_safety_contract": true
+  },
+  "retry": {
+    "default_retry_after_seconds": 10.0,
+    "max_rate_limit_retries_per_request": 8,
+    "maximum_retry_after_seconds": 65.0,
+    "transient_backoff_initial_seconds": 5.0,
+    "transient_backoff_maximum_seconds": 60.0
+  },
+  "role": "audit_and_calibration_evidence_not_safe_anchor_selection_signal",
+  "schema_version": 1,
+  "scope_note": "Jedyne roznice wobec task06_groq_preference_audit_v1.json to pair_count, status, owner_waiver i ten komentarz. Prompt, rubryka, modele, batch_size, limity, retry, quota_scheduler, resume_policy i required_outputs sa bajtowo identyczne.",
+  "status": "frozen_not_executed_waiting_for_blind_pairs_v2_1"
+}

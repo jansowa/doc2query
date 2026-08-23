@@ -51,8 +51,11 @@ if TYPE_CHECKING:  # pragma: no cover - tylko dla typów
     # `answerability_judge`, który importuje helpery z tego modułu, więc import
     # modułowy zamknąłby cykl. Runtime'owy import siedzi w `load_export_manifest`.
     from doc2query.preferences.pair_audit_export_v2 import DefectBlindExportManifest
+    from doc2query.preferences.pair_audit_export_v2_1 import DefectBlindExportManifestV21
 
-ExportManifest: TypeAlias = "BlindExportManifest | DefectBlindExportManifest"
+ExportManifest: TypeAlias = (
+    "BlindExportManifest | DefectBlindExportManifest | DefectBlindExportManifestV21"
+)
 
 LEDGER_SCHEMA = "task06-groq-pair-audit-ledger-v1"
 RESULT_SCHEMA = "task06-groq-pair-audit-result-v1"
@@ -661,6 +664,16 @@ _V2_ADAPTER = ExportReadAdapter(
     decided_slice_analysis_key="decided_agreement_by_axis",
     label_analysis_key="agreement_by_rejected_defect_label",
 )
+# Polityka v2.1 ma jedną oś, więc `axis` przestaje różnicować cokolwiek; wymiarem
+# opisowym zostaje jednowartościowa etykieta defektu (ADR v2.1 §3.3). Prompt,
+# rubryka, modele, limity i reguły decyzyjne pozostają bez zmian.
+_V2_1_ADAPTER = ExportReadAdapter(
+    slice_field="rejected_defect_label",
+    label_field="rejected_defect_labels",
+    slice_analysis_key="agreement_by_primary_defect_label",
+    decided_slice_analysis_key="decided_agreement_by_primary_defect_label",
+    label_analysis_key="agreement_by_rejected_defect_label",
+)
 
 
 def load_export_manifest(path: Path) -> tuple[ExportManifest, ExportReadAdapter]:
@@ -671,8 +684,16 @@ def load_export_manifest(path: Path) -> tuple[ExportManifest, ExportReadAdapter]
     from doc2query.preferences.pair_audit_export_v2 import (
         load_defect_blind_export_manifest,
     )
+    from doc2query.preferences.pair_audit_export_v2_1 import (
+        EXPORT_CONTRACT as V2_1_EXPORT_CONTRACT,
+    )
+    from doc2query.preferences.pair_audit_export_v2_1 import (
+        load_defect_blind_export_manifest_v2_1,
+    )
 
     raw = json.loads(path.read_text(encoding="utf-8"))
+    if str(raw.get("contract")) == V2_1_EXPORT_CONTRACT:
+        return load_defect_blind_export_manifest_v2_1(path), _V2_1_ADAPTER
     if str(raw.get("contract")) == V2_EXPORT_CONTRACT:
         return load_defect_blind_export_manifest(path), _V2_ADAPTER
     return load_blind_export_manifest(path), _V1_ADAPTER
