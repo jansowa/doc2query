@@ -10,7 +10,7 @@ Aktualizacja 2026-08-23 (audyt par v2 ukończony; **bramka V2-05 niedowieziona**
 ślepy audyt dual-LLM 500 par v2 zakończył się statusem `complete` (250/250
 requestów u obu sędziów, dwa okna dziennych budżetów Groq, bez zmiany promptu,
 rubryki, modeli ani limitów). Raport:
-[`task06_defect_pairs_v2_audit_2026-08-23.md`](../reports/measurements/task06_defect_pairs_v2_audit_2026-08-23.md).
+[`task06_defect_pairs_v2_audit_2026-08-23.md`](../reports/measurements/task06_defect_pairs_v2_audit_2026-08-23.md). **Diagnostyka post hoc porażki (eksploracyjna, nie zmienia werdyktu)**: obie porażki pochodzą z osi B — P1 wynosi w osi A 3,90%/3,25%, a w osi B 6,25%/8,33%; P3 wynosi w osi A **1,30%**, a w osi B 6,25%, czyli oś B wnosi trzy czwarte wszystkich sprzeczności przy 38,4% próbki. To trzeci niezależny sygnał przeciw osi B (obok zgodności 0,250 i niedoboru podaży) i przesuwa podejrzenie z cięcia `content_jaccard` na samą hipotezę, że wyższy overlap jest defektem. Diagnostyka **nie** ustala, że polityka jednoosiowa przeszłaby bramkę (górna granica CI dla P1 osi A sięga 6,71%) i **nie** usuwa wady konstrukcyjnej predykcji: progi punktowe przy n=500 mają przedziały ~±2 pp, więc v2.1 musi ustalać próg razem z liczebnością próby. Raport: `reports/measurements/task06_v2_gate_failure_decomposition_2026-08-23.md`.
 
 - **P1 FAIL** (nieodpowiadalne `chosen` ≤ 5% u każdego sędziego): `gpt-oss`
   4,80% przechodzi, `qwen` **5,20%** nie.
