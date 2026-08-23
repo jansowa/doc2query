@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 import yaml
+from conftest import require_local_artifacts
 
 from doc2query.config import load_config
 from doc2query.evaluation import d01_campaign, d01_pipeline
@@ -275,7 +276,9 @@ def test_common_cohort_preserves_frozen_order_and_original_seed_index(
     )
 
 
+@pytest.mark.usefixtures()
 def test_w06_matched_provenance_rejects_bs1_and_accepts_bs8() -> None:
+    require_local_artifacts()
     adapter = Path("runs/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/adapter")
     manifest = Path("runs/W06-4.5B-INSTRUCT-50K-8GB-BS8-L512/run_manifest.json")
     with pytest.raises(ValueError, match="not BS8"):

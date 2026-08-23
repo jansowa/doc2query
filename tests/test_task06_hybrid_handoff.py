@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 import yaml
+from conftest import require_local_artifacts
 
 from doc2query.preferences.hybrid_handoff import _assert_shape, preflight_hybrid_handoff
 
@@ -44,6 +45,7 @@ def test_hybrid_handoff_contract_fails_closed(
 
 
 def test_real_hybrid_handoff_preflight_is_model_free_and_closed() -> None:
+    require_local_artifacts()
     result = preflight_hybrid_handoff(CONFIG)
     assert result["status"] == "verified_ready_for_task06_execution_design_not_generation"
     assert result["candidate_pool"] == {"w06": 4, "d01_controlled": 4, "selected": 4}

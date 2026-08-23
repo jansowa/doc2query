@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
+
+from conftest import project_cache_env
 
 from doc2query.config import load_config
 
@@ -103,6 +106,7 @@ def test_base_campaign_help_dry_run_and_order() -> None:
             check=False,
             capture_output=True,
             text=True,
+            env={**os.environ, **project_cache_env()},
         )
         assert result.returncode == 0, result.stderr
     source = Path("scripts/run_base_1_5b_campaign.sh").read_text(encoding="utf-8")

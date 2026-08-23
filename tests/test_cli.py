@@ -7,7 +7,9 @@ from typer.testing import CliRunner
 from doc2query.cli import app
 from doc2query.utils.records import JsonlWriter
 
-runner = CliRunner()
+# Rich zawija pomoc do szerokości terminala; w CI to 80 kolumn, więc długie flagi
+# (np. --resume-if-available) łamią się w środku i asercje podłańcuchowe padają.
+runner = CliRunner(env={"COLUMNS": "200", "TERM": "dumb"})
 
 
 def test_root_help_lists_public_groups() -> None:

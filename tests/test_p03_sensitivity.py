@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
+from conftest import project_cache_env, require_local_artifacts
 
 from doc2query.evaluation.p03_sensitivity import (
     ARM_NAMES,
@@ -240,6 +242,7 @@ def test_completed_dev_evaluation_is_reused_only_when_contract_matches(tmp_path:
 
 
 def test_preflight_without_model_loading_and_mock_smoke(tmp_path: Path) -> None:
+    require_local_artifacts()
     root = Path.cwd()
     raw = load_sensitivity_config(Path("configs/evaluation/p03_w05_sensitivity.yaml"))
     report = preflight(raw, root, require_model_cache=False)
@@ -269,6 +272,7 @@ def test_runner_help_and_shell_mock_smoke() -> None:
         check=False,
         capture_output=True,
         text=True,
+        env={**os.environ, **project_cache_env()},
     )
     assert help_result.returncode == 0
     assert "--dry-run" in help_result.stdout
@@ -277,6 +281,7 @@ def test_runner_help_and_shell_mock_smoke() -> None:
         check=False,
         capture_output=True,
         text=True,
+        env={**os.environ, **project_cache_env()},
     )
     assert smoke_result.returncode == 0, smoke_result.stderr
     payload = json.loads(smoke_result.stdout)

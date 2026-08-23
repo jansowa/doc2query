@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 import yaml
+from conftest import require_local_artifacts
 
 from doc2query.evaluation.d01_prospective import assert_scoring_summary
 from doc2query.evaluation.d01b_scale_pilot import (
@@ -68,6 +69,7 @@ def test_scale_pilot_rejects_any_final_test_reference() -> None:
 
 
 def test_real_scale_pilot_preflight_without_materialization() -> None:
+    require_local_artifacts()
     result = preflight_scale_pilot(CONFIG, require_materialized=False)
     assert result["status"] == "verified"
     assert result["generation_cohort_count"] == 1000

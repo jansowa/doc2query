@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+from conftest import require_local_artifacts
 
 from doc2query.evaluation.d01_usefulness import (
     D01UsefulnessContract,
@@ -54,6 +55,7 @@ def _candidate(
 
 
 def test_usefulness_contract_is_retrospective_and_shadow_reserved() -> None:
+    require_local_artifacts()
     contract = D01UsefulnessContract.load(
         Path("configs/evaluation/d01b_usefulness_hybrid_v1.yaml")
     )

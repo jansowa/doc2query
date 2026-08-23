@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+from conftest import require_local_artifacts
 
 from doc2query.evaluation.d01b_scale_confirm import (
     assess_confirm_feasibility,
@@ -17,6 +18,7 @@ SNAPSHOT = Path(
 
 
 def test_real_id_only_audit_fails_closed_for_591_record_reserve() -> None:
+    require_local_artifacts()
     result = assess_confirm_feasibility(CONFIG)
     assert result == json.loads(SNAPSHOT.read_text(encoding="utf-8"))
     assert result["status"] == "blocked_insufficient_unseen_development"

@@ -5,6 +5,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import yaml
+from conftest import require_local_artifacts
 
 from doc2query.preferences import execution_design
 from doc2query.preferences.execution_design import (
@@ -79,6 +80,7 @@ def test_id_only_audit_excludes_entire_adapter_training_clusters(tmp_path: Path)
 
 
 def test_real_execution_design_preflight_is_fail_closed() -> None:
+    require_local_artifacts()
     root = Path(__file__).resolve().parents[1]
     result = preflight_execution_design(
         root / "configs/preferences/task06_candidate_execution_design_v1.yaml",

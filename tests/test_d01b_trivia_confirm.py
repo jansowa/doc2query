@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 import yaml
+from conftest import require_local_artifacts
 
 from doc2query.evaluation.d01b_trivia_confirm import (
     _assert_contract_shape,
@@ -53,6 +54,7 @@ def test_trivia_confirm_contract_fails_closed(
 
 
 def test_real_trivia_confirm_preflight_before_seed42_staging() -> None:
+    require_local_artifacts()
     result = preflight_trivia_confirm(CONFIG, require_staged_seed42=False)
     assert result["status"] == "verified"
     assert result["external_query_count"] == 8000
