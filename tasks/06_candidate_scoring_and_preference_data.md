@@ -117,6 +117,27 @@ audytu, a bramka V2-05 pozostaje przegrana i nieprzeliczana.
   raportowana **przed** odczytem; przy <500 bramka nie startuje; poluzowanie
   jakiegokolwiek progu zabronione.
 
+Wykonanie rozpoczęte tego samego dnia, po commicie zamrażającym ADR (raport:
+[`task06_defect_pairs_v2_1_build_2026-08-23.md`](../reports/measurements/task06_defect_pairs_v2_1_build_2026-08-23.md)):
+
+- polityka i eksport v2.1 zaimplementowane w **nowych** modułach
+  (`pair_policy_v2_1.py`, `pair_audit_export_v2_1.py`, 21 testów CPU); zamrożony
+  pipeline v2.0 i jego zamknięty pomiar pozostają nietknięte;
+- czytnik audytu dostał trzeci adapter kontraktu eksportu (wymiar opisowy to
+  etykieta defektu zamiast osi), a amendment
+  [`task06_groq_audit_sample_size_amendment_2026-08-23.md`](../reports/decisions/task06_groq_audit_sample_size_amendment_2026-08-23.md)
+  — spisany **przed pierwszym requestem** — zamienił twardą bramkę
+  `pair_count == 500` na zbiór liczebności zamrożonych ADR-ami `{500, 800}`,
+  nadal fail-closed, bez zmiany promptu, rubryki, modeli i limitów;
+- **budowa dała 2 253 pary** (v1 199, v2 270, v3 1 784), czyli **dokładnie**
+  zmierzoną inną ścieżką kodu podaż osi A po certyfikacji — niezależna kontrola,
+  że zdjęcie osi B przywróciło definicję `chosen` bajtowo;
+- **ślepy eksport komórki bramkowej**: 800 par, 12 strat, orientacja 400/400,
+  800/800 zobowiązań zweryfikowanych, zero wycieku, 800 unikalnych grup i
+  klastrów, **1 453 pary nieoglądane w zapasie**;
+- **pierwsze okno audytu uruchomione** i wznawialne; **żaden wynik nie został
+  odczytany**, bramka V2.1-05 policzy się dopiero po `status: complete`.
+
 Wartości z osi A audytu v2 wchodzą do ADR **wyłącznie** jako założenia
 planistyczne rachunku mocy i są jawnie eksploracyjne — pochodzą z podpróby
 próbki, na której bramka przegrała, i mają własne przedziały (P1 osi A u
