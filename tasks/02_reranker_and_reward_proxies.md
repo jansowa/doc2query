@@ -6,19 +6,20 @@
 
 Aktualizacja 2026-08-23 (pełny dev benchmark obu sędziów uruchomiony): `scripts/run_task02_full_dev_judge_benchmark.py` domyka lukę notowaną w rejestrze — shadow miał dotąd tylko 775 wspólnych query bramki HN. Run jest wznawialny (34 shardy po 500 rekordów, pomijanie ukończonych, `journal.jsonl`), zmierzony koszt 177 s na shard przy obu sędziach, czyli ~100 min GPU. Shardy nie mieszają populacji: pasma `neg10`/`neg07_09`/`neg03_06` odpowiadają liczbie negatywów w rekordzie (frozen dev ma 3-10). Run nie zmienia progów, wag ani rubryki i **nie otwiera testów finalnych** — wejście to wyłącznie `dev.parquet`, ścieżka testowa jest odrzucana twardo. Wynik zmierzony i zagregowany tego samego dnia (raport:
 [`task02_full_dev_judge_benchmark_2026-08-23.md`](../reports/measurements/task02_full_dev_judge_benchmark_2026-08-23.md)):
-oba sędziowie na **6 598 query** (8 096 grup), czyli na całej populacji dev w
-granicach kontraktu przyrządu, co daje **8,5×** wzrost pokrycia shadow wobec 775
-query bramki HN przy ~41 min GPU. Primary wygrywa na każdej miarze (query-macro
-R@1 0,9457 vs 0,9218, MRR 0,9656 vs 0,9463, nDCG@10 0,9736 vs 0,9584, ujemny
-margines 5,43% vs 7,82%); rozbieżność rank 9,56%, zwycięzca 7,36%, Pearson
-0,6547 — zgodne z 9,81% z bramki HN, więc tamta liczba nie była artefaktem małej
-próbki. Otwarte i nazwane: rekordy z <10 negatywami (9 674, czyli 59,5% dev) są
-poza kontraktem „1 pozytyw + 10 negatywów” i ich zmierzenie wymaga osobnej
-decyzji o populacji rankingowej; wymagane slice'y są nieosiągalne z powodu
-zdegenerowanych metadanych frozen dev (`domain`/`query_type`/`difficulty` =
-`unknown`, `source_en_difficulty` = `easy`), co jest luką kontraktu danych
-Task 01; część testowa pozostaje zamknięta. Żadnego progu nie ustalono ani nie
-przeliczono. `final_tests_used=[]`.
+oba sędziowie mają **16 258 z 16 272 rekordów** frozen dev, czyli **21×** więcej niż
+775 query bramki HN, w ~100 min GPU. Pomiar idzie w pasmach liczby negatywów, których
+**nie wolno sumować** — `neg10` 6 598, `neg07_09` 8 959, `neg04_06` 701 — a wyłączone
+jest 14 rekordów (0,086%) z pulą poniżej 5 kandydatów, gdzie Recall@5 jest
+nieokreślony. Query-macro w `neg10`: primary R@1 0,9457 vs shadow 0,9218, MRR 0,9656
+vs 0,9463, nDCG@10 0,9736 vs 0,9584, ujemny margines 5,43% vs 7,82%. **Przewaga
+primary maleje z rozmiarem puli i w `neg04_06` się odwraca** (0,9489 vs 0,9584,
+spójnie na czterech miarach, n=701) — przesłanka, nie rozstrzygnięcie; wniosek jest
+wąski: primary jest uzasadniony tam, gdzie działa reward proxy, czyli na pełnych
+pulach. Rozbieżność sędziów w `neg10` to 9,56% rank przy 8 096 grupach, praktycznie
+tyle samo co 9,81% z bramki HN na 775 query, więc tamta liczba nie była artefaktem
+małej próbki. Otwarte: wymagane slice'y są nieosiągalne z powodu zdegenerowanych
+metadanych frozen dev (luka kontraktu danych Task 01) i część testowa pozostaje
+zamknięta. Żadnego progu nie ustalono ani nie przeliczono. `final_tests_used=[]`.
 
 `IMPLEMENTED`
 

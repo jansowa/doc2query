@@ -30,18 +30,30 @@ import pandas as pd
 from doc2query.reranker.commands import benchmark_main
 from doc2query.utils.records import JsonlWriter
 
-BANDS: tuple[tuple[str, int, int], ...] = (
-    ("neg10", 10, 10),
-    ("neg07_09", 7, 9),
-    ("neg03_06", 0, 6),
+# Pasma liczby negatywów. Ostatnie pole to minimum przekazywane benchmarkowi;
+# `None` oznacza pasmo WYŁĄCZONE z pomiaru — przy puli poniżej 5 kandydatów
+# Recall@5 jest matematycznie nieokreślony, a mierzenie go innym cutoffem
+# zrobiłoby z tego inną metrykę pod tą samą nazwą.
+BANDS: tuple[tuple[str, int, int, int | None], ...] = (
+    ("neg10", 10, 10, 10),
+    ("neg07_09", 7, 9, 7),
+    ("neg04_06", 4, 6, 4),
+    ("neg03", 0, 3, None),
 )
 
 
 def _band(count: int) -> str:
-    for name, low, high in BANDS:
+    for name, low, high, _minimum in BANDS:
         if low <= count <= high:
             return name
     raise ValueError(f"unmapped negative count: {count}")
+
+
+def _band_minimum(name: str) -> int | None:
+    for band, _low, _high, minimum in BANDS:
+        if band == name:
+            return minimum
+    raise ValueError(f"unknown band: {name}")
 
 
 def _reject_final_test(path: Path) -> None:
@@ -52,14 +64,14 @@ def _reject_final_test(path: Path) -> None:
 def _materialize_shards(input_path: Path, work_dir: Path, shard_size: int) -> list[Path]:
     """Deterministycznie pokrój dev na shardy w obrębie pasma liczby negatywów."""
     _reject_final_test(input_path)
-    by_band: dict[str, list[dict[str, Any]]] = {name: [] for name, _, _ in BANDS}
+    by_band: dict[str, list[dict[str, Any]]] = {name: [] for name, _, _, _ in BANDS}
     frame = pd.read_parquet(input_path)
     for raw in frame["record_json"]:
         record = json.loads(raw)
         by_band[_band(len(record["hard_negatives"]))].append(record)
     shards: list[Path] = []
     work_dir.mkdir(parents=True, exist_ok=True)
-    for name, _, _ in BANDS:
+    for name, _low, _high, _minimum in BANDS:
         rows = sorted(by_band[name], key=lambda row: str(row["example_id"]))
         for index in range(0, len(rows), shard_size):
             shard = work_dir / f"{name}.{index // shard_size:04d}.jsonl"
@@ -99,7 +111,13 @@ def main() -> None:
     journal = args.output_dir / "journal.jsonl"
     done = 0
     started_run = time.perf_counter()
+    excluded: list[str] = []
     for shard in shards:
+        band = shard.stem.split(".")[0]
+        minimum = _band_minimum(band)
+        if minimum is None:
+            excluded.append(shard.name)
+            continue
         target = args.output_dir / "results" / shard.stem
         if (target / "benchmark.json").is_file():
             continue
@@ -112,6 +130,8 @@ def main() -> None:
                 str(shard),
                 "--output-dir",
                 str(target),
+                "--min-hard-negatives",
+                str(minimum),
                 *[value for path in judges for value in ("--judge-config", str(path))],
             ]
         )
@@ -140,7 +160,8 @@ def main() -> None:
     remaining = sum(
         1
         for shard in shards
-        if not (args.output_dir / "results" / shard.stem / "benchmark.json").is_file()
+        if _band_minimum(shard.stem.split(".")[0]) is not None
+        and not (args.output_dir / "results" / shard.stem / "benchmark.json").is_file()
     )
     print(
         json.dumps(
@@ -148,6 +169,7 @@ def main() -> None:
                 "shards_total": len(shards),
                 "shards_completed_this_run": done,
                 "shards_remaining": remaining,
+                "shards_excluded_pool_below_five_candidates": sorted(excluded),
                 "status": "complete" if remaining == 0 else "resumable_incomplete",
                 "elapsed_seconds": round(time.perf_counter() - started_run, 1),
                 "final_tests_used": [],

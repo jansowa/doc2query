@@ -94,6 +94,14 @@ strict = true
 files = ["src", "tests"]
 warn_unused_configs = true
 
+# scipy nie dostarcza stubów typów. Reguła decyzyjna bramki V2.1-05 potrzebuje
+# dokładnych kwantyli rozkładu beta (Clopper-Pearson), a scipy jest już zależnością
+# projektu, więc zamiast przepisywać niepełną funkcję beta ręcznie wyciszamy brak
+# stubów wyłącznie dla tego pakietu. Reszta repozytorium pozostaje w strict mode.
+[[tool.mypy.overrides]]
+module = ["scipy.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 addopts = "--strict-markers"
 testpaths = ["tests"]

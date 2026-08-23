@@ -75,13 +75,29 @@ def _source_en_negative_scores(negatives: list[Any]) -> tuple[float, ...]:
     return tuple(float(value) for value in values if value is not None) if all(present) else ()
 
 
-def build_scoring_groups(record: dict[str, Any]) -> list[ScoringGroup]:
+def build_scoring_groups(
+    record: dict[str, Any], *, minimum_hard_negatives: int = 10
+) -> list[ScoringGroup]:
+    """Zbuduj grupy rankingowe; domyślny kontrakt to 1 pozytyw + 10 hard negatywów.
+
+    `minimum_hard_negatives` wolno obniżyć **wyłącznie** jawnie i wyłącznie po to, by
+    zmierzyć uboższą populację jako osobne pasmo. Wyniki z różnych rozmiarów puli nie
+    są porównywalne (Recall@k i nDCG@10 zależą od liczby kandydatów), więc pasm nie
+    wolno sumować ani uśredniać w jednej liczbie.
+    """
     positives = record.get("positives")
     negatives = record.get("hard_negatives")
+    if minimum_hard_negatives < 4:
+        raise ValueError(
+            "pula poniżej 5 kandydatów nie pozwala raportować Recall@5; "
+            "takie rekordy zostają wyłączone z pomiaru, nie mierzone innym cutoffem"
+        )
     if not isinstance(positives, list) or not positives:
         raise ValueError("record requires at least one positive")
-    if not isinstance(negatives, list) or len(negatives) < 10:
-        raise ValueError("benchmark requires at least 10 hard negatives")
+    if not isinstance(negatives, list) or len(negatives) < minimum_hard_negatives:
+        raise ValueError(
+            f"benchmark requires at least {minimum_hard_negatives} hard negatives"
+        )
     base_id = str(record.get("example_id", ""))
     query = str(record["query"])
     negative_texts = [_document_text(value) for value in negatives]
@@ -172,6 +188,15 @@ def benchmark_main(argv: list[str] | None = None) -> int:
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--judge-config", type=Path, action="append", required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--min-hard-negatives",
+        type=int,
+        default=10,
+        help=(
+            "Minimalna liczba hard negatywów. Obniżać wyłącznie po to, by zmierzyć "
+            "uboższą populację jako OSOBNE pasmo; pasm nie wolno sumować."
+        ),
+    )
     args = parser.parse_args(argv)
     judges = _load_judges(args.judge_config)
     if len(judges) < 2:
@@ -184,7 +209,9 @@ def benchmark_main(argv: list[str] | None = None) -> int:
     started = time.perf_counter()
     with JsonlWriter(args.output_dir / "scores.jsonl") as writer:
         for record in read_records(args.input):
-            for group in build_scoring_groups(record):
+            for group in build_scoring_groups(
+                record, minimum_hard_negatives=args.min_hard_negatives
+            ):
                 slices = _slice_values(record, group)
                 for judge in judges:
                     result = _score(judge, group)
@@ -196,6 +223,8 @@ def benchmark_main(argv: list[str] | None = None) -> int:
     report = {
         "status": "measured",
         "input": str(args.input),
+        "minimum_hard_negatives": args.min_hard_negatives,
+        "bands_must_not_be_pooled": True,
         "elapsed_seconds": time.perf_counter() - started,
         "judges": {
             name: {
@@ -233,7 +262,9 @@ def score_main(argv: list[str] | None = None) -> int:
     judge = _load_judges([args.judge_config])[0]
     with JsonlWriter(args.output) as writer:
         for record in read_records(args.input):
-            for group in build_scoring_groups(record):
+            for group in build_scoring_groups(
+                record, minimum_hard_negatives=args.min_hard_negatives
+            ):
                 writer.write(_score(judge, group).to_dict())
     return 0
 
