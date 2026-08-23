@@ -4,6 +4,8 @@
 
 ## Status
 
+Aktualizacja 2026-08-23 (pełny dev benchmark obu sędziów uruchomiony): `scripts/run_task02_full_dev_judge_benchmark.py` domyka lukę notowaną w rejestrze — shadow miał dotąd tylko 775 wspólnych query bramki HN. Run jest wznawialny (34 shardy po 500 rekordów, pomijanie ukończonych, `journal.jsonl`), zmierzony koszt 177 s na shard przy obu sędziach, czyli ~100 min GPU. Shardy nie mieszają populacji: pasma `neg10`/`neg07_09`/`neg03_06` odpowiadają liczbie negatywów w rekordzie (frozen dev ma 3-10). Run nie zmienia progów, wag ani rubryki i **nie otwiera testów finalnych** — wejście to wyłącznie `dev.parquet`, ścieżka testowa jest odrzucana twardo. Pozostaje agregacja per pasmo i wciąż zamknięta część testowa. `final_tests_used=[]`.
+
 `IMPLEMENTED`
 
 Szybki `sdadas/polish-reranker-base-ranknet` oraz primary
