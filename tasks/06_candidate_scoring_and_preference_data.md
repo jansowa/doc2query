@@ -47,6 +47,85 @@ rachunkiem mocy próby) należy do właściciela i wymaga nowego prospektywnego 
 **przed** jakimkolwiek kolejnym odczytem. Audyt nie jest human evidence.
 `task07_training_authorized=false`, `final_tests_used=[]`.
 
+Aktualizacja 2026-08-23 (**ADR polityki par v2.1 zamrożony**): prospektywny ADR
+[`task06_defect_pair_policy_v2_1.md`](../reports/decisions/task06_defect_pair_policy_v2_1.md)
+podpisano **przed zbudowaniem pierwszej pary v2.1 i przed pierwszym nowym
+requestem Groq**; jest dokumentem-only — nie tknięto kodu, par, eksportów ani
+audytu, a bramka V2-05 pozostaje przegrana i nieprzeliczana.
+
+- **Oś B wypada z polityki.** Trzy niezależne zmierzone sygnały przeciw
+  (zgodność konsensusu 0,250 przy n=16 wobec 0,974 przy n=154, podaż 192 wobec
+  kwoty 250, trzy czwarte sprzeczności P3 przy 38,4% próbki), a podejrzenie pada
+  na samą hipotezę osi, nie na cięcie `content_jaccard` — dlatego oś nie dostaje
+  nowego progu, tylko wypada. v2.1 jest jawnie **jednoosiowa** i nie naprawi
+  łatwości leksykalnej, monotonii, focusa ani naturalności; to zapisane jako
+  ograniczenie. Znikają hasz przypisania osi, kwoty 250/250, realokacja i
+  warunek `content_jaccard ≤ 0,0556` na `chosen`, więc definicja `chosen` wraca
+  **bajtowo** do tej, na której zmierzono podaż 2 253 par. Łatwość leksykalna
+  wraca do kontrolek, M-05 i set-level nagrody GRPO — zgodnie z baseline'em
+  monotonii, który pokazał, że monotonia jest dyktowana kontrolką
+  (`intent=procedure` → `jak` w 100%; `length` nigdy nieużyta). Powrót osi B to
+  nazwany dług: wymaga walidacji etykiety defektu na wzór bramki K1–K3, nie
+  nowego cięcia tej samej cechy. Różnorodność wewnątrz osi A wchodzi do strat
+  próbki jako etykieta defektu (`judge_unanswerable` n=142/0,993,
+  `weak_corpus_round_trip` 69/0,957, `judge_rank_disagreement` 48/1,000).
+- **Reguła decyzyjna: przedział zamiast punktu, ustalony razem z próbą.**
+  Dokładny jednostronny 95% przedział Cloppera–Pearsona, werdykt
+  PASS/FAIL/`INCONCLUSIVE`, `INCONCLUSIVE` fail-closed. Progów **nie zmieniono** —
+  reguła jest surowsza od v2, bo wymaga całego przedziału pod progiem, a ceną
+  jest liczebność. Koniunkcja (test przekroju–unii) nie wymaga korekty na
+  wielokrotność; nie ma eskalacji ani dolewania par. P2 zaostrzone do dolnej
+  granicy ≥ 30% (punkt decyzyjny 262/800, moc 1,000 przy założeniu osi A 48,7%),
+  P3 konfirmacyjnie ≤ 16/800 = 2,00% (moc **0,964** przy 1,30%), P4
+  przedefiniowane na **P4'** — kontrast **wewnątrz pary** (nieodpowiadalne
+  `rejected` − `chosen`, próg +20 pp bez zmian, założenie +45,1/+59,8 pp, 13,2 i
+  21,9 sd zapasu, percentylowy bootstrap po parach, ziarno 20260823), bo
+  kontrast **między** osiami w polityce jednoosiowej nie istnieje.
+- **P1 schodzi z roli konfirmacyjnej do guardraila** — jedyne osłabienie ciężaru
+  dowodu w tym ADR, zapisane wprost. Próg 5% nietknięty, ale FAIL wymaga
+  **dowiedzionego** naruszenia (dolna granica > 5%, czyli ≥ 51/800 = 6,375%).
+  Powód policzony: przy prawdzie 3,90% (oś A, `gpt-oss`) reguła konfirmacyjna
+  wymaga n=1 103 dla mocy 0,50, **n=2 310 dla 0,80** i 3 147 dla 0,90, a przy
+  prawdzie 4,80% (cała próbka v2) próg 5% jest nieosiągalny przy **żadnym** n;
+  wyprowadzenie progu (reszta 1,01% z `recall_no` 0,9429) zostało sfalsyfikowane
+  pomiarem 3–5× wyższym, a to, co P1 miało potwierdzać, ma niezależne
+  potwierdzenie (bramka K1–K3 i zmierzony 3,5× spadek przy zgodności między
+  sędziami 0,983). Charakterystyka guardraila zapisana z góry: P(FAIL) 0,001 przy
+  3,90%, 0,048 przy 5,0%, 0,577 przy 6,5%, 0,964 przy 8,0%, 1,000 przy poziomie
+  v1 — łapie regresję materialną, nie 1 pp. Raportowanie „P1 przeszła", gdy
+  guardrail tylko się nie zapalił, jest zabronione.
+- **Moc łączna części konfirmacyjnej 0,964**, ryzyko `INCONCLUSIVE` wycenione na
+  ~3,6%; analiza wrażliwości zapisana przed odczytem (P3 przy prawdzie 2,00%
+  spada do 0,566 — jedyna predykcja realnie zagrożona nierozstrzygnięciem).
+- **Próba: 800 par bramki + 300 par kotwicy złotej = 1 100** z podaży 2 086 par
+  osi A w kohortach v1+v2+v3 (~53% populacji), z **co najmniej 900 parami
+  nieoglądanymi w zapasie**. Kohorty v4–v11 **pozostają zamknięte**. Koszt
+  policzony z ledgerów zamkniętego audytu v2: `gpt-oss` 235 348 tokenów na 500
+  par = **470,7 tok/para** (`qwen` 373,3) przy limicie 185 000 tok/dobę, czyli
+  **393 pary na okno**; 1 100 par = 2,80 token-doby → **3–4 okna** (kontrola:
+  n=500 to 1,27 token-doby i zużyło 2 okna). Wariant z P1 konfirmacyjnym:
+  6–7 okien, autoryzacja nowych kohort, moc łączna 0,82.
+- **Komórka kotwic jest niebramkowa** (naturalne zapytanie `train` vs `chosen` z
+  grup rozłącznych z bramką, ta sama rubryka i ci sami sędziowie). Jej jedyny
+  cel: zmierzyć podłogę sędziów na złotym zapytaniu, żeby przyszły próg
+  absolutny wyprowadzać z pomiaru, a nie z modelu reszty (przy n=300 obserwowane
+  4% daje CP [2,32%; 6,40%]). Nie relabeluje i nie filtruje żadnej pary
+  naturalnej, nie dotyka progu `source_en_score >= 23.50`, nie jest human
+  evidence i nie może uratować ani obalić bramki.
+- **Prerejestrowana ścieżka niedoboru**: bramka ma priorytet do 800, kotwice
+  minimum 200 albo odroczenie; przy <800 parach moc jest przeliczana i
+  raportowana **przed** odczytem; przy <500 bramka nie startuje; poluzowanie
+  jakiegokolwiek progu zabronione.
+
+Wartości z osi A audytu v2 wchodzą do ADR **wyłącznie** jako założenia
+planistyczne rachunku mocy i są jawnie eksploracyjne — pochodzą z podpróby
+próbki, na której bramka przegrała, i mają własne przedziały (P1 osi A u
+`gpt-oss`: 12/308, górna granica CP 6,24%). Weryfikacja wymaga **nowych** par i
+**nowego** audytu. Następny krok: implementacja polityki i eksportu (CPU),
+budowa par v2.1 na kohortach v1+v2+v3, ślepy eksport dwóch rozłącznych komórek,
+audyt dual-LLM na niezmienionym kontrakcie Groq.
+`task07_training_authorized=false`, `final_tests_used=[]`.
+
 Aktualizacja 2026-08-17 (kierunek polityki par v2, decyzja właściciela):
 właściciel — po zapoznaniu się z wynikami dnia 1 audytu dual-LLM — zatwierdził
 kierunkowo przejście z porządkowania par marginesem primary na **pary
