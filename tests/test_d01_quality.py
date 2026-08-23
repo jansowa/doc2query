@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -13,13 +14,13 @@ from doc2query.evaluation.d01_quality import (
 
 
 class _OrthogonalEncoder:
-    def encode(self, texts: list[str], *, batch_size: int) -> np.ndarray:
+    def encode(self, texts: Sequence[str], *, batch_size: int) -> np.ndarray:
         del batch_size
         return np.eye(len(texts), dtype=np.float32)
 
 
 class _UnexpectedEncoder:
-    def encode(self, texts: list[str], *, batch_size: int) -> np.ndarray:
+    def encode(self, texts: Sequence[str], *, batch_size: int) -> np.ndarray:
         raise AssertionError(f"cache miss for {len(texts)} texts at batch {batch_size}")
 
 

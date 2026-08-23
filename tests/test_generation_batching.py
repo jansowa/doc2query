@@ -101,8 +101,8 @@ def test_independent_sampling_streams_are_invariant_for_fixed_logits() -> None:
     singles = [
         IndependentSeedSamplingProcessor([seed], temperature=0.8, top_p=0.9) for seed in (17, 91)
     ]
-    batched_tokens = []
-    single_tokens = [[], []]
+    batched_tokens: list[list[int]] = []
+    single_tokens: list[list[int]] = [[], []]
     for step_scores in scores:
         input_ids = torch.ones((2, 1), dtype=torch.long)
         batched_tokens.append(batched(input_ids, step_scores).argmax(dim=-1).tolist())

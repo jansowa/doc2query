@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -106,7 +107,7 @@ def test_batched_generation_resumes_only_after_atomic_passage_batch(
     _install_frozen_mocks(monkeypatch, records)
     calls = 0
 
-    def interrupted(_prompts: list[str], seeds: list[int]) -> list[str]:
+    def interrupted(_prompts: Sequence[str], seeds: Sequence[int]) -> list[str]:
         nonlocal calls
         calls += 1
         if calls == 5:
@@ -132,8 +133,8 @@ def test_batched_generation_resumes_only_after_atomic_passage_batch(
     ]
     resumed_seeds: list[list[int]] = []
 
-    def resumed(_prompts: list[str], seeds: list[int]) -> list[str]:
-        resumed_seeds.append(seeds)
+    def resumed(_prompts: Sequence[str], seeds: Sequence[int]) -> list[str]:
+        resumed_seeds.append(list(seeds))
         return [f"zapytanie {seed}" for seed in seeds]
 
     summary = generate_frozen_dev_batched(
@@ -303,7 +304,7 @@ def test_d01_audit_accepts_legacy_model_and_explicit_slot_gaps(
     config_path = Path("configs/experiments/d01_1_5b_style_dev_generation_s42.yaml")
     output = tmp_path / "generation.jsonl"
 
-    def backend(_prompts: list[str], seeds: list[int]) -> list[str]:
+    def backend(_prompts: Sequence[str], seeds: Sequence[int]) -> list[str]:
         return ["query 42" if seed in {45, 46, 47} else f"query {seed}" for seed in seeds]
 
     generate_frozen_dev_batched(
@@ -541,7 +542,7 @@ def test_d01_scoring_propagates_signed_cohort_hard_negative_minimum(
     summary_path = tmp_path / "generations.summary.json"
     primary_config = tmp_path / "primary.yaml"
     shadow_config = tmp_path / "shadow.yaml"
-    identity = {
+    identity: dict[str, Any] = {
         "identity_sha256": "i" * 64,
         "minimum_hard_negatives": 5,
         "cohort": {

@@ -163,7 +163,9 @@ def test_seq2seq_lora_uses_encoder_decoder_task_type() -> None:
             num_layers=1,
             num_decoder_layers=1,
             num_heads=4,
-            decoder_start_token_id=0,
+            # T5Config przyjmuje ten kwarg przez PretrainedConfig, ale nie wymienia go
+            # w swojej sygnaturze, więc mypy widzi tu nieistniejący argument.
+            decoder_start_token_id=0,  # type: ignore[call-arg]
             pad_token_id=0,
             eos_token_id=1,
         )

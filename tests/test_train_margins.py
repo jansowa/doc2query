@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -14,7 +15,7 @@ from doc2query.reranker.train_margins import score_natural_train_margins
 class LengthScorer:
     name = "judge/test"
 
-    def score_pairs(self, pairs: list[tuple[str, str]]) -> list[float]:
+    def score_pairs(self, pairs: Sequence[tuple[str, str]]) -> list[float]:
         return [float(len(document)) for _query, document in pairs]
 
 
@@ -22,7 +23,7 @@ class InterruptingScorer(LengthScorer):
     def __init__(self) -> None:
         self.calls = 0
 
-    def score_pairs(self, pairs: list[tuple[str, str]]) -> list[float]:
+    def score_pairs(self, pairs: Sequence[tuple[str, str]]) -> list[float]:
         self.calls += 1
         if self.calls == 2:
             raise KeyboardInterrupt

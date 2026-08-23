@@ -12,6 +12,7 @@ import json
 import os
 import subprocess
 import time
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -44,7 +45,7 @@ def _env(tmp_path: Path, bin_dir: Path, **extra: Any) -> dict[str, str]:
     return env
 
 
-def _queue_file(tmp_path: Path, rows: list[tuple[str, ...]]) -> Path:
+def _queue_file(tmp_path: Path, rows: Sequence[tuple[Any, ...]]) -> Path:
     path = tmp_path / "queue.tsv"
     path.write_text(
         "".join("\t".join(str(field) for field in row) + "\n" for row in rows), encoding="utf-8"
@@ -53,7 +54,7 @@ def _queue_file(tmp_path: Path, rows: list[tuple[str, ...]]) -> Path:
 
 
 def _run_supervisor(
-    tmp_path: Path, rows: list[tuple[str, ...]], *, gpu_busy: bool = False, **extra: Any
+    tmp_path: Path, rows: Sequence[tuple[Any, ...]], *, gpu_busy: bool = False, **extra: Any
 ) -> subprocess.CompletedProcess[str]:
     bin_dir = _fake_gpu(tmp_path, busy=gpu_busy)
     env = _env(
@@ -79,7 +80,7 @@ def _run_supervisor(
 
 def _run_guardian(
     tmp_path: Path,
-    rows: list[tuple[str, ...]],
+    rows: Sequence[tuple[Any, ...]],
     *,
     gpu_busy: bool = False,
     gpu_broken: bool = False,

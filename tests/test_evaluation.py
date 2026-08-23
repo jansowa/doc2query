@@ -347,7 +347,8 @@ def test_probe_resumes_atomic_training_checkpoint(
             self.projection = torch.nn.Linear(1, 2)
 
         def forward(self, values: torch.Tensor) -> torch.Tensor:
-            return self.projection(values)
+            projected: torch.Tensor = self.projection(values)
+            return projected
 
         def save_pretrained(self, path: Path, *, safe_serialization: bool) -> None:
             assert safe_serialization
@@ -360,8 +361,10 @@ def test_probe_resumes_atomic_training_checkpoint(
             self.backbone = TinyBackbone()
 
         def forward(self, encoded: dict[str, torch.Tensor]) -> torch.Tensor:
-            result = torch.nn.functional.normalize(self.backbone(encoded["values"]), dim=-1)
-            return cast(torch.Tensor, result)
+            result: torch.Tensor = torch.nn.functional.normalize(
+                self.backbone(encoded["values"]), dim=-1
+            )
+            return result
 
     class TinyTokenizer:
         def save_pretrained(self, path: Path) -> None:
