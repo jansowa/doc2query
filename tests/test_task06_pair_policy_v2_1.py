@@ -412,3 +412,25 @@ def test_groq_audit_config_v2_1_changes_only_the_sample_size() -> None:
         "human_evidence_claimed",
     ):
         assert new[key] == base[key], f"kontrakt Groq zmienił się w polu {key}"
+
+
+def test_groq_audit_sample_size_is_pinned_to_adr_frozen_values(tmp_path: Path) -> None:
+    """Bramka pozostaje fail-closed: wolno tylko liczebności zamrożone ADR-em."""
+    import json
+
+    from doc2query.preferences.llm_audit import APPROVED_PAIR_COUNTS, load_llm_audit_config
+
+    assert APPROVED_PAIR_COUNTS == frozenset({500, 800})
+    base = json.loads(
+        Path("configs/preferences/task06_groq_preference_audit_v2_1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    ok = tmp_path / "ok.json"
+    ok.write_text(json.dumps(base), encoding="utf-8")
+    assert int(load_llm_audit_config(ok)["pair_count"]) == 800
+
+    smuggled = tmp_path / "smuggled.json"
+    smuggled.write_text(json.dumps(base | {"pair_count": 501}), encoding="utf-8")
+    with pytest.raises(ValueError, match="frozen by an owner-approved ADR"):
+        load_llm_audit_config(smuggled)

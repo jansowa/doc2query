@@ -13,6 +13,15 @@ from doc2query.utils.records import read_records
 
 CONTRACT = "task06-groq-dual-llm-preference-audit-v1"
 APPROVED_MODELS = frozenset({"openai/gpt-oss-120b", "qwen/qwen3.6-27b"})
+# Liczebności próby audytowej zamrożone prospektywnie przez ADR-y właściciela:
+#   500 — rozwojowa bramka dual-LLM pilota (waiver 2026-08-12, audyty v1 i v2);
+#   800 — komórka bramkowa polityki v2.1, wyprowadzona z rachunku mocy
+#         (reports/decisions/task06_defect_pair_policy_v2_1.md §4-5), plus
+#         amendment task06_groq_audit_sample_size_amendment_2026-08-23.md.
+# Bramka pozostaje fail-closed: dowolna inna liczba jest odrzucana, żeby nikt nie
+# zmienił liczebności audytu bez prospektywnej decyzji. Prompt, rubryka, modele i
+# limity są tą zmianą nietknięte.
+APPROVED_PAIR_COUNTS = frozenset({500, 800})
 FORBIDDEN_BLIND_FIELDS = frozenset(
     {
         "chosen",
@@ -52,8 +61,11 @@ def load_llm_audit_config(path: Path) -> dict[str, Any]:
     models = value.get("models")
     if not isinstance(models, list) or {row.get("model_id") for row in models} != APPROVED_MODELS:
         raise ValueError("dual audit must pin both owner-approved Groq models")
-    if int(value.get("pair_count", 0)) != 500:
-        raise ValueError("owner-approved pilot audit must contain exactly 500 pairs")
+    if int(value.get("pair_count", 0)) not in APPROVED_PAIR_COUNTS:
+        raise ValueError(
+            "audit sample size must be one frozen by an owner-approved ADR "
+            f"({sorted(APPROVED_PAIR_COUNTS)}), not an arbitrary number"
+        )
     if value.get("assignment") != "every_pair_reviewed_by_both_models":
         raise ValueError("each pair must receive two independent ratings")
     if value.get("disagreement_policy") != "exclude_from_automatic_acceptance":
