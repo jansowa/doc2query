@@ -103,6 +103,16 @@ Kontrole pośrednie kosztowały średnio **10,1 s na run** (trzy kontrole po ~3,
 przy treningu ~195 s i budowie indeksu ~730 s, czyli **~0,7% czasu runu**.
 Całe okno: 20 runów, ~8,2 h GPU, bez awarii i bez interwencji.
 
+## Uwaga porządkowa o artefaktach
+
+Po policzeniu pomiaru skasowano 20 katalogów `model/` tej serii (~9,5 GB), bo
+zamrożony preflight D01b wymaga 30 GB wolnego miejsca. Skasowano **wyłącznie**
+wagi probe: `result.json`, `corpus_retrieval_summary.json`, `train_summary.json`,
+krzywe straty i dzienniki kontroli pośrednich zostały nietknięte, więc każda
+liczba tego raportu jest nadal przeliczalna ze skryptu pomiarowego. Wagi nie są
+przez nic referencjonowane (seria jest jednoramienna i nic nie promuje) i są
+odtwarzalne z zamrożonej receptury i seeda. Decyzja właściciela, 2026-08-23.
+
 ## Czego ten pomiar nie robi
 
 - Nie kalibruje żadnego progu; wszystkie liczby policzono regułą zamrożoną
