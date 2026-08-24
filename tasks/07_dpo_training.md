@@ -6,6 +6,39 @@
 
 `IN PROGRESS`
 
+Aktualizacja 2026-08-24 (**runtime DPO i pierwszy memory probe**): dotąd
+`training/dpo.py` trzymał wyłącznie kontrakty, walidatory i skalarną stratę, a
+`DPOTrainer` nie występował nigdzie w `src/` — czyli warstwy wykonawczej DPO nie
+było wcale. Powstała jako `src/doc2query/training/dpo_runtime.py` (14 testów CPU),
+**dwufazowo**, zgodnie z istniejącymi kontraktami: (1) precompute logprobów
+referencji modelem zamrożonym, wznawialny po journalu, odmawiający datasetu w innej
+kolejności i weryfikujący SHA-256 pliku logprobów; (2) trening polityki klasyczną
+stratą sigmoid DPO na precomputowanych logprobach. `trl.DPOTrainer` odrzucony
+świadomie: w TRL 0.29.1 przy modelu PEFT i `ref_model=None` referencją jest baza z
+**wyłączonym** adapterem, czyli nie punkt startowy, a to zadanie wymaga wprost
+walidacji, że referencja odpowiada punktowi startowemu; drugi pełny model nie mieści
+się obok polityki na 8 GB. Completion nigdy nie jest ucinany — nadmiar leci z lewej
+strony promptu, a fakt ucięcia jest raportowany.
+
+Memory probe zmierzony na prawdziwym stosie (baza 4.5B NF4 + adapter
+`D01-4.5B-STYLE-50K-S42`, RTX 3060 Ti, pary **syntetyczne**, bez par v2.1 i bez
+bramki; raport
+[`task07_dpo_memory_probe_2026-08-24.md`](../reports/measurements/task07_dpo_memory_probe_2026-08-24.md)):
+peak 2,71 GiB precompute i 3,78 GiB trening przy `max_length=512`, 2,78 / 4,14 GiB
+przy 768 — o połowę mniej niż 7,74 GiB peaku SFT 4.5B, bo faza treningowa nie trzyma
+drugiego modelu. Koszt 0,711 s/para i 2,599 s/krok (512), co dla 2 253 par daje ~27
+min precompute i ~1,6 h epoki; przy trzech ramionach trening to 5–7 h, a kosztem
+dominującym pozostaje ewaluacja probe (~1500 s/run × ≥5 par seedów + 18,5%
+reseedów ≈ 7,5 h).
+
+Nadal niewykonane i wprost blokujące: bramka V2.1-05 (brakuje 23 requestów u
+`gpt-oss`, czyli jednego okna dobowego), autoryzacja właściciela
+(`task07_training_authorized=false` to osobna flaga), objętość danych (2 253 pary
+wobec ablacji zakładających 20k/50k/100k; pełna pula osi A to 15 989 par, ale
+kohorty v4–v11 są zamknięte do pozytywnej bramki), handoff danych, token lengths na
+prawdziwych parach, podłączenie `doc2query train dpo` (nadal stub) i orkiestracja
+config → precompute → trening → manifest runu. `final_tests_used=[]`.
+
 Aktualizacja 2026-08-13 (rozszerzenie specyfikacji, decyzja właściciela):
 Task 07 jest jawnie także destylacją procedury dwumodelowej z selektorem do
 pojedynczego generatora; dla finalistów obowiązuje ewaluacja trybu
