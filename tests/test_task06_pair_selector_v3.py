@@ -1,0 +1,164 @@
+from __future__ import annotations
+
+import json
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from doc2query.preferences.pair_selector_v3 import (
+    RUBRICS,
+    JudgeEndpoint,
+    PairwiseItem,
+    analyze_calibration,
+    chat_payload,
+    endpoint_from_args,
+    journal_key,
+    load_journal,
+    parse_verdict,
+    plan_summary,
+    run_pairwise,
+)
+
+
+def _endpoint(**kwargs: Any) -> JudgeEndpoint:
+    return JudgeEndpoint(base_url="http://x/v1", api_key="k", model="m", **kwargs)
+
+
+def _item(index: int = 0) -> PairwiseItem:
+    return PairwiseItem(
+        item_id=f"item-{index}",
+        passage="Pasaż o orangutanach na Borneo i Sumatrze.",
+        query_first="jaki jest zasięg występowania orangutanów",
+        query_second="które kraje mają orangutany",
+        metadata={"expected_canonical": "A"},
+    )
+
+
+def _transport(answers: Mapping[str, str]) -> Any:
+    def call(payload: Mapping[str, Any]) -> dict[str, Any]:
+        user = str(payload["messages"][1]["content"])
+        first = user.split("Zapytanie A:\n")[1].split("\n")[0]
+        return {
+            "choices": [
+                {"message": {"content": json.dumps({"better": answers[first], "confidence": 0.9})}}
+            ]
+        }
+
+    return call
+
+
+def test_rubrics_are_frozen_and_state_the_conflict_hierarchy() -> None:
+    assert set(RUBRICS) == {"R1_grounding", "R2_retrieval_usefulness", "R3_holistic"}
+    assert "ugruntowanie przed" in RUBRICS["R3_holistic"]
+    for text in RUBRICS.values():
+        assert "better" in text and "confidence" in text
+
+
+def test_payload_swaps_queries_and_hides_every_selection_signal() -> None:
+    item = _item()
+    endpoint = _endpoint()
+    forward = chat_payload(item, "R3_holistic", "ab", endpoint)
+    reverse = chat_payload(item, "R3_holistic", "ba", endpoint)
+    forward_user = str(forward["messages"][1]["content"])
+    reverse_user = str(reverse["messages"][1]["content"])
+    assert item.query_first in forward_user.split("Zapytanie B:")[0]
+    assert item.query_second in reverse_user.split("Zapytanie B:")[0]
+    for text in (forward_user, reverse_user):
+        for leak in ("chosen", "rejected", "margin", "round_trip", "score"):
+            assert leak not in text
+    assert forward["temperature"] == 0.0
+    assert forward["chat_template_kwargs"] == {"enable_thinking": False}
+    assert "chat_template_kwargs" not in chat_payload(
+        item, "R3_holistic", "ab", _endpoint(allow_reasoning=True)
+    )
+    with pytest.raises(ValueError, match="nieznana rubryka"):
+        chat_payload(item, "R9", "ab", endpoint)
+
+
+def test_parse_verdict_accepts_only_the_frozen_labels() -> None:
+    assert parse_verdict('{"better": "A", "confidence": 0.8}') == ("A", 0.8)
+    assert parse_verdict('bla {"better":"tie","confidence":0.1} bla')[0] == "tie"
+    with pytest.raises(ValueError, match="niedozwolony werdykt"):
+        parse_verdict('{"better": "oba", "confidence": 1}')
+    with pytest.raises(ValueError, match="nie zawiera obiektu JSON"):
+        parse_verdict("A jest lepsze")
+
+
+def test_position_swap_is_normalized_to_canonical_order(tmp_path: Path) -> None:
+    """Sędzia zawsze mówi 'A'; po normalizacji to raz A, raz B — czyli position_flip."""
+    item = _item()
+    journal = tmp_path / "j.jsonl"
+    summary = run_pairwise(
+        items=[item],
+        endpoint=_endpoint(),
+        journal_path=journal,
+        transport=_transport({item.query_first: "A", item.query_second: "A"}),
+        rubrics=["R3_holistic"],
+        progress_every=0,
+    )
+    assert summary["judgments"] == 2
+    rows = load_journal(journal)
+    assert rows[journal_key("item-0", "R3_holistic", "ab")]["canonical_verdict"] == "A"
+    assert rows[journal_key("item-0", "R3_holistic", "ba")]["canonical_verdict"] == "B"
+
+
+def test_consistent_judge_yields_full_votes_and_no_flip(tmp_path: Path) -> None:
+    item = _item()
+    journal = tmp_path / "j.jsonl"
+    run_pairwise(
+        items=[item],
+        endpoint=_endpoint(),
+        journal_path=journal,
+        transport=_transport({item.query_first: "A", item.query_second: "B"}),
+        progress_every=0,
+    )
+    report = analyze_calibration(journal)
+    assert report["complete_items"] == 1
+    assert report["position_flip_counts"] == {}
+    assert report["aggregation_curve"]["min_votes_6"]["surviving_items"] == 1
+    assert report["per_rubric"]["R3_holistic"]["correct_share"] == 1.0
+    assert report["threshold_frozen_here"] is False
+
+
+def test_run_is_resumable_and_skips_finished_judgments(tmp_path: Path) -> None:
+    item = _item()
+    journal = tmp_path / "j.jsonl"
+    kwargs: dict[str, Any] = {
+        "items": [item],
+        "endpoint": _endpoint(),
+        "journal_path": journal,
+        "transport": _transport({item.query_first: "A", item.query_second: "B"}),
+        "progress_every": 0,
+    }
+    first = run_pairwise(**kwargs)
+    second = run_pairwise(**kwargs)
+    assert first["collected"] == 6
+    assert second["collected"] == 0
+    assert second["resumed"] == 6
+
+
+def test_endpoint_requires_a_key_and_a_full_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("QWEN_API_KEY", raising=False)
+    with pytest.raises(ValueError, match="brak klucza API"):
+        endpoint_from_args(
+            base_url="http://x/v1", api_key=None, api_key_env="QWEN_API_KEY",
+            model="m", allow_reasoning=False, max_completion_tokens=64,
+        )
+    monkeypatch.setenv("QWEN_API_KEY", "z-env")
+    assert endpoint_from_args(
+        base_url="http://x/v1", api_key=None, api_key_env="QWEN_API_KEY",
+        model="m", allow_reasoning=False, max_completion_tokens=64,
+    ).api_key == "z-env"
+    with pytest.raises(ValueError, match="pełnym adresem"):
+        endpoint_from_args(
+            base_url="x/v1", api_key="k", api_key_env="QWEN_API_KEY",
+            model="m", allow_reasoning=False, max_completion_tokens=64,
+        )
+
+
+def test_plan_summary_reports_the_call_budget() -> None:
+    plan = plan_summary([_item(0), _item(1)], list(RUBRICS))
+    assert plan["calls"] == 2 * 3 * 2
+    assert plan["estimated_minutes_at_19_1_per_second"] >= 0
