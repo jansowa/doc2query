@@ -40,6 +40,9 @@ JOURNAL_SCHEMA = "task06-v3-pairwise-judgment-v1"
 PROMPT_VERSION = "task06-v3-pairwise-pl-v1"
 VERDICTS = frozenset({"A", "B", "tie"})
 MAX_RETRIES = 4
+# Jeżeli tyle wywołań padnie, a żadne nie przejdzie, run przerywa się z przyczyną —
+# inaczej zły model albo nieznane pole API zapisałoby tysiące cichych porażek.
+FAIL_FAST_AFTER = 8
 
 _HIERARCHY = (
     "Hierarchia przy konflikcie kryteriów jest wiążąca: ugruntowanie przed "
@@ -216,7 +219,7 @@ def run_pairwise(
     transport: Transport | None = None,
     rubrics: Sequence[str] | None = None,
     orders: Sequence[Order] = ("ab", "ba"),
-    progress_every: int = 200,
+    progress_every: int = 20,
     concurrency: int = 1,
 ) -> dict[str, Any]:
     """Zbierz werdykty dla każdej pary, rubryki i kolejności, wznawialnie.
@@ -243,6 +246,7 @@ def run_pairwise(
     ]
     write_lock = threading.Lock()
     counters = {"collected": 0, "failures": 0}
+    first_failure: list[str] = []
     started = time.perf_counter()
 
     def judge(task: tuple[PairwiseItem, str, Order]) -> dict[str, Any]:
@@ -287,9 +291,29 @@ def run_pairwise(
             _append(journal_path, row)
             if row["event"] == "judgment":
                 counters["collected"] += 1
+                if counters["collected"] == 1:
+                    print(
+                        f"[selector] pierwsza odpowiedź OK po "
+                        f"{time.perf_counter() - started:.1f} s "
+                        f"(werdykt {row['verdict']}, kanonicznie {row['canonical_verdict']})",
+                        flush=True,
+                    )
             else:
                 counters["failures"] += 1
+                reason = str(row.get("reason"))
+                if not first_failure:
+                    first_failure.append(reason)
+                    print(f"[selector] PIERWSZY BŁĄD: {reason}", flush=True)
             finished = counters["collected"] + counters["failures"]
+            if (
+                counters["collected"] == 0
+                and counters["failures"] >= FAIL_FAST_AFTER
+            ):
+                raise RuntimeError(
+                    f"{counters['failures']} wywołań pod rząd zawiodło i ani jedno nie "
+                    f"przeszło; przerywam zamiast zapisywać porażki. Pierwsza przyczyna: "
+                    f"{first_failure[0]}"
+                )
             if progress_every and finished % progress_every == 0:
                 rate = finished / max(1e-9, time.perf_counter() - started)
                 remaining = (len(tasks) - finished) / rate / 60 if rate else 0.0

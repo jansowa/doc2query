@@ -180,6 +180,23 @@ def test_partial_run_resumes_only_the_missing_judgments(tmp_path: Path) -> None:
     assert summary["planned_calls"] == 2 * 3 * 2
 
 
+def test_run_aborts_when_nothing_succeeds(tmp_path: Path) -> None:
+    """Zły model albo nieznane pole API nie może zapisać tysięcy cichych porażek."""
+
+    def broken(payload: Mapping[str, Any]) -> dict[str, Any]:
+        raise ValueError("model not found")
+
+    with pytest.raises(RuntimeError, match="ani jedno nie przeszło"):
+        run_pairwise(
+            items=[_item(index) for index in range(20)],
+            endpoint=_endpoint(),
+            journal_path=tmp_path / "j.jsonl",
+            transport=broken,
+            rubrics=["R3_holistic"],
+            progress_every=0,
+        )
+
+
 def test_concurrency_must_be_positive(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="concurrency"):
         run_pairwise(
