@@ -155,6 +155,35 @@ progów nie zmieniono, audytu nie powtórzono. Raport:
 [`task06_v2_1_gate_result_2026-08-25.md`](../reports/measurements/task06_v2_1_gate_result_2026-08-25.md).
 `task07_training_authorized=false`, `final_tests_used=[]`.
 
+Aktualizacja 2026-08-25 (**kierunek v3: lokalny sędzia jako selektor**, decyzja
+właściciela): zamiast trzeci raz przestawiać poprzeczkę, zmienia się pytanie — o
+lepszej stronie pary orzeka lokalny `Qwen3.8-27B` FP8 porównujący zapytania wprost.
+Prospektywny ADR
+[`task06_judge_selected_pair_policy_v3.md`](../reports/decisions/task06_judge_selected_pair_policy_v3.md)
+spisano **przed pierwszym wywołaniem selektora i przed pierwszą parą v3**; jest on
+zarazem wymaganą przez AGENTS.md §7 zgodą na użycie lokalnego modelu jako **sygnału
+selekcji** oraz amendmentem wykonawczym do zapisu o przepustowości (zakaz masowego
+scoringu dotyczył 27B w Q4 z offloadem na 16 GB; operator ma serwer FP8 vLLM bez
+limitów dobowych, 19,1 itemu/s).
+
+Projekt w skrócie: ślepość (pasaż i dwa zapytania, bez score'ów i bez informacji o
+wyborze automatu), obowiązkowa zamiana pozycji z `position_flip` jako przypadkiem
+nierozstrzygniętym, trzy rubryki z definicjami i hierarchią konfliktu, dozwolone
+rozumowanie. Selekcja trzyetapowa: tanie guardy dopuszczalności → turniej rankingujący
+(R3 + swap) → pełny ensemble sześciu głosów na finałowej parze; 86 856 wywołań, czyli
+1,3 h bez rozumowania i 3,8 h z nim. Werdykt odpowiadalności przestaje decydować o
+rolach i zostaje etykietą raportową. Strona `rejected` dostaje jedną prerejestrowaną
+ablację `bottom` vs `near_miss`.
+
+**Próg agregacji nie jest zamrożony w tym ADR** — zamrozi go amendment po kalibracji
+na korpusie walidacyjnym nagrody (1 440 zapytań o etykietach znanych z konstrukcji) i
+przed pierwszą parą; kalibracja mierzy czystość per rubryka, obciążenie pozycyjne i
+krzywą czystość/wydajność dla reguł 6/6, 5/6 i 4/6. Raport budowy par musi pokazać
+przeżywalność na każdym poziomie surowości, bo filtrowanie do par pewnych podnosi
+precyzję i obniża trudność. Pary v2.1 przestają być kandydatem na dane treningowe i
+stają się materiałem kalibracyjnym; wynik bramki V2.1-05 zostaje zapisany bez
+reinterpretacji. `task07_training_authorized=false`, `final_tests_used=[]`.
+
 Wartości z osi A audytu v2 wchodzą do ADR **wyłącznie** jako założenia
 planistyczne rachunku mocy i są jawnie eksploracyjne — pochodzą z podpróby
 próbki, na której bramka przegrała, i mają własne przedziały (P1 osi A u
