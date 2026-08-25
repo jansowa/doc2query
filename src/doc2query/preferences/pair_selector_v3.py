@@ -99,6 +99,8 @@ class JudgeEndpoint:
     base_url: str
     api_key: str
     model: str
+    # Serwer vLLM bez uwierzytelniania jest normalny w sieci lokalnej; wtedy nagłówek
+    # Authorization jest pomijany, a nie wysyłany z pustym kluczem.
     temperature: float = 0.0
     max_completion_tokens: int = 512
     timeout_seconds: float = 300.0
@@ -109,13 +111,13 @@ def http_transport(endpoint: JudgeEndpoint) -> Transport:
     """Minimalny klient OpenAI-compatible; klucz trafia wyłącznie do nagłówka."""
 
     def call(payload: Mapping[str, Any]) -> dict[str, Any]:
+        headers = {"Content-Type": "application/json"}
+        if endpoint.api_key:
+            headers["Authorization"] = f"Bearer {endpoint.api_key}"
         request = urllib.request.Request(
             endpoint.base_url.rstrip("/") + "/chat/completions",
             data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {endpoint.api_key}",
-            },
+            headers=headers,
             method="POST",
         )
         with urllib.request.urlopen(request, timeout=endpoint.timeout_seconds) as response:
@@ -416,12 +418,14 @@ def endpoint_from_args(
     model: str,
     allow_reasoning: bool,
     max_completion_tokens: int,
+    allow_no_auth: bool = False,
 ) -> JudgeEndpoint:
     """Klucz z argumentu albo ze zmiennej środowiskowej; nigdy z repozytorium."""
     key = api_key if api_key else os.environ.get(api_key_env, "")
-    if not key:
+    if not key and not allow_no_auth:
         raise ValueError(
-            f"brak klucza API: podaj --api-key albo ustaw zmienną {api_key_env}"
+            f"brak klucza API: podaj --api-key, ustaw zmienną {api_key_env} "
+            "albo jawnie użyj --allow-no-auth dla serwera bez uwierzytelniania"
         )
     if not base_url.startswith(("http://", "https://")):
         raise ValueError("base-url musi być pełnym adresem http(s)")

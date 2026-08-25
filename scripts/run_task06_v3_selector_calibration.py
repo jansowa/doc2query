@@ -40,6 +40,11 @@ def main() -> None:
     parser.add_argument("--base-url", required=True, help="np. https://host/v1")
     parser.add_argument("--api-key", help="Klucz API; alternatywnie zmienna środowiskowa.")
     parser.add_argument("--api-key-env", default="QWEN_API_KEY")
+    parser.add_argument(
+        "--allow-no-auth",
+        action="store_true",
+        help="Serwer bez uwierzytelniania (typowe dla lokalnego vLLM).",
+    )
     parser.add_argument("--model", required=True)
     parser.add_argument("--corpus", type=Path, default=CORPUS)
     parser.add_argument("--passages", type=Path, default=PASSAGES)
@@ -86,6 +91,7 @@ def main() -> None:
         model=args.model,
         allow_reasoning=args.reasoning,
         max_completion_tokens=args.max_completion_tokens,
+        allow_no_auth=args.allow_no_auth,
     )
     print(json.dumps(plan, ensure_ascii=False, sort_keys=True), flush=True)
     summary = run_pairwise(

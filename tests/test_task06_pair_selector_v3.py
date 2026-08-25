@@ -158,6 +158,24 @@ def test_endpoint_requires_a_key_and_a_full_url(monkeypatch: pytest.MonkeyPatch)
         )
 
 
+def test_server_without_auth_is_allowed_only_explicitly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("QWEN_API_KEY", raising=False)
+    kwargs: dict[str, Any] = {
+        "base_url": "http://127.0.0.1:8000/v1",
+        "api_key": None,
+        "api_key_env": "QWEN_API_KEY",
+        "model": "m",
+        "allow_reasoning": False,
+        "max_completion_tokens": 64,
+    }
+    with pytest.raises(ValueError, match="allow-no-auth"):
+        endpoint_from_args(**kwargs)
+    endpoint = endpoint_from_args(**kwargs, allow_no_auth=True)
+    assert endpoint.api_key == ""
+
+
 def test_plan_summary_reports_the_call_budget() -> None:
     plan = plan_summary([_item(0), _item(1)], list(RUBRICS))
     assert plan["calls"] == 2 * 3 * 2
