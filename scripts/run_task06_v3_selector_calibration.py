@@ -60,7 +60,12 @@ def main() -> None:
         action="store_true",
         help="Pozwól sędziemu myśleć przed werdyktem (osobne ramię, osobny journal).",
     )
-    parser.add_argument("--sleep-seconds", type=float, default=0.0)
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=8,
+        help="Ile requestów jednocześnie; vLLM robi continuous batching (domyślnie 8).",
+    )
     parser.add_argument("--execute", action="store_true", help="Wymagane, by wołać API.")
     parser.add_argument("--analyze-only", action="store_true")
     args = parser.parse_args()
@@ -78,7 +83,11 @@ def main() -> None:
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
         return
 
-    plan = plan_summary(items, list(RUBRICS)) | {"arm": arm, "journal": str(journal_path)}
+    plan = plan_summary(items, list(RUBRICS)) | {
+        "arm": arm,
+        "journal": str(journal_path),
+        "concurrency": args.concurrency,
+    }
     if not args.execute:
         print(json.dumps(plan | {"executed": False, "requires": "--execute"},
                          ensure_ascii=False, indent=2, sort_keys=True))
@@ -98,7 +107,7 @@ def main() -> None:
         items=items,
         endpoint=endpoint,
         journal_path=journal_path,
-        sleep_seconds=args.sleep_seconds,
+        concurrency=args.concurrency,
     )
     write_report(output_dir / "run_summary.json", summary)
     report = analyze_calibration(journal_path)

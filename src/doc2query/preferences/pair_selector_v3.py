@@ -22,11 +22,13 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 import urllib.error
 import urllib.request
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -215,50 +217,46 @@ def run_pairwise(
     rubrics: Sequence[str] | None = None,
     orders: Sequence[Order] = ("ab", "ba"),
     progress_every: int = 200,
-    sleep_seconds: float = 0.0,
+    concurrency: int = 1,
 ) -> dict[str, Any]:
-    """Zbierz werdykty dla każdej pary, rubryki i kolejności, wznawialnie."""
+    """Zbierz werdykty dla każdej pary, rubryki i kolejności, wznawialnie.
+
+    Równoległość jest po stronie klienta: serwer vLLM robi continuous batching, więc
+    kilkanaście jednoczesnych requestów podnosi przepustowość niemal liniowo, a
+    generacja jest tu wąskim gardłem (512 tokenów na werdykt, 1024 z rozumowaniem).
+    Zadania są **wyznaczone przed startem** po odjęciu tego, co już jest w journalu,
+    więc żaden werdykt nie może zostać policzony dwa razy, a zapis do journala idzie
+    pod jednym zamkiem, żeby linie nie przeplatały się w środku.
+    """
+    if concurrency < 1:
+        raise ValueError("concurrency musi być dodatnie")
     call = transport or http_transport(endpoint)
     selected = list(rubrics or RUBRICS)
     done = load_journal(journal_path)
     resumed = len(done)
-    errors = 0
+    tasks = [
+        (item, rubric, order)
+        for item in items
+        for rubric in selected
+        for order in orders
+        if journal_key(item.item_id, rubric, order) not in done
+    ]
+    write_lock = threading.Lock()
+    counters = {"collected": 0, "failures": 0}
     started = time.perf_counter()
-    for index, item in enumerate(items):
-        for rubric in selected:
-            for order in orders:
-                key = journal_key(item.item_id, rubric, order)
-                if key in done:
-                    continue
-                payload = chat_payload(item, rubric, order, endpoint)
-                verdict: str | None = None
-                confidence = 0.0
-                failure: str | None = None
-                for attempt in range(1, MAX_RETRIES + 1):
-                    try:
-                        response = call(payload)
-                        choices = cast(list[Any], response["choices"])
-                        content = str(cast(Mapping[str, Any], choices[0]["message"])["content"])
-                        verdict, confidence = parse_verdict(content)
-                        break
-                    except (urllib.error.URLError, TimeoutError, OSError) as exc:
-                        failure = f"transport:{exc}"
-                        time.sleep(min(30.0, 2.0**attempt))
-                    except (ValueError, KeyError, json.JSONDecodeError) as exc:
-                        failure = f"schema:{exc}"
-                if verdict is None:
-                    errors += 1
-                    _append(
-                        journal_path,
-                        {
-                            "schema": JOURNAL_SCHEMA,
-                            "event": "failure",
-                            "key": key,
-                            "reason": failure,
-                        },
-                    )
-                    continue
-                row = {
+
+    def judge(task: tuple[PairwiseItem, str, Order]) -> dict[str, Any]:
+        item, rubric, order = task
+        key = journal_key(item.item_id, rubric, order)
+        payload = chat_payload(item, rubric, order, endpoint)
+        failure: str | None = None
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                response = call(payload)
+                choices = cast(list[Any], response["choices"])
+                content = str(cast(Mapping[str, Any], choices[0]["message"])["content"])
+                verdict, confidence = parse_verdict(content)
+                return {
                     "schema": JOURNAL_SCHEMA,
                     "event": "judgment",
                     "key": key,
@@ -272,22 +270,62 @@ def run_pairwise(
                     "prompt_version": PROMPT_VERSION,
                     "allow_reasoning": endpoint.allow_reasoning,
                 }
-                _append(journal_path, row)
-                done[key] = row
-                if sleep_seconds:
-                    time.sleep(sleep_seconds)
-        if progress_every and (index + 1) % progress_every == 0:
-            print(f"[selector] {index + 1}/{len(items)} par", flush=True)
+            except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                failure = f"transport:{exc}"
+                time.sleep(min(30.0, 2.0**attempt))
+            except (ValueError, KeyError, json.JSONDecodeError) as exc:
+                failure = f"schema:{exc}"
+        return {
+            "schema": JOURNAL_SCHEMA,
+            "event": "failure",
+            "key": key,
+            "reason": failure,
+        }
+
+    def record(row: Mapping[str, Any]) -> None:
+        with write_lock:
+            _append(journal_path, row)
+            if row["event"] == "judgment":
+                counters["collected"] += 1
+            else:
+                counters["failures"] += 1
+            finished = counters["collected"] + counters["failures"]
+            if progress_every and finished % progress_every == 0:
+                rate = finished / max(1e-9, time.perf_counter() - started)
+                remaining = (len(tasks) - finished) / rate / 60 if rate else 0.0
+                print(
+                    f"[selector] {finished}/{len(tasks)} wywołań, {rate:.2f}/s, "
+                    f"zostało ~{remaining:.0f} min",
+                    flush=True,
+                )
+
+    if concurrency == 1:
+        for task in tasks:
+            record(judge(task))
+    else:
+        with ThreadPoolExecutor(max_workers=concurrency) as pool:
+            futures = [pool.submit(judge, task) for task in tasks]
+            for future in as_completed(futures):
+                record(future.result())
+
+    elapsed = time.perf_counter() - started
     return {
         "contract": CONTRACT,
         "items": len(items),
         "rubrics": selected,
         "orders": list(orders),
-        "judgments": len(done),
+        "concurrency": concurrency,
+        "planned_calls": len(tasks),
+        "judgments": resumed + counters["collected"],
         "resumed": resumed,
-        "collected": len(done) - resumed,
-        "failures": errors,
-        "elapsed_seconds": round(time.perf_counter() - started, 1),
+        "collected": counters["collected"],
+        "failures": counters["failures"],
+        "elapsed_seconds": round(elapsed, 1),
+        "observed_calls_per_second": round(
+            (counters["collected"] + counters["failures"]) / elapsed, 3
+        )
+        if elapsed > 0
+        else None,
         "allow_reasoning": endpoint.allow_reasoning,
         "final_tests_used": [],
     }
@@ -439,14 +477,20 @@ def endpoint_from_args(
 
 
 def plan_summary(items: Iterable[PairwiseItem], rubrics: Sequence[str]) -> dict[str, Any]:
+    """Sam budżet wywołań; czasu NIE szacujemy z góry.
+
+    Zmierzone 19,1 itemu/s dotyczyło sędziego odpowiadalności generującego 24 tokeny.
+    Tu limit to 512 tokenów (1024 z rozumowaniem), a wąskim gardłem jest dekodowanie,
+    więc przepustowość trzeba odczytać z runu (`observed_calls_per_second`), a nie
+    przenosić ze starego pomiaru.
+    """
     rows = list(items)
-    calls = len(rows) * len(rubrics) * 2
     return {
         "items": len(rows),
         "rubrics": list(rubrics),
         "orders": 2,
-        "calls": calls,
-        "estimated_minutes_at_19_1_per_second": round(calls / 19.1 / 60, 1),
+        "calls": len(rows) * len(rubrics) * 2,
+        "throughput_note": "czas z observed_calls_per_second w trakcie runu",
     }
 
 

@@ -122,6 +122,75 @@ def test_consistent_judge_yields_full_votes_and_no_flip(tmp_path: Path) -> None:
     assert report["threshold_frozen_here"] is False
 
 
+def test_concurrent_run_records_every_judgment_exactly_once(tmp_path: Path) -> None:
+    """Równoległość nie może zdublować ani zgubić werdyktu, a resume musi ją widzieć."""
+    items = [_item(index) for index in range(25)]
+    journal = tmp_path / "j.jsonl"
+    transport = _transport({items[0].query_first: "A", items[0].query_second: "B"})
+    summary = run_pairwise(
+        items=items,
+        endpoint=_endpoint(),
+        journal_path=journal,
+        transport=transport,
+        concurrency=8,
+        progress_every=0,
+    )
+    expected = 25 * 3 * 2
+    assert summary["collected"] == expected
+    assert summary["failures"] == 0
+    rows = load_journal(journal)
+    assert len(rows) == expected
+    keys = [json.loads(line)["key"] for line in journal.read_text().splitlines()]
+    assert len(keys) == len(set(keys)), "żaden klucz nie może się powtórzyć"
+    again = run_pairwise(
+        items=items,
+        endpoint=_endpoint(),
+        journal_path=journal,
+        transport=transport,
+        concurrency=8,
+        progress_every=0,
+    )
+    assert again["planned_calls"] == 0
+    assert again["collected"] == 0
+    assert again["resumed"] == expected
+
+
+def test_partial_run_resumes_only_the_missing_judgments(tmp_path: Path) -> None:
+    items = [_item(index) for index in range(4)]
+    journal = tmp_path / "j.jsonl"
+    transport = _transport({items[0].query_first: "A", items[0].query_second: "B"})
+    run_pairwise(
+        items=items[:2],
+        endpoint=_endpoint(),
+        journal_path=journal,
+        transport=transport,
+        concurrency=4,
+        progress_every=0,
+    )
+    summary = run_pairwise(
+        items=items,
+        endpoint=_endpoint(),
+        journal_path=journal,
+        transport=transport,
+        concurrency=4,
+        progress_every=0,
+    )
+    assert summary["resumed"] == 2 * 3 * 2
+    assert summary["collected"] == 2 * 3 * 2
+    assert summary["planned_calls"] == 2 * 3 * 2
+
+
+def test_concurrency_must_be_positive(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="concurrency"):
+        run_pairwise(
+            items=[_item()],
+            endpoint=_endpoint(),
+            journal_path=tmp_path / "j.jsonl",
+            transport=_transport({}),
+            concurrency=0,
+        )
+
+
 def test_run_is_resumable_and_skips_finished_judgments(tmp_path: Path) -> None:
     item = _item()
     journal = tmp_path / "j.jsonl"
@@ -179,4 +248,6 @@ def test_server_without_auth_is_allowed_only_explicitly(
 def test_plan_summary_reports_the_call_budget() -> None:
     plan = plan_summary([_item(0), _item(1)], list(RUBRICS))
     assert plan["calls"] == 2 * 3 * 2
-    assert plan["estimated_minutes_at_19_1_per_second"] >= 0
+    # Czasu nie szacujemy z góry: 19,1 it/s zmierzono na sędzim generującym 24 tokeny.
+    assert "estimated_minutes_at_19_1_per_second" not in plan
+    assert plan["throughput_note"]
