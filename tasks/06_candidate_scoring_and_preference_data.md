@@ -138,6 +138,23 @@ Wykonanie rozpoczęte tego samego dnia, po commicie zamrażającym ADR (raport:
 - **pierwsze okno audytu uruchomione** i wznawialne; **żaden wynik nie został
   odczytany**, bramka V2.1-05 policzy się dopiero po `status: complete`.
 
+Aktualizacja 2026-08-25 (**audyt v2.1 ukończony, bramka V2.1-05 niezdana**): audyt
+zamknął się statusem `complete` (400/400 requestów u obu sędziów, 800 par, 1 600
+ocen, trzy okna budżetów Groq), a bramkę policzył moduł napisany **przed** odczytem
+i odmawiający niedokończonego audytu. Wynik: **blokuje P3 ze statusem
+`INCONCLUSIVE`** — 17/800 = 2,12% z górną granicą CP 3,1704% wobec progu 3,1%, czyli
+brak **0,0704 pp**, znowu o jedną parę. Kluczowa różnica wobec v2.0: tam był FAIL na
+punkcie (twierdzenie, że polityka jest zła), tu jest INCONCLUSIVE (stwierdzenie, że
+próba nie rozstrzyga progu). P2 **45,12%** (CI [42,19; 48,09] wobec progu 30%) i P4'
+**+38,2 / +55,5 pp** (wobec +20 pp) przeszły; guardrail P1 nie zapalił się przy
+5,12% / 5,75%, ale punkty leżą **powyżej** progu 5%, więc nie wolno pisać, że „P1
+przeszła". Scenariusz był zapisany z góry w §4.6 ADR: podpróba osi A z przegranej
+bramki v2.0 okazała się optymistyczna na obu wymiarach (P3 1,30% → 2,12%, moc 0,964
+→ 0,467; P1 3,90%/3,25% → 5,12%/5,75%). Pary v2.1 nie idą do żadnego treningu,
+progów nie zmieniono, audytu nie powtórzono. Raport:
+[`task06_v2_1_gate_result_2026-08-25.md`](../reports/measurements/task06_v2_1_gate_result_2026-08-25.md).
+`task07_training_authorized=false`, `final_tests_used=[]`.
+
 Wartości z osi A audytu v2 wchodzą do ADR **wyłącznie** jako założenia
 planistyczne rachunku mocy i są jawnie eksploracyjne — pochodzą z podpróby
 próbki, na której bramka przegrała, i mają własne przedziały (P1 osi A u

@@ -159,6 +159,7 @@ htmlcov/
 !/reports/measurements/task06_defect_pairs_v2_1_build_2026-08-23.md
 !/reports/measurements/task02_full_dev_judge_benchmark_2026-08-23.md
 !/reports/measurements/task07_dpo_memory_probe_2026-08-24.md
+!/reports/measurements/task06_v2_1_gate_result_2026-08-25.md
 !/reports/measurements/task04/shadow_collapse_detector_v1/
 /reports/measurements/task04/shadow_collapse_detector_v1/*
 !/reports/measurements/task04/shadow_collapse_detector_v1/summary.json
