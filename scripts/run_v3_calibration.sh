@@ -39,11 +39,18 @@ echo "== model: $MODEL | endpoint: $BASE_URL | równolegle: $CONCURRENCY"
 export QWEN_API_KEY="$API_KEY"
 export PYTHONPATH=src
 
+# Domyślnie NIE ruszamy istniejącego katalogu: journal jest wznawialny, a odkładanie
+# go na bok kasowałoby postęp przerwanego runu (np. przy zmianie równoległości).
+# Świeży start wymaga jawnego FRESH=1.
 STALE="artifacts/task06/v3_selector_calibration_v1"
 if [ -d "$STALE" ]; then
-  BACKUP="$STALE.stare-$(date -u +%Y%m%dT%H%M%SZ)"
-  mv "$STALE" "$BACKUP"
-  echo "== odłożyłem poprzedni katalog kalibracji na $BACKUP"
+  if [ "${FRESH:-0}" = "1" ]; then
+    BACKUP="$STALE.stare-$(date -u +%Y%m%dT%H%M%SZ)"
+    mv "$STALE" "$BACKUP"
+    echo "== FRESH=1: odłożyłem poprzedni katalog kalibracji na $BACKUP"
+  else
+    echo "== wznawiam istniejący katalog $STALE (FRESH=1 wymusza świeży start)"
+  fi
 fi
 
 run_arm() {
