@@ -23,10 +23,12 @@ from pathlib import Path
 
 from doc2query.preferences.pair_selector_v3 import (
     RUBRICS,
+    JudgeApiError,
     analyze_calibration,
     calibration_items,
     endpoint_from_args,
     plan_summary,
+    probe_endpoint,
     run_pairwise,
     write_report,
 )
@@ -66,6 +68,12 @@ def main() -> None:
         default=8,
         help="Ile requestów jednocześnie; vLLM robi continuous batching (domyślnie 8).",
     )
+    parser.add_argument("--timeout-seconds", type=float, default=120.0)
+    parser.add_argument(
+        "--skip-probe",
+        action="store_true",
+        help="Pomiń jedno wywołanie sprawdzające przed startem (nie zalecane).",
+    )
     parser.add_argument("--execute", action="store_true", help="Wymagane, by wołać API.")
     parser.add_argument("--analyze-only", action="store_true")
     args = parser.parse_args()
@@ -101,8 +109,28 @@ def main() -> None:
         allow_reasoning=args.reasoning,
         max_completion_tokens=args.max_completion_tokens,
         allow_no_auth=args.allow_no_auth,
+        timeout_seconds=args.timeout_seconds,
     )
     print(json.dumps(plan, ensure_ascii=False, sort_keys=True), flush=True)
+    if not args.skip_probe:
+        try:
+            probe = probe_endpoint(endpoint)
+        except JudgeApiError as exc:
+            print(
+                "PREFLIGHT NIE PRZESZEDŁ — serwer sędziego odpowiedział błędem, "
+                "więc nie startuję 10 800 wywołań.\n"
+                f"  przyczyna: {exc.summary(1200)}",
+                flush=True,
+            )
+            raise SystemExit(2) from exc
+        except ValueError as exc:
+            print(
+                "PREFLIGHT NIE PRZESZEDŁ — serwer odpowiedział, ale nie dało się "
+                f"odczytać werdyktu.\n  przyczyna: {exc}",
+                flush=True,
+            )
+            raise SystemExit(2) from exc
+        print(json.dumps({"preflight": probe}, ensure_ascii=False, sort_keys=True), flush=True)
     summary = run_pairwise(
         items=items,
         endpoint=endpoint,

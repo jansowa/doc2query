@@ -9,6 +9,7 @@ import pytest
 
 from doc2query.preferences.pair_selector_v3 import (
     RUBRICS,
+    JudgeApiError,
     JudgeEndpoint,
     PairwiseItem,
     analyze_calibration,
@@ -18,7 +19,9 @@ from doc2query.preferences.pair_selector_v3 import (
     load_journal,
     parse_verdict,
     plan_summary,
+    probe_endpoint,
     run_pairwise,
+    strip_reasoning,
 )
 
 
@@ -268,3 +271,126 @@ def test_plan_summary_reports_the_call_budget() -> None:
     # Czasu nie szacujemy z góry: 19,1 it/s zmierzono na sędzim generującym 24 tokeny.
     assert "estimated_minutes_at_19_1_per_second" not in plan
     assert plan["throughput_note"]
+
+
+# --- obsługa błędów -------------------------------------------------------------
+
+
+def _failing(status: int | None, body: str, *, retryable: bool) -> Any:
+    def call(payload: Mapping[str, Any]) -> dict[str, Any]:
+        raise JudgeApiError("odmowa", status=status, body=body, retryable=retryable)
+
+    return call
+
+
+def test_api_error_keeps_status_and_body_in_its_summary() -> None:
+    error = JudgeApiError("x", status=400, body='{"error": "model  not\n found"}', retryable=False)
+    assert "HTTP 400" in error.summary()
+    assert "model not found" in error.summary()
+
+
+def test_reasoning_block_with_braces_does_not_break_parsing() -> None:
+    """Model rozumujący wstawia nawiasy w toku myślenia; werdykt jest na końcu."""
+    content = (
+        "<think>Rozważam {A} kontra {B}, chyba {\"better\": \"B\"} nie...</think>\n"
+        '{"better": "A", "confidence": 0.7}'
+    )
+    assert strip_reasoning(content).startswith("{")
+    assert parse_verdict(content) == ("A", 0.7)
+
+
+def test_unterminated_reasoning_block_is_reported_not_guessed() -> None:
+    with pytest.raises(ValueError, match="pusta po usunięciu"):
+        parse_verdict("<think>myślę i nie kończę")
+
+
+def test_permanent_api_error_is_not_retried(tmp_path: Path) -> None:
+    """Przy 400 cztery próby z backoffem tylko wydłużały ciszę."""
+    calls = {"n": 0}
+
+    def call(payload: Mapping[str, Any]) -> dict[str, Any]:
+        calls["n"] += 1
+        raise JudgeApiError("zły model", status=400, body="model not found", retryable=False)
+
+    row = run_pairwise(
+        items=[_item()],
+        endpoint=_endpoint(),
+        journal_path=tmp_path / "j.jsonl",
+        transport=call,
+        rubrics=["R3_holistic"],
+        orders=("ab",),
+        progress_every=0,
+    )
+    assert calls["n"] == 1, "błąd trwały nie może być ponawiany"
+    assert row["failures"] == 1
+    assert "model not found" in json.loads((tmp_path / "j.jsonl").read_text())["reason"]
+
+
+def test_rejected_optional_field_is_dropped_and_the_call_retried(tmp_path: Path) -> None:
+    """Serwer bez `chat_template_kwargs` nie może wywalić całego runu."""
+    seen: list[bool] = []
+
+    def call(payload: Mapping[str, Any]) -> dict[str, Any]:
+        has_field = "chat_template_kwargs" in payload
+        seen.append(has_field)
+        if has_field:
+            raise JudgeApiError(
+                "nieznane pole",
+                status=400,
+                body="unrecognized request argument: chat_template_kwargs",
+                retryable=False,
+            )
+        return {"choices": [{"message": {"content": '{"better": "A", "confidence": 1.0}'}}]}
+
+    summary = run_pairwise(
+        items=[_item()],
+        endpoint=_endpoint(),
+        journal_path=tmp_path / "j.jsonl",
+        transport=call,
+        rubrics=["R3_holistic"],
+        orders=("ab",),
+        progress_every=0,
+    )
+    assert seen == [True, False]
+    assert summary["collected"] == 1
+    row = json.loads((tmp_path / "j.jsonl").read_text().splitlines()[0])
+    assert row["dropped_payload_fields"] == ["chat_template_kwargs"]
+
+
+def test_response_without_choices_or_content_is_a_named_failure(tmp_path: Path) -> None:
+    cases: list[tuple[dict[str, Any], str]] = [
+        ({"choices": []}, "bez pola choices"),
+        ({"choices": [{"message": {}}]}, "bez treści"),
+    ]
+    for response, expected in cases:
+
+        def call(payload: Mapping[str, Any], reply: dict[str, Any] = response) -> dict[str, Any]:
+            return dict(reply)
+
+        journal = tmp_path / f"j{expected[:5]}.jsonl"
+        run_pairwise(
+            items=[_item()],
+            endpoint=_endpoint(),
+            journal_path=journal,
+            transport=call,
+            rubrics=["R3_holistic"],
+            orders=("ab",),
+            progress_every=0,
+        )
+        assert expected in json.loads(journal.read_text())["reason"]
+
+
+def test_probe_surfaces_the_server_error_body() -> None:
+    with pytest.raises(JudgeApiError) as caught:
+        probe_endpoint(_endpoint(), _failing(404, "model 'zly' does not exist", retryable=False))
+    assert "does not exist" in caught.value.summary()
+
+
+def test_probe_returns_a_verdict_when_the_server_answers() -> None:
+    def call(payload: Mapping[str, Any]) -> dict[str, Any]:
+        return {"choices": [{"message": {"content": '{"better": "A", "confidence": 0.9}'}}]}
+
+    probe = probe_endpoint(_endpoint(), call)
+    assert probe["ok"] is True
+    assert probe["verdict"] == "A"
+    assert probe["dropped_payload_fields"] == []

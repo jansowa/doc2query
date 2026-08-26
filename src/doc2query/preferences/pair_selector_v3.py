@@ -84,6 +84,29 @@ RUBRICS: dict[str, str] = {
 RANKING_RUBRIC = "R3_holistic"
 Transport = Callable[[Mapping[str, Any]], dict[str, Any]]
 Order = Literal["ab", "ba"]
+# Pola, które część serwerów OpenAI-compatible odrzuca; przy odmowie run próbuje raz
+# bez nich i zapisuje ten fakt, zamiast padać 10 800 razy na tym samym.
+OPTIONAL_PAYLOAD_FIELDS = ("chat_template_kwargs", "response_format")
+
+
+class JudgeApiError(RuntimeError):
+    """Błąd wywołania sędziego z zachowanym statusem i ciałem odpowiedzi.
+
+    Ciało jest tu kluczowe: vLLM zwraca w nim konkretną przyczynę (nieznany model,
+    nieobsługiwane pole, zły klucz), a bez niego diagnoza sprowadza się do „coś nie
+    działa". `retryable` rozdziela błędy przejściowe od trwałych — powtarzanie
+    czterech prób przy 400 tylko wydłużało ciszę.
+    """
+
+    def __init__(self, message: str, *, status: int | None, body: str, retryable: bool):
+        super().__init__(message)
+        self.status = status
+        self.body = body
+        self.retryable = retryable
+
+    def summary(self, limit: int = 400) -> str:
+        body = " ".join(self.body.split())[:limit]
+        return f"HTTP {self.status}: {body}" if self.status else f"{self}: {body}"
 
 
 @dataclass(frozen=True)
@@ -108,7 +131,7 @@ class JudgeEndpoint:
     # Authorization jest pomijany, a nie wysyłany z pustym kluczem.
     temperature: float = 0.0
     max_completion_tokens: int = 512
-    timeout_seconds: float = 300.0
+    timeout_seconds: float = 120.0
     allow_reasoning: bool = False
 
 
@@ -125,8 +148,39 @@ def http_transport(endpoint: JudgeEndpoint) -> Transport:
             headers=headers,
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=endpoint.timeout_seconds) as response:
-            return cast(dict[str, Any], json.loads(response.read().decode("utf-8")))
+        try:
+            with urllib.request.urlopen(request, timeout=endpoint.timeout_seconds) as response:
+                raw = response.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            body = ""
+            try:
+                body = exc.read().decode("utf-8", errors="replace")
+            except Exception:
+                body = "(brak ciała odpowiedzi)"
+            # 429 i 5xx są przejściowe; 4xx to kontrakt API i powtarzanie nic nie da.
+            retryable = exc.code == 429 or exc.code >= 500
+            raise JudgeApiError(
+                f"serwer sędziego odrzucił request ({exc.code})",
+                status=exc.code,
+                body=body,
+                retryable=retryable,
+            ) from exc
+        except (TimeoutError, urllib.error.URLError, OSError) as exc:
+            raise JudgeApiError(
+                f"transport nie doszedł do serwera sędziego: {exc}",
+                status=None,
+                body=str(exc),
+                retryable=True,
+            ) from exc
+        try:
+            return cast(dict[str, Any], json.loads(raw))
+        except json.JSONDecodeError as exc:
+            raise JudgeApiError(
+                "serwer sędziego zwrócił coś, co nie jest JSON-em",
+                status=None,
+                body=raw[:2000],
+                retryable=False,
+            ) from exc
 
     return call
 
@@ -161,13 +215,42 @@ def chat_payload(
     return payload
 
 
+def strip_reasoning(content: str) -> str:
+    """Usuń bloki myślenia; model rozumujący potrafi w nich zawrzeć nawiasy klamrowe."""
+    text = content
+    for opening, closing in (("<think>", "</think>"), ("<thinking>", "</thinking>")):
+        while opening in text:
+            start = text.index(opening)
+            stop = text.find(closing, start)
+            if stop < 0:
+                text = text[:start]
+                break
+            text = text[:start] + text[stop + len(closing) :]
+    return text.strip()
+
+
+def _last_json_object(text: str) -> str:
+    """Zwróć ostatni domknięty obiekt JSON; werdykt jest zawsze na końcu odpowiedzi."""
+    end = text.rfind("}")
+    while end >= 0:
+        depth = 0
+        for index in range(end, -1, -1):
+            if text[index] == "}":
+                depth += 1
+            elif text[index] == "{":
+                depth -= 1
+                if depth == 0:
+                    return text[index : end + 1]
+        end = text.rfind("}", 0, end)
+    raise ValueError("odpowiedź sędziego nie zawiera obiektu JSON")
+
+
 def parse_verdict(content: str) -> tuple[str, float]:
     """Wyciągnij `better` i `confidence`; cokolwiek innego jest błędem, nie remisem."""
-    start = content.find("{")
-    end = content.rfind("}")
-    if start < 0 or end <= start:
-        raise ValueError("odpowiedź sędziego nie zawiera obiektu JSON")
-    payload = json.loads(content[start : end + 1])
+    text = strip_reasoning(content)
+    if not text:
+        raise ValueError("odpowiedź sędziego jest pusta po usunięciu bloku myślenia")
+    payload = json.loads(_last_json_object(text))
     better = str(payload.get("better", "")).strip().upper()
     if better == "TIE":
         better = "tie"
@@ -211,6 +294,66 @@ def _append(path: Path, row: Mapping[str, Any]) -> None:
         os.fsync(handle.fileno())
 
 
+def _field_rejected_by_server(error: JudgeApiError, payload: Mapping[str, Any]) -> str | None:
+    """Rozpoznaj odmowę konkretnego pola, żeby ponowić bez niego, a nie polec 10 800 razy."""
+    if error.status is None or error.retryable:
+        return None
+    haystack = error.body.lower()
+    for field_name in OPTIONAL_PAYLOAD_FIELDS:
+        if field_name in payload and field_name.lower() in haystack:
+            return field_name
+    return None
+
+
+def probe_endpoint(
+    endpoint: JudgeEndpoint, transport: Transport | None = None
+) -> dict[str, Any]:
+    """Jedno wywołanie sprawdzające, zanim polecą tysiące.
+
+    Bez tego zły model albo nieobsługiwane pole objawiają się jako minuty ciszy.
+    Przy porażce wyjątek nosi ciało odpowiedzi serwera, czyli faktyczną przyczynę.
+    """
+    call = transport or http_transport(endpoint)
+    item = PairwiseItem(
+        item_id="probe",
+        passage="Stolicą Polski jest Warszawa, największe miasto kraju nad Wisłą.",
+        query_first="jakie miasto jest stolicą Polski",
+        query_second="ile kosztuje bilet do kina",
+        metadata={"source": "probe"},
+    )
+    started = time.perf_counter()
+    payload = dict(chat_payload(item, RANKING_RUBRIC, "ab", endpoint))
+    dropped: list[str] = []
+    while True:
+        try:
+            response = call(payload)
+            break
+        except JudgeApiError as exc:
+            field_name = _field_rejected_by_server(exc, payload)
+            if field_name is None:
+                raise
+            payload.pop(field_name, None)
+            dropped.append(field_name)
+    choices = cast(list[Any], response.get("choices") or [])
+    if not choices:
+        raise JudgeApiError(
+            "odpowiedź sędziego nie zawiera choices",
+            status=None,
+            body=str(response)[:2000],
+            retryable=False,
+        )
+    content = str(cast(Mapping[str, Any], choices[0]["message"])["content"])
+    verdict, confidence = parse_verdict(content)
+    return {
+        "ok": True,
+        "verdict": verdict,
+        "confidence": confidence,
+        "seconds": round(time.perf_counter() - started, 2),
+        "dropped_payload_fields": dropped,
+        "raw_content_prefix": " ".join(content.split())[:200],
+    }
+
+
 def run_pairwise(
     *,
     items: Sequence[PairwiseItem],
@@ -249,17 +392,26 @@ def run_pairwise(
     first_failure: list[str] = []
     started = time.perf_counter()
 
+    disabled_fields: list[str] = []
+
     def judge(task: tuple[PairwiseItem, str, Order]) -> dict[str, Any]:
         item, rubric, order = task
         key = journal_key(item.item_id, rubric, order)
-        payload = chat_payload(item, rubric, order, endpoint)
         failure: str | None = None
         for attempt in range(1, MAX_RETRIES + 1):
+            payload = dict(chat_payload(item, rubric, order, endpoint))
+            for field_name in disabled_fields:
+                payload.pop(field_name, None)
             try:
                 response = call(payload)
-                choices = cast(list[Any], response["choices"])
-                content = str(cast(Mapping[str, Any], choices[0]["message"])["content"])
-                verdict, confidence = parse_verdict(content)
+                choices = cast(list[Any], response.get("choices") or [])
+                if not choices:
+                    raise ValueError(f"odpowiedź bez pola choices: {str(response)[:300]}")
+                message = cast(Mapping[str, Any], choices[0].get("message") or {})
+                content = message.get("content")
+                if content is None:
+                    raise ValueError(f"odpowiedź bez treści: {str(message)[:300]}")
+                verdict, confidence = parse_verdict(str(content))
                 return {
                     "schema": JOURNAL_SCHEMA,
                     "event": "judgment",
@@ -273,11 +425,25 @@ def run_pairwise(
                     "metadata": dict(item.metadata),
                     "prompt_version": PROMPT_VERSION,
                     "allow_reasoning": endpoint.allow_reasoning,
+                    "dropped_payload_fields": list(disabled_fields),
                 }
-            except (urllib.error.URLError, TimeoutError, OSError) as exc:
-                failure = f"transport:{exc}"
+            except JudgeApiError as exc:
+                failure = f"api:{exc.summary()}"
+                dropped = _field_rejected_by_server(exc, payload)
+                if dropped is not None:
+                    with write_lock:
+                        if dropped not in disabled_fields:
+                            disabled_fields.append(dropped)
+                            print(
+                                f"[selector] serwer odrzucił pole {dropped!r}; "
+                                "ponawiam bez niego i zapisuję ten fakt w journalu",
+                                flush=True,
+                            )
+                    continue
+                if not exc.retryable:
+                    break
                 time.sleep(min(30.0, 2.0**attempt))
-            except (ValueError, KeyError, json.JSONDecodeError) as exc:
+            except (ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
                 failure = f"schema:{exc}"
         return {
             "schema": JOURNAL_SCHEMA,
@@ -327,10 +493,21 @@ def run_pairwise(
         for task in tasks:
             record(judge(task))
     else:
-        with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        pool = ThreadPoolExecutor(max_workers=concurrency)
+        try:
             futures = [pool.submit(judge, task) for task in tasks]
             for future in as_completed(futures):
                 record(future.result())
+        except BaseException:
+            # Bez anulowania abort czekałby na wszystkie requesty w locie, czyli do
+            # `concurrency` razy timeout. Zaległe zadania nie są potrzebne — journal i tak
+            # ma tylko to, co zdążyło się zapisać, a wznowienie dobierze resztę.
+            for future in futures:
+                future.cancel()
+            pool.shutdown(wait=False)
+            raise
+        else:
+            pool.shutdown(wait=True)
 
     elapsed = time.perf_counter() - started
     return {
@@ -481,6 +658,7 @@ def endpoint_from_args(
     allow_reasoning: bool,
     max_completion_tokens: int,
     allow_no_auth: bool = False,
+    timeout_seconds: float = 120.0,
 ) -> JudgeEndpoint:
     """Klucz z argumentu albo ze zmiennej środowiskowej; nigdy z repozytorium."""
     key = api_key if api_key else os.environ.get(api_key_env, "")
@@ -497,6 +675,7 @@ def endpoint_from_args(
         model=model,
         allow_reasoning=allow_reasoning,
         max_completion_tokens=max_completion_tokens,
+        timeout_seconds=timeout_seconds,
     )
 
 
