@@ -1,0 +1,36 @@
+{
+  "chosen_pool_size_mean": 3.3986820428336078,
+  "cohort_counts": {
+    "same_prompt_expansion_v1": 202,
+    "same_prompt_expansion_v2": 302,
+    "same_prompt_expansion_v3": 1924
+  },
+  "contract": "task06-judge-selected-pairs-v3",
+  "final_tests_used": [],
+  "form_or_focus_compliance_claimed": false,
+  "normalized_query_jaccard_mean": 0.22612471235277173,
+  "pair_count": 2428,
+  "rejected_variant": "near_miss",
+  "rejection_counts": {
+    "chosen_failed_reverification": 141,
+    "near_duplicate_query_pair": 6,
+    "no_admissible_chosen": 537,
+    "not_unanimous": 507
+  },
+  "requested_form_counts": {
+    "full_question": 1353,
+    "keyword_query": 1075
+  },
+  "requested_intent_counts": {
+    "definition": 416,
+    "entity_lookup": 659,
+    "fact_lookup": 693,
+    "procedure": 660
+  },
+  "schema_version": 1,
+  "validated_defect_scope": [
+    "ungrounded",
+    "copy_verbatim",
+    "too_general"
+  ]
+}

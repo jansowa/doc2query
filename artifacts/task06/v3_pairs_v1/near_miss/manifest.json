@@ -1,0 +1,49 @@
+{
+  "aggregation_amendment": "reports/decisions/task06_v3_selector_aggregation_amendment_2026-08-27.md",
+  "audit_completed": false,
+  "bundle_manifest_sha256": "171df76af3ee008b37da81d2f854720d9cf091b26d3e0cc2df10c0578f722764",
+  "cohorts": [
+    "same_prompt_expansion_v1",
+    "same_prompt_expansion_v2",
+    "same_prompt_expansion_v3"
+  ],
+  "contract": "task06-judge-selected-pairs-v3",
+  "final_tests_used": [],
+  "form_or_focus_compliance_claimed": false,
+  "guard_policy_id": "task06-defect-pair-policy-v2.1",
+  "guard_policy_sha256": "ce4b87acafcd9c04d82d34a9c58bacb9adfea091243496a4d715c0192f020e43",
+  "manifest_fingerprint": "827be9ec44f6c5d27f5004009aac3784245967618137976716a4269c28fee318",
+  "pair_count": 2428,
+  "pair_ids_fingerprint": "65f89362d8a4e648148bc404f27e4aae358e1ac381ba0a1b5babdb23c53188ef",
+  "paired_groups": 3082,
+  "pairs": {
+    "path": "pairs.jsonl",
+    "record_count": 2428,
+    "sha256": "1a4f6b71658e2d2a0a6260aaced414bab697fbf9b11b1616dc425bd6a90b46ec"
+  },
+  "rejected_variant": "near_miss",
+  "rejection_counts": {
+    "chosen_failed_reverification": 141,
+    "near_duplicate_query_pair": 6,
+    "no_admissible_chosen": 537,
+    "not_unanimous": 507
+  },
+  "report": {
+    "path": "report.json",
+    "record_count": 1,
+    "sha256": "8a9a1c2855f6208f9e535cf7126c02ec8185786c9c8f60dcc3533985485c789b"
+  },
+  "required_unanimous_votes": 6,
+  "schema_version": 1,
+  "selector_adr": "reports/decisions/task06_judge_selected_pair_policy_v3.md",
+  "status": "pairs_built_not_audited",
+  "task07_training_authorized": false,
+  "tournament_groups": 3619,
+  "tournament_outcomes_sha256": "a82b089781543f2489216b0823ffa89140bc5ac1463d8933ce6ed0d457a49022",
+  "unanimous_groups": 2575,
+  "validated_defect_scope": [
+    "ungrounded",
+    "copy_verbatim",
+    "too_general"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "admissible_as_chosen": 9964,
+  "bundle": {
+    "path": "tournament_bundle.jsonl",
+    "record_count": 3619,
+    "sha256": "06f628c88689a684ebbf2a5861e4ffb01dcb468287661507f3d048c302ba3775"
+  },
+  "candidate_count": 23676,
+  "contains_automatic_choice": false,
+  "contains_scores": false,
+  "contract": "task06-v3-tournament-bundle-v1",
+  "final_tests_used": [],
+  "group_count": 3619,
+  "manifest_fingerprint": "d40c9246a66756d410738d10235434c6a43ef281b4b0e0ec52c7737526aef774",
+  "policy_id": "task06-defect-pair-policy-v2.1",
+  "schema_version": 1,
+  "sources": {
+    "same_prompt_expansion_v1": {
+      "gate_verdicts_sha256": "88dcbedd9d28b29814a538dce883bd2ffd663d4b0c36f0479e348f2e775af8c5",
+      "scoring_sha256": "02fb85e9713b10ee835ff1ffbc316d1efea2963a077ece962a6b76bd09f4a54e"
+    },
+    "same_prompt_expansion_v2": {
+      "gate_verdicts_sha256": "01345ccfa8162f118412397461ca94e99b4bda0ef6ec534fb24a519030199f00",
+      "scoring_sha256": "f7a1fa67ef1d8f036cf9e019c75cf05a3578a8fb8675a693d43271ad3632ed02"
+    },
+    "same_prompt_expansion_v3": {
+      "gate_verdicts_sha256": "86694654e656ea65ea91686943dad0d840936f07191c09f56f9f57e8a0f4d261",
+      "scoring_sha256": "ba566953c995f66e21940ef20b77d3af6e4714b5f57cfa1e45784523df9f5821"
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "calls_made": 86007,
+  "contract": "task06-v3-tournament-v1",
+  "elapsed_seconds": 13397.0,
+  "failures": 5,
+  "final_tests_used": [],
+  "groups": 3619,
+  "observed_calls_per_second": 6.42,
+  "paired_groups": 3082,
+  "required_unanimous_votes": 6,
+  "task07_training_authorized": false,
+  "unanimous_bottom_pairs": 2902
+}

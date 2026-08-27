@@ -274,3 +274,76 @@ def test_clean_candidate_must_be_format_admissible() -> None:
             admissible_as_chosen=True,
             admissible_as_rejected=False,
         )
+
+
+def _content_server() -> Any:
+    """Sędzia deterministyczny wobec treści: preferuje leksykalnie mniejsze zapytanie."""
+
+    def call(payload: Mapping[str, Any]) -> dict[str, Any]:
+        user = str(payload["messages"][1]["content"])
+        first = user.split("Zapytanie A:\n")[1].split("\n")[0]
+        second = user.split("Zapytanie B:\n")[1].split("\n")[0]
+        better = "A" if first < second else "B"
+        return {
+            "choices": [
+                {"message": {"content": json.dumps({"better": better, "confidence": 0.9})}}
+            ]
+        }
+
+    return call
+
+
+def test_outcome_is_invariant_to_concurrency_and_to_stopping(tmp_path: Path) -> None:
+    """Wolno zacząć na 4 wątkach, przerwać i wznowić na 16: wynik jest ten sam.
+
+    Turniej jest deterministyczną funkcją nad cache'em porównań, a równoległość dotyczy
+    tylko tego, ile requestów leci naraz. Gdyby wynik zależał od zbiegu czasowego,
+    zmiana równoległości cicho zmieniałaby dane treningowe.
+    """
+    groups = load_bundle(_bundle(tmp_path, groups=6))
+    endpoint = JudgeEndpoint(base_url="http://x/v1", api_key="k", model="m")
+
+    def outcomes(name: str, plan: list[int]) -> tuple[str, int]:
+        directory = tmp_path / name
+        directory.mkdir()
+        calls = 0
+        for concurrency in plan:
+            summary = run_tournaments(
+                groups=groups,
+                endpoint=endpoint,
+                journal_path=directory / "j.jsonl",
+                output_path=directory / "o.jsonl",
+                transport=_content_server(),
+                concurrency=concurrency,
+                progress_every=0,
+            )
+            calls = int(summary["calls_made"])
+        return (directory / "o.jsonl").read_text(encoding="utf-8"), calls
+
+    sequential, sequential_calls = outcomes("seq", [1])
+    parallel, parallel_calls = outcomes("par", [8])
+    resumed, resumed_calls = outcomes("resumed", [4, 16])
+
+    assert sequential == parallel, "równoległość nie może zmieniać wyniku"
+    assert sequential == resumed, "wznowienie na innej równoległości nie może zmieniać wyniku"
+    assert sequential_calls == parallel_calls
+    assert resumed_calls == 0, "drugi przebieg nie może wykonać ani jednego wywołania"
+
+
+def test_export_and_assembly_share_one_cleanliness_definition() -> None:
+    """Dwie definicje czystości rozjechały się raz i kosztowały 165 grup.
+
+    Eksport pomijał `pool_margin` i `entity_preservation`, więc turniej rankingował
+    liderów z za szerokiej puli, a składanie odrzucało je dopiero przy ponownej
+    weryfikacji. Test pilnuje, że oba etapy wołają tę samą funkcję.
+    """
+    export_source = Path("scripts/export_v3_tournament_bundle.py").read_text(encoding="utf-8")
+    assembly_source = Path("src/doc2query/preferences/pair_assembly_v3.py").read_text(
+        encoding="utf-8"
+    )
+    for source, label in ((export_source, "eksport"), (assembly_source, "składanie")):
+        assert "_clean_chosen" in source, f"{label} musi wołać wspólną definicję"
+        assert "pair_policy_v2_1 import" in source, f"{label} musi ją importować z polityki"
+    # Żadna ze ścieżek nie może mieć własnej kopii definicji.
+    assert "def _clean_chosen" not in export_source
+    assert "def _clean_chosen" not in assembly_source

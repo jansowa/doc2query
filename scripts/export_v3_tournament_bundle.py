@@ -16,14 +16,16 @@ import json
 from pathlib import Path
 from typing import Any
 
-from doc2query.evaluation.d01_usefulness import _copy_risk as copy_risk_flag
 from doc2query.preferences.pair_policy import (
     _Candidate,
     _format_admissible,
     _load_gate,
     _load_scoring,
 )
-from doc2query.preferences.pair_policy_v2_1 import load_defect_pair_policy_v2_1
+from doc2query.preferences.pair_policy_v2_1 import (
+    _clean_chosen,
+    load_defect_pair_policy_v2_1,
+)
 from doc2query.preferences.pair_policy_v3 import BUNDLE_CONTRACT
 from doc2query.training.dpo import canonical_fingerprint, file_sha256
 from doc2query.utils.records import JsonlWriter, write_json
@@ -46,8 +48,6 @@ def main() -> None:
         raise SystemExit(f"pakiet już istnieje: {args.output_dir}")
 
     policy = load_defect_pair_policy_v2_1(args.policy)
-    thresholds = policy.copy_risk.thresholds()
-    round_trip_field = policy.corpus_round_trip.chosen_required_field
     args.output_dir.mkdir(parents=True)
     bundle_path = args.output_dir / "tournament_bundle.jsonl"
     sources: dict[str, Any] = {}
@@ -89,11 +89,11 @@ def main() -> None:
                 payload = []
                 for member in sorted(members, key=lambda c: c.candidate_index):
                     format_ok = _format_admissible(member)
-                    clean = (
-                        format_ok
-                        and member.number(round_trip_field) >= 1.0
-                        and not copy_risk_flag(member.row, thresholds)
-                    )
+                    # JEDNA definicja czystości, ta sama, którą liczy etap składania.
+                    # Wcześniej eksport pomijał `pool_margin` i `entity_preservation`,
+                    # więc turniej rankingował liderów z za szerokiej puli i 165 grup
+                    # traciło lidera dopiero przy ponownej weryfikacji.
+                    clean = _clean_chosen(member, policy)
                     payload.append(
                         {
                             "candidate_id": member.candidate_id,

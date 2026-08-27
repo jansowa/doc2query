@@ -208,6 +208,26 @@ z pomiarem zamiast argumentu o zepsutym etykieciarzu. Raport:
 [`task06_v3_selector_calibration_2026-08-27.md`](../reports/measurements/task06_v3_selector_calibration_2026-08-27.md).
 `task07_training_authorized=false`, `final_tests_used=[]`.
 
+Aktualizacja 2026-08-27 (**pary v3 zbudowane, Groq zdjęty z roli bramki**): turniej u
+operatora dał 3 082 sparowane grupy z 3 619 (537 pominiętych bez czystego kandydata),
+86 007 wywołań w 3,7 h przy 6,42/s, 5 porażek. Jednomyślność 6/6 w 2 902 grupach
+(94,2%) dla `bottom` i 2 575 (83,6%) dla `near_miss`; wewnętrzna sprzeczność selektora
+0,42% i 1,9%. **Złożone pary: 2 730 i 2 428**, oba warianty powyżej 2 253 par v2.1.
+
+Znaleziony i naprawiony błąd własny: eksport pakietu liczył czystość słabszą definicją
+niż składanie (pomijał `pool_margin` i `entity_preservation`), co kosztowało 165 i 141
+grup. Pary są poprawne, bo składanie było surowsze; naprawa strukturalna — jedna
+funkcja `_clean_chosen` w obu ścieżkach, pilnowana testem. Turnieju nie przeliczam.
+Raport: [`task06_v3_pairs_2026-08-27.md`](../reports/measurements/task06_v3_pairs_2026-08-27.md).
+
+Amendment [`task06_v3_groq_role_amendment_2026-08-27.md`](../reports/decisions/task06_v3_groq_role_amendment_2026-08-27.md)
+zdejmuje audyt Groq z roli bramki dla v3: gęstość sygnału to 30,6% i 47,2%
+rozstrzygniętych w v2 i v2.1, czyli trzy doby za 150–380 porównań, a etykiety z
+konstrukcji są mocniejszym dowodem. Zamiast bramki: probe jako kryterium, walidacja na
+etykietach z konstrukcji i ślepy spot-check właściciela na 50 parach (jawnie nie panel
+§9.3). Groq zostaje dla finalistów, warunkowo po naprawie rubryki.
+`task07_training_authorized=false`, `final_tests_used=[]`.
+
 Wartości z osi A audytu v2 wchodzą do ADR **wyłącznie** jako założenia
 planistyczne rachunku mocy i są jawnie eksploracyjne — pochodzą z podpróby
 próbki, na której bramka przegrała, i mają własne przedziały (P1 osi A u
