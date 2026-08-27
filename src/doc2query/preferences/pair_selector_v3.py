@@ -578,8 +578,21 @@ def calibration_items(corpus_path: Path, passages_path: Path) -> list[PairwiseIt
 
 
 def analyze_calibration(journal_path: Path) -> dict[str, Any]:
-    """Policz czystość per rubryka, obciążenie pozycyjne i krzywą czystość/wydajność."""
-    rows = [row for row in load_journal(journal_path).values()]
+    """Policz czystość per rubryka, obciążenie pozycyjne i krzywą czystość/wydajność.
+
+    Rozróżnienie, które trzeba trzymać osobno, bo łatwo je pomylić:
+
+    * **wydajność** (`yield`) — jaki odsetek par filtr zatrzymuje;
+    * **czystość** (`precision`) — jaki odsetek **zatrzymanych** par ma poprawny
+      kierunek. To ona decyduje o jakości danych treningowych, bo w prawdziwym
+      użyciu nie wiemy, która strona jest dobra: filtrujemy po **spójności** głosów
+      sędziego, nie po zgodzie z prawdą.
+
+    Głosy liczą się parami: rubryka wnosi dwa głosy tylko wtedy, gdy obie kolejności
+    dają ten sam werdykt (inaczej to `position_flip` i zero głosów). Osiągalne progi
+    są więc parzyste — 2, 4 i 6 — a nieparzyste dawałyby te same zbiory.
+    """
+    rows = list(load_journal(journal_path).values())
     if not rows:
         raise ValueError("journal nie zawiera żadnego werdyktu")
     per_rubric: dict[str, Counter[str]] = {}
@@ -601,7 +614,7 @@ def analyze_calibration(journal_path: Path) -> dict[str, Any]:
         }
 
     flips: Counter[str] = Counter()
-    votes_per_item: dict[str, int] = {}
+    votes: dict[str, tuple[int, int]] = {}
     complete_items = 0
     for item_id, verdicts in by_item.items():
         rubrics = sorted({rubric for rubric, _order in verdicts})
@@ -609,22 +622,34 @@ def analyze_calibration(journal_path: Path) -> dict[str, Any]:
             continue
         complete_items += 1
         correct = 0
+        wrong = 0
         for rubric in rubrics:
-            ab = verdicts[(rubric, "ab")]
-            ba = verdicts[(rubric, "ba")]
-            if ab != ba:
+            forward = verdicts[(rubric, "ab")]
+            reverse = verdicts[(rubric, "ba")]
+            if forward != reverse:
                 flips[rubric] += 1
                 continue
-            if ab == "A":
+            if forward == "A":
                 correct += 2
-        votes_per_item[item_id] = correct
-    curve = {}
-    for threshold in (6, 5, 4, 3):
-        surviving = [item for item, votes in votes_per_item.items() if votes >= threshold]
+            elif forward == "B":
+                wrong += 2
+        votes[item_id] = (correct, wrong)
+
+    curve: dict[str, Any] = {}
+    for threshold in (2, 4, 6):
+        kept = [
+            (correct, wrong)
+            for correct, wrong in votes.values()
+            if max(correct, wrong) >= threshold and correct != wrong
+        ]
+        good = sum(1 for correct, wrong in kept if correct > wrong)
         curve[f"min_votes_{threshold}"] = {
-            "surviving_items": len(surviving),
-            "yield": len(surviving) / complete_items if complete_items else None,
+            "kept_items": len(kept),
+            "yield": len(kept) / complete_items if complete_items else None,
+            "precision": good / len(kept) if kept else None,
+            "kept_with_wrong_direction": len(kept) - good,
         }
+    unresolved = sum(1 for correct, wrong in votes.values() if correct == wrong)
     return {
         "contract": CONTRACT,
         "prompt_version": PROMPT_VERSION,
@@ -635,11 +660,14 @@ def analyze_calibration(journal_path: Path) -> dict[str, Any]:
             rubric: count / complete_items if complete_items else None
             for rubric, count in sorted(flips.items())
         },
+        "unresolved_items": unresolved,
         "aggregation_curve": curve,
+        "achievable_thresholds": [2, 4, 6],
         "threshold_frozen_here": False,
         "note": (
             "Próg agregacji zamraża osobny amendment po odczycie tych liczb i przed "
-            "zbudowaniem pierwszej pary v3 (§6 ADR)."
+            "zbudowaniem pierwszej pary v3 (§6 ADR). `precision` liczy się na parach "
+            "ZATRZYMANYCH przez filtr, `yield` to ich udział w całości."
         ),
         "final_tests_used": [],
     }

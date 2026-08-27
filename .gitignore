@@ -83,6 +83,7 @@ htmlcov/
 !/reports/decisions/task06_defect_pair_policy_v2_1.md
 !/reports/decisions/task06_groq_audit_sample_size_amendment_2026-08-23.md
 !/reports/decisions/task06_judge_selected_pair_policy_v3.md
+!/reports/decisions/task06_v3_selector_aggregation_amendment_2026-08-27.md
 !/reports/plans/
 /reports/plans/*
 !/reports/plans/task05_d01_overnight_2026-07-26.md
@@ -161,6 +162,7 @@ htmlcov/
 !/reports/measurements/task02_full_dev_judge_benchmark_2026-08-23.md
 !/reports/measurements/task07_dpo_memory_probe_2026-08-24.md
 !/reports/measurements/task06_v2_1_gate_result_2026-08-25.md
+!/reports/measurements/task06_v3_selector_calibration_2026-08-27.md
 !/reports/measurements/task04/shadow_collapse_detector_v1/
 /reports/measurements/task04/shadow_collapse_detector_v1/*
 !/reports/measurements/task04/shadow_collapse_detector_v1/summary.json

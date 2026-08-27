@@ -184,6 +184,30 @@ precyzję i obniża trudność. Pary v2.1 przestają być kandydatem na dane tre
 stają się materiałem kalibracyjnym; wynik bramki V2.1-05 zostaje zapisany bez
 reinterpretacji. `task07_training_authorized=false`, `final_tests_used=[]`.
 
+Aktualizacja 2026-08-27 (**selektor v3 skalibrowany, próg zamrożony**): kalibracja
+wykonana na serwerze operatora (1 800 par o kierunku znanym z konstrukcji, 10 800
+wywołań na ramię). Ramię bez rozumowania: zero porażek, 5,81/s, 31 min. Ramię z
+rozumowaniem: 302 porażki, 0,44/s, 405 min — **odrzucone** (+0,8 pp czystości za 13×
+koszt).
+
+Pierwszy odczyt był mylący i został skorygowany: zagregowana czystość 0,8498 przy 6/6
+wyglądała na porażkę filtra, ale rozbicie per klasa pokazało, że `ungrounded` i
+`copy_verbatim` są rozpoznane **bezbłędnie**, `too_general` na 0,9433, a całość ciągnęły
+w dół `wrong_form` (0,8099) i `wrong_focus` (**0,3704**, poniżej losowego). Obie te
+klasy są zepsute względem kontrolki, której ślepy sędzia nie widzi, więc są
+nierozstrzygalne z definicji — czystość na nich jest płaska wobec progu, co jest
+sygnaturą błędu systematycznego. Krzywa na klasach rozstrzygalnych: ≥4 głosy 0,9584
+przy wydajności 0,956; **≥6 głosów 0,9793 przy 0,717**.
+
+Amendment
+[`task06_v3_selector_aggregation_amendment_2026-08-27.md`](../reports/decisions/task06_v3_selector_aggregation_amendment_2026-08-27.md)
+zamraża **jednomyślność 6/6** (4,2% odwróconych par przy 4/6 wobec 2,1% przy 6/6;
+objętość jest rozwiązywalna kohortami, czystość nie) oraz **wąski zakres ważności**:
+ugruntowanie, kopiowanie, ogólność — nie forma i nie focus. Oś C zostaje poza wydaniem
+z pomiarem zamiast argumentu o zepsutym etykieciarzu. Raport:
+[`task06_v3_selector_calibration_2026-08-27.md`](../reports/measurements/task06_v3_selector_calibration_2026-08-27.md).
+`task07_training_authorized=false`, `final_tests_used=[]`.
+
 Wartości z osi A audytu v2 wchodzą do ADR **wyłącznie** jako założenia
 planistyczne rachunku mocy i są jawnie eksploracyjne — pochodzą z podpróby
 próbki, na której bramka przegrała, i mają własne przedziały (P1 osi A u

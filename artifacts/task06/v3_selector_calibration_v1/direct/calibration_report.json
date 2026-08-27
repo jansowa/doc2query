@@ -1,0 +1,64 @@
+{
+  "achievable_thresholds": [
+    2,
+    4,
+    6
+  ],
+  "aggregation_curve": {
+    "min_votes_2": {
+      "kept_items": 1731,
+      "kept_with_wrong_direction": 304,
+      "precision": 0.8243789716926632,
+      "yield": 0.9616666666666667
+    },
+    "min_votes_4": {
+      "kept_items": 1638,
+      "kept_with_wrong_direction": 268,
+      "precision": 0.8363858363858364,
+      "yield": 0.91
+    },
+    "min_votes_6": {
+      "kept_items": 1205,
+      "kept_with_wrong_direction": 181,
+      "precision": 0.8497925311203319,
+      "yield": 0.6694444444444444
+    }
+  },
+  "complete_items": 1800,
+  "contract": "task06-judge-selected-pair-policy-v3",
+  "final_tests_used": [],
+  "note": "Próg agregacji zamraża osobny amendment po odczycie tych liczb i przed zbudowaniem pierwszej pary v3 (§6 ADR). `precision` liczy się na parach ZATRZYMANYCH przez filtr, `yield` to ich udział w całości.",
+  "per_rubric": {
+    "R1_grounding": {
+      "correct_share": 0.7311111111111112,
+      "judgments": 3600,
+      "tie_share": 0.012222222222222223,
+      "wrong_share": 0.25666666666666665
+    },
+    "R2_retrieval_usefulness": {
+      "correct_share": 0.7708333333333334,
+      "judgments": 3600,
+      "tie_share": 0.0005555555555555556,
+      "wrong_share": 0.2286111111111111
+    },
+    "R3_holistic": {
+      "correct_share": 0.8136111111111111,
+      "judgments": 3600,
+      "tie_share": 0.0005555555555555556,
+      "wrong_share": 0.18583333333333332
+    }
+  },
+  "position_flip_counts": {
+    "R1_grounding": 224,
+    "R2_retrieval_usefulness": 163,
+    "R3_holistic": 175
+  },
+  "position_flip_share": {
+    "R1_grounding": 0.12444444444444444,
+    "R2_retrieval_usefulness": 0.09055555555555556,
+    "R3_holistic": 0.09722222222222222
+  },
+  "prompt_version": "task06-v3-pairwise-pl-v1",
+  "threshold_frozen_here": false,
+  "unresolved_items": 69
+}

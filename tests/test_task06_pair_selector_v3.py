@@ -120,7 +120,8 @@ def test_consistent_judge_yields_full_votes_and_no_flip(tmp_path: Path) -> None:
     report = analyze_calibration(journal)
     assert report["complete_items"] == 1
     assert report["position_flip_counts"] == {}
-    assert report["aggregation_curve"]["min_votes_6"]["surviving_items"] == 1
+    assert report["aggregation_curve"]["min_votes_6"]["kept_items"] == 1
+    assert report["aggregation_curve"]["min_votes_6"]["precision"] == 1.0
     assert report["per_rubric"]["R3_holistic"]["correct_share"] == 1.0
     assert report["threshold_frozen_here"] is False
 
@@ -394,3 +395,42 @@ def test_probe_returns_a_verdict_when_the_server_answers() -> None:
     assert probe["ok"] is True
     assert probe["verdict"] == "A"
     assert probe["dropped_payload_fields"] == []
+
+
+def test_curve_separates_precision_from_yield(tmp_path: Path) -> None:
+    """Filtr trzymający pary, w których sędzia myli kierunek, musi to pokazać."""
+    journal = tmp_path / "j.jsonl"
+    lines = []
+    # Dwie pary spójnie poprawne, jedna spójnie ODWROTNA, jedna z position_flip.
+    plan = {
+        "ok-1": ("A", "A"),
+        "ok-2": ("A", "A"),
+        "zla": ("B", "B"),
+        "flip": ("A", "B"),
+    }
+    for item_id, (forward, reverse) in plan.items():
+        for rubric in ("R1_grounding", "R2_retrieval_usefulness", "R3_holistic"):
+            for order, verdict in (("ab", forward), ("ba", reverse)):
+                lines.append(
+                    json.dumps(
+                        {
+                            "event": "judgment",
+                            "key": f"{item_id}|{rubric}|{order}",
+                            "item_id": item_id,
+                            "rubric": rubric,
+                            "order": order,
+                            "canonical_verdict": verdict,
+                        }
+                    )
+                )
+    journal.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    report = analyze_calibration(journal)
+    assert report["complete_items"] == 4
+    six = report["aggregation_curve"]["min_votes_6"]
+    # Zatrzymane: dwie poprawne i jedna odwrotna; para z flipem nie ma żadnych głosów.
+    assert six["kept_items"] == 3
+    assert six["precision"] == pytest.approx(2 / 3)
+    assert six["kept_with_wrong_direction"] == 1
+    assert six["yield"] == pytest.approx(3 / 4)
+    assert report["position_flip_counts"]["R3_holistic"] == 1
+    assert report["achievable_thresholds"] == [2, 4, 6]

@@ -1,0 +1,23 @@
+{
+  "allow_reasoning": true,
+  "collected": 10498,
+  "concurrency": 8,
+  "contract": "task06-judge-selected-pair-policy-v3",
+  "elapsed_seconds": 24311.6,
+  "failures": 302,
+  "final_tests_used": [],
+  "items": 1800,
+  "judgments": 10498,
+  "observed_calls_per_second": 0.444,
+  "orders": [
+    "ab",
+    "ba"
+  ],
+  "planned_calls": 10800,
+  "resumed": 0,
+  "rubrics": [
+    "R1_grounding",
+    "R2_retrieval_usefulness",
+    "R3_holistic"
+  ]
+}
