@@ -59,6 +59,14 @@ class BundleCandidate:
     admissible_as_chosen: bool
     admissible_as_rejected: bool
 
+    def __post_init__(self) -> None:
+        # Czystość zawiera w sobie dopuszczalność formatem, więc „czysty, ale
+        # niedopuszczalny formatem" jest sprzecznością i oznacza błąd eksportu.
+        if self.admissible_as_chosen and not self.admissible_as_rejected:
+            raise ValueError(
+                f"{self.candidate_id}: kandydat czysty musi być dopuszczalny formatem"
+            )
+
 
 @dataclass(frozen=True)
 class BundleGroup:
@@ -69,10 +77,25 @@ class BundleGroup:
     passage: str
     candidates: tuple[BundleCandidate, ...]
 
+    def _sorted(self, rows: list[BundleCandidate]) -> list[BundleCandidate]:
+        return sorted(rows, key=lambda row: (row.candidate_index, row.candidate_id))
+
+    def chosen_pool(self) -> list[BundleCandidate]:
+        """Kandydaci spełniający PEŁNY kontrakt czystości — tylko z nich może być chosen.
+
+        ADR §5 wymaga po stronie `chosen` formatu, round-tripu @20 i braku `copy_risk`.
+        Rankingowanie lidera po szerszej puli oznaczałoby, że para wypada dopiero przy
+        składaniu, już po wydaniu wywołań.
+        """
+        return self._sorted([row for row in self.candidates if row.admissible_as_chosen])
+
+    def rejected_pool(self) -> list[BundleCandidate]:
+        """Kandydaci dopuszczalni formatem; strona `rejected` nie wymaga czystości."""
+        return self._sorted([row for row in self.candidates if row.admissible_as_rejected])
+
     def ranked_pool(self) -> list[BundleCandidate]:
-        """Kandydaci dopuszczalni w turnieju, w deterministycznej kolejności."""
-        pool = [row for row in self.candidates if row.admissible_as_rejected]
-        return sorted(pool, key=lambda row: (row.candidate_index, row.candidate_id))
+        """Zachowane dla raportowania planu: pula, w której cokolwiek się rozgrywa."""
+        return self.rejected_pool()
 
 
 def load_bundle(path: Path) -> list[BundleGroup]:
@@ -136,9 +159,24 @@ def run_group_tournament(
     końca. Przy remisie utrzymuje się dotychczasowy lider — inaczej wynik zależałby od
     kolejności losowo.
     """
-    pool = group.ranked_pool()
-    if len(pool) < 2:
-        return {"group_id": group.group_id, "paired": False, "reason": "too_few_admissible"}
+    chosen_pool = group.chosen_pool()
+    rejected_pool = group.rejected_pool()
+    if not chosen_pool:
+        # Grupa bez ani jednego czystego kandydata nie może dać pary; turniej na niej
+        # byłby wydatkiem bez możliwego wyniku.
+        return {
+            "group_id": group.group_id,
+            "cohort_id": group.cohort_id,
+            "paired": False,
+            "reason": "no_admissible_chosen",
+        }
+    if len(rejected_pool) < 2:
+        return {
+            "group_id": group.group_id,
+            "cohort_id": group.cohort_id,
+            "paired": False,
+            "reason": "too_few_admissible",
+        }
     comparisons = 0
 
     def duel(left: BundleCandidate, right: BundleCandidate) -> str:
@@ -146,12 +184,19 @@ def run_group_tournament(
         comparisons += 1
         return compare(group, left, right)
 
-    best = pool[0]
-    for challenger in pool[1:]:
+    best = chosen_pool[0]
+    for challenger in chosen_pool[1:]:
         if duel(best, challenger) == "B":
             best = challenger
 
-    rest = [row for row in pool if row.candidate_id != best.candidate_id]
+    rest = [row for row in rejected_pool if row.candidate_id != best.candidate_id]
+    if not rest:
+        return {
+            "group_id": group.group_id,
+            "cohort_id": group.cohort_id,
+            "paired": False,
+            "reason": "no_rejected_candidate",
+        }
     worst = rest[0]
     for challenger in rest[1:]:
         if duel(worst, challenger) == "A":
@@ -173,8 +218,8 @@ def run_group_tournament(
         "best": best.candidate_id,
         "worst": worst.candidate_id,
         "second_worst": second_worst.candidate_id if second_worst else None,
-        "pool_size": len(pool),
-        "chosen_admissible": best.admissible_as_chosen,
+        "chosen_pool_size": len(chosen_pool),
+        "rejected_pool_size": len(rejected_pool),
     }
 
 

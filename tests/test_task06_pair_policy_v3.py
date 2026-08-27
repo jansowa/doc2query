@@ -5,6 +5,8 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from doc2query.preferences.pair_policy_v3 import (
     REQUIRED_UNANIMOUS_VOTES,
     BundleCandidate,
@@ -66,20 +68,55 @@ def test_tournament_uses_only_admissible_candidates() -> None:
         passage="p",
         candidates=(
             _candidate(0),
-            _candidate(1, rejected_ok=False),
+            _candidate(1, chosen_ok=False, rejected_ok=False),
             _candidate(2),
         ),
     )
     outcome = run_group_tournament(group, _ordering_comparator(["c0", "c2"]))
-    assert outcome["pool_size"] == 2
+    assert outcome["rejected_pool_size"] == 2
     assert {outcome["best"], outcome["worst"]} == {"c0", "c2"}
     assert outcome["second_worst"] is None
+
+
+def test_group_without_any_clean_candidate_is_skipped_before_any_call() -> None:
+    """14,8% grup nie ma czystego kandydata; turniej na nich byłby wydatkiem bez wyniku."""
+    group = BundleGroup(
+        group_id="g1", cohort_id="c", passage="p",
+        candidates=tuple(_candidate(i, chosen_ok=False) for i in range(3)),
+    )
+    calls = {"n": 0}
+
+    def counting(group: BundleGroup, left: BundleCandidate, right: BundleCandidate) -> str:
+        calls["n"] += 1
+        return "A"
+
+    outcome = run_group_tournament(group, counting)
+    assert outcome["paired"] is False
+    assert outcome["reason"] == "no_admissible_chosen"
+    assert calls["n"] == 0, "nie wolno wykonać ani jednego porównania"
+
+
+def test_leader_is_ranked_only_among_clean_candidates() -> None:
+    """Lider musi spełniać pełny kontrakt czystości, nie tylko format."""
+    group = BundleGroup(
+        group_id="g1", cohort_id="c", passage="p",
+        candidates=(
+            _candidate(0, chosen_ok=False),  # najlepszy w rankingu, ale nieczysty
+            _candidate(1),
+            _candidate(2),
+        ),
+    )
+    outcome = run_group_tournament(group, _ordering_comparator(["c0", "c1", "c2"]))
+    assert outcome["best"] == "c1", "nieczysty kandydat nie może zostać chosen"
+    assert outcome["chosen_pool_size"] == 2
+    assert outcome["rejected_pool_size"] == 3
+    assert outcome["worst"] in {"c0", "c2"}
 
 
 def test_group_with_one_admissible_candidate_is_not_paired() -> None:
     group = BundleGroup(
         group_id="g1", cohort_id="c", passage="p",
-        candidates=(_candidate(0), _candidate(1, rejected_ok=False)),
+        candidates=(_candidate(0), _candidate(1, chosen_ok=False, rejected_ok=False)),
     )
     outcome = run_group_tournament(group, _ordering_comparator(["c0"]))
     assert outcome["paired"] is False
@@ -226,3 +263,14 @@ def test_position_consistent_server_yields_unanimous_pairs(tmp_path: Path) -> No
     bottom = outcome["confirmations"]["bottom"]
     assert bottom["position_flips"] == 3
     assert bottom["unanimous"] is False
+
+
+def test_clean_candidate_must_be_format_admissible() -> None:
+    with pytest.raises(ValueError, match="dopuszczalny formatem"):
+        BundleCandidate(
+            candidate_id="c9",
+            candidate_index=9,
+            query="q",
+            admissible_as_chosen=True,
+            admissible_as_rejected=False,
+        )
