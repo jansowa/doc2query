@@ -1,0 +1,17 @@
+{
+  "artifact_fingerprint": "67ece04dc5e485c52b31a74cef3ccf3f44b6eff40188b061398ce6a29604ae2a",
+  "contract": "task06-score-weight-assignments-for-task07-v1",
+  "dataset_fingerprint": "6eaf53f109875e251c2e8cea4b6e00f2482368ef75a433fe9e1777a883f25cc9",
+  "dataset_id": "task06-judge-selected-pairs-v3",
+  "final_tests_used": [],
+  "ordered_preference_ids_fingerprint": "db262cb7e855147c6792cc1e0d64edf444e2a886eab9d484eef3b374bbfc412f",
+  "records": {
+    "path": "weight_records.jsonl",
+    "record_count": 2730,
+    "sha256": "525828bc4ba6c459851d5afcff51dc42c2a5e9918753b1a00ad357c2bbb3e5c8"
+  },
+  "selection_policy_fingerprint": "a2a219e4bb98bd31f92f85aef863730d4faf68e491a64d30a1f61f619d376e10",
+  "selection_policy_id": "task06-judge-selected-pair-policy-v3",
+  "weight_policy_fingerprint": "95b7d6997102149f117085ea282dbddea2eaebac5529b60cbb5582ad84c7ae70",
+  "weight_policy_id": "task07-chosen-primary-margin-percentile-v1"
+}

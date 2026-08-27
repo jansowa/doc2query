@@ -276,7 +276,9 @@ def load_journal(path: Path) -> dict[str, dict[str, Any]]:
     if not path.is_file():
         return {}
     done: dict[str, dict[str, Any]] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
+    # Dzielimy TYLKO po "\n": pasaże msmarco_pl zawierają U+0085 i U+2028, które
+    # `splitlines()` traktuje jako łamanie linii, a JSON ich nie escapuje.
+    for line in path.read_text(encoding="utf-8").split("\n"):
         try:
             row = json.loads(line)
         except json.JSONDecodeError:

@@ -1,0 +1,18 @@
+{
+  "artifact_fingerprint": "ab0abf45009f1996c487eee1bf9c5cc5ed08cec4bb7165324d3518f57a51b073",
+  "contract": "task07-model-free-token-lengths-v1",
+  "dataset_fingerprint": "6eaf53f109875e251c2e8cea4b6e00f2482368ef75a433fe9e1777a883f25cc9",
+  "final_tests_used": [],
+  "model_loading_performed": false,
+  "ordered_preference_ids_fingerprint": "db262cb7e855147c6792cc1e0d64edf444e2a886eab9d484eef3b374bbfc412f",
+  "records": {
+    "path": "token_lengths.jsonl",
+    "record_count": 2730,
+    "sha256": "0dde455a130e3943949d68c8f481cdfd2f525bd030f3b26b1d03dbf1d5cb7c0f"
+  },
+  "tokenizer": {
+    "revision": "4b1220a9d745bdd874c44347075ef25484ef322b",
+    "tokenizer_fingerprint": "e7be77fbc82690d74ad81e43ed2d05a854a32161a340190b66122db112b8911e",
+    "tokenizer_id": "speakleash/Bielik-4.5B-v3.0-Instruct"
+  }
+}

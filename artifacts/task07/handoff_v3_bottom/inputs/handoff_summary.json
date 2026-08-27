@@ -1,0 +1,38 @@
+{
+  "artifacts": {
+    "continued_sft_dev": "continued_sft_dev.jsonl",
+    "continued_sft_train": "continued_sft_train.jsonl",
+    "preference_dev": "preference_dev.jsonl",
+    "preference_train": "preference_train.jsonl",
+    "weight_manifest": "weight_manifest.json",
+    "weight_records": "weight_records.jsonl"
+  },
+  "contract": "task07-handoff-inputs-from-v3-pairs-v1",
+  "dataset_fingerprint": "6eaf53f109875e251c2e8cea4b6e00f2482368ef75a433fe9e1777a883f25cc9",
+  "dataset_id": "task06-judge-selected-pairs-v3",
+  "dev_count": 269,
+  "dev_every": 10,
+  "final_tests_used": [],
+  "pairs_path": "artifacts/task06/v3_pairs_v1/bottom/pairs.jsonl",
+  "schema_version": 1,
+  "score_margin_is_constant": true,
+  "score_margin_value": 1.0,
+  "selection_policy_fingerprint": "a2a219e4bb98bd31f92f85aef863730d4faf68e491a64d30a1f61f619d376e10",
+  "split_seed": 20260827,
+  "task07_training_authorized": false,
+  "train_count": 2461,
+  "weight_max": 1.5,
+  "weight_min": 0.5,
+  "weight_policy": {
+    "range": [
+      0.5,
+      1.5
+    ],
+    "rationale": "Bez stopniowanej wagi trzecie obowiązkowe ramię Task 07 byłoby identyczne z continued SFT. Margines primary jest jedynym stopniowanym sygnałem niezależnym od sędziego, który wybrał parę.",
+    "role": "control_arm_weighting_only_never_selection",
+    "signal": "chosen_components.pool_margin",
+    "transform": "percentile_rank_within_dataset",
+    "weight_policy_id": "task07-chosen-primary-margin-percentile-v1"
+  },
+  "weight_policy_fingerprint": "95b7d6997102149f117085ea282dbddea2eaebac5529b60cbb5582ad84c7ae70"
+}
