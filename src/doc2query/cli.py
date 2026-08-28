@@ -153,9 +153,54 @@ def build_preferences(
 
 
 @train_app.command("dpo")
-def train_dpo(config: ConfigPath) -> None:
-    """Train with DPO (implemented by task 07)."""
-    _pending(config, "training.dpo")
+def train_dpo(
+    config: ConfigPath,
+    plan: Annotated[Path, typer.Option("--plan", exists=True, dir_okay=False)],
+    packaged_dir: Annotated[Path, typer.Option("--packaged-dir", exists=True, file_okay=False)],
+    adapter: Annotated[Path, typer.Option("--adapter", exists=True, file_okay=False)],
+    output_dir: Annotated[Path, typer.Option("--output-dir")],
+    arm: Annotated[
+        str, typer.Option("--arm", help="dpo | continued_sft | score_weighted_continued_sft")
+    ] = "dpo",
+    reference_logprobs: Annotated[
+        Path | None, typer.Option("--reference-logprobs", exists=True, dir_okay=False)
+    ] = None,
+    seed: Annotated[int | None, typer.Option("--seed")] = None,
+    max_steps: Annotated[int | None, typer.Option("--max-steps")] = None,
+    checkpoint_every: Annotated[int, typer.Option("--checkpoint-every")] = 25,
+    gradient_accumulation_steps: Annotated[int, typer.Option("--grad-accum")] = 16,
+    resume: Annotated[bool, typer.Option("--resume/--no-resume")] = True,
+) -> None:
+    """Train one Task 07 arm from a frozen plan; hyperparameters come from the plan."""
+    from doc2query.training.dpo import DPOArm
+    from doc2query.training.dpo_launch import ArmInputs, launch_arm
+
+    try:
+        selected = DPOArm(arm)
+    except ValueError as exc:
+        console.print(f"[red]Unknown arm:[/red] {arm}", highlight=False)
+        raise typer.Exit(code=2) from exc
+    try:
+        result = launch_arm(
+            arm=selected,
+            config=load_config(config),
+            inputs=ArmInputs(
+                packaged_dir=packaged_dir,
+                plan_path=plan,
+                adapter_path=adapter,
+                output_dir=output_dir,
+                reference_logprobs_manifest=reference_logprobs,
+            ),
+            seed=seed,
+            max_steps=max_steps,
+            checkpoint_every=checkpoint_every,
+            gradient_accumulation_steps=gradient_accumulation_steps,
+            resume=resume,
+        )
+    except (ValueError, ValidationError) as exc:
+        console.print(f"[red]Refused:[/red] {exc}", highlight=False)
+        raise typer.Exit(code=2) from exc
+    console.print_json(json.dumps(result))
 
 
 @train_app.command("grpo")
