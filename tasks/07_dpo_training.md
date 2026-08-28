@@ -6,6 +6,25 @@
 
 `IN PROGRESS`
 
+Aktualizacja 2026-08-28 (**plan DPO i precompute logprobów referencji**; raport
+[`task07_reference_logprobs_2026-08-28.md`](../reports/measurements/task07_reference_logprobs_2026-08-28.md)):
+zamrożony plan model-free `task07-dpo-plan-v3-bottom-s42` (fingerprint
+`b1ab25b7…`) z hiperparametrami przepisanymi z §Konfiguracja startowa i wartościami
+policzonymi z pomiaru: `max_length` 768 / `max_prompt_length` 704 (max `prompt+chosen`
+547, max promptu 540 → zero truncacji), 154 kroki optymalizatora, budżet 1 087 057
+tokenów par DPO, kohorta 2 461 par. Tożsamość stosu jest zmierzona z treści plików
+(baza `8de58e41…`, adapter `da862dd3…`), nie wpisana. Precompute wykonany na
+prawdziwych parach: **2 461 / 2 461**, prompty ucięte **0**, peak **2,72 GiB**,
+935 s (0,380 s/para), przyjęty przez `validate_reference_logprobs`. Forward-only,
+bez optymalizatora i bez zapisu adaptera — **to nie trening** i
+`task07_training_authorized` pozostaje `false`. Przygotowany też ślepy spot-check
+50 par (`scripts/task07_owner_spot_check.py`, seed 20260827, 24×A / 26×B, klucz
+osobno, brak progu) — kontrola operacyjna z amendmentu §2.3, **nie** panel §9.3.
+Blokujące pozostają: autoryzacja właściciela, wykonanie spot-checku, podłączenie
+`doc2query train dpo` (nadal stub) z orkiestracją config → precompute → trening →
+manifest runu oraz objętość danych (2 461 par wobec ablacji 20k/50k/100k).
+`final_tests_used=[]`.
+
 Aktualizacja 2026-08-24 (**runtime DPO i pierwszy memory probe**): dotąd
 `training/dpo.py` trzymał wyłącznie kontrakty, walidatory i skalarną stratę, a
 `DPOTrainer` nie występował nigdzie w `src/` — czyli warstwy wykonawczej DPO nie

@@ -1,0 +1,21 @@
+{
+  "adapter_written": false,
+  "computed_records": 2461,
+  "contract": "task07-reference-logprob-run-v1",
+  "final_tests_used": [],
+  "gpu": "NVIDIA GeForce RTX 3060 Ti",
+  "max_length": 768,
+  "peak_gib": 2.72,
+  "plan_fingerprint": "b1ab25b7071624cf60fb6ea1facd99a0e1eb207598fd35aa591b5c82e2e55c42",
+  "plan_id": "task07-dpo-plan-v3-bottom-s42",
+  "precision": "PrecisionSelection(dtype=torch.bfloat16, bf16=True, fp16=False, label='bf16')",
+  "prompt_truncated_count": 0,
+  "record_count": 2461,
+  "resumed_records": 0,
+  "schema_version": 1,
+  "seconds_per_pair": 0.38,
+  "seconds_total": 935.4,
+  "task07_training_authorized": false,
+  "training_started": false,
+  "validated_records": 2461
+}
