@@ -538,7 +538,13 @@ def train_arm(
         "history": {
             "path": history_path.name,
             "sha256": file_sha256(history_path),
-            "record_count": step - started_step,
+            # Liczymy wiersze pliku, a nie kroki tego procesu: po wznowieniu historia
+            # zawiera także kroki policzone przed przerwaniem, a manifest ma opisywać
+            # plik, który wskazuje.
+            "record_count": sum(
+                1 for line in history_path.read_text(encoding="utf-8").split("\n") if line.strip()
+            ),
+            "steps_this_process": step - started_step,
         },
         "adapter": {
             "path": str(adapter_path.relative_to(output_dir)),
