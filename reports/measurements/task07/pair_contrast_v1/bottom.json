@@ -1,0 +1,52 @@
+{
+  "contract": "task07-pair-contrast-diagnostic-v1",
+  "definicja_prefix": {
+    "chosen": 0.1681,
+    "rejected": 0.167
+  },
+  "final_tests_used": [],
+  "label": "bottom",
+  "length_content_words": {
+    "chosen_at_most_three": 0.4103,
+    "chosen_median": 4.0,
+    "rejected_median": 4.0
+  },
+  "measure_notes": {
+    "bias": "zaniża pokrycie obu stron symetrycznie (fleksja)",
+    "lemmatization": false,
+    "min_word_length": 4
+  },
+  "pairs": 2730,
+  "pairs_modified": 0,
+  "passage_coverage": {
+    "chosen_mean": 0.5317,
+    "chosen_median": 0.5,
+    "rejected_mean": 0.2268,
+    "rejected_median": 0.2
+  },
+  "requested_form": {
+    "full_question": 1535,
+    "keyword_query": 1195
+  },
+  "schema_version": 1,
+  "shares": {
+    "both_grounded": 0.0711,
+    "chosen_fully_in_passage": 0.0934,
+    "chosen_question_form": 0.5344,
+    "rejected_ungrounded": 0.7531
+  },
+  "sources": [
+    "artifacts/task07/handoff_v3_bottom/packaged/preference_train.jsonl",
+    "artifacts/task07/handoff_v3_bottom/packaged/preference_dev.jsonl"
+  ],
+  "top_first_words_chosen": {
+    "co": 134,
+    "czy": 141,
+    "definicja": 459,
+    "ile": 91,
+    "jak": 742,
+    "jaka": 80,
+    "kim": 85,
+    "nazwa": 104
+  }
+}
