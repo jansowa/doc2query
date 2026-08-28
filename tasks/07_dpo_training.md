@@ -6,6 +6,17 @@
 
 `IN PROGRESS`
 
+Aktualizacja 2026-08-28 (**autoryzacja treningu**): właściciel autoryzował trening
+DPO na parach v3, więc `task07_training_authorized=true` w zakresie zapisanym w
+[decyzji](../reports/decisions/task07_training_authorization_2026-08-28.md): trzy
+ramiona z planu na kohorcie 2 461 par przy dopasowanym budżecie, wybory na dev,
+zapis adapterów i manifestów. Zbiory testowe pozostają zamknięte
+(`final_tests_used=[]`), pule v4–v11 zamknięte, bramki v2/v2.1 bez reinterpretacji.
+Ślepy spot-check 50 par pozostaje **niewykonany** — właściciel autoryzował trening
+bez niego; to kontrola operacyjna, nie bramka, i nie jest panelem §9.3. Do runu
+brakuje teraz wyłącznie kodu: `doc2query train dpo` jest nadal stubem, a
+orkiestracji config → precompute → trzy ramiona → manifest runu jeszcze nie ma.
+
 Aktualizacja 2026-08-28 (**plan DPO i precompute logprobów referencji**; raport
 [`task07_reference_logprobs_2026-08-28.md`](../reports/measurements/task07_reference_logprobs_2026-08-28.md)):
 zamrożony plan model-free `task07-dpo-plan-v3-bottom-s42` (fingerprint
