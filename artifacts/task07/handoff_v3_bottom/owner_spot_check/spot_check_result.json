@@ -1,0 +1,22 @@
+{
+  "agreement_ci95": [
+    0.8453,
+    0.9944
+  ],
+  "agreement_rate": 0.9545,
+  "agreements": 42,
+  "answered": 50,
+  "contract": "task07-owner-spot-check-result-v1",
+  "count": 50,
+  "decided": 44,
+  "disagreement_items": [
+    15,
+    29
+  ],
+  "disagreements": 2,
+  "final_tests_used": [],
+  "no_frozen_threshold": true,
+  "role": "operational_sanity_check_not_panel_9_3",
+  "schema_version": 1,
+  "ties": 6
+}

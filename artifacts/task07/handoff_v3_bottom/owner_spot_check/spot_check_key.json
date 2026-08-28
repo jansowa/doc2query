@@ -1,0 +1,364 @@
+{
+  "contract": "task07-owner-spot-check-v1",
+  "count": 50,
+  "final_tests_used": [],
+  "items": [
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 1,
+      "preference_id": "cc487dcd119195e82e62b95c3ea13d41"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 2,
+      "preference_id": "3857b0b1ec927917d6903b8fcbea3b87"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 3,
+      "preference_id": "da7c8f05d9414733d9ae4e4d8da1c999"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 4,
+      "preference_id": "ef182ff7da498c419404c7b5eebcfa51"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 5,
+      "preference_id": "5ccd5d1c06a7664251ecf2c9715a63ab"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 6,
+      "preference_id": "9cd184f57dd04eed83acf01556778ed9"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 7,
+      "preference_id": "00840913f4043f3dd8afbd6fa858bc3f"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 8,
+      "preference_id": "c480f11fdecf44b71de9aa84fc4dbe43"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 9,
+      "preference_id": "92db2c7f105f07113ce8553553f5f83b"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 10,
+      "preference_id": "0f323d316106610571256a671c8888fd"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 11,
+      "preference_id": "9cbadb02b9a94dd441bdcf91cafa6cd9"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 12,
+      "preference_id": "ca2b575f4ca5a6302c65737dbf4370f3"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 13,
+      "preference_id": "f2a98eb50fa8f9aad0000ae3c6334866"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 14,
+      "preference_id": "630aebef7e4bc1c4960823c22039727b"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 15,
+      "preference_id": "454f54766892370f433212261cc7bf8c"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 16,
+      "preference_id": "5da83cfd7718b6fb74285ca946db950f"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 17,
+      "preference_id": "414a48ab10b8d39fd826693a825837c8"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 18,
+      "preference_id": "0bf2b88ad9bf4a8f836927377adbb932"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 19,
+      "preference_id": "545e1d8075e9c237f009457462a1ea5b"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 20,
+      "preference_id": "14cd47e45bf3331249a434881ebf3e6c"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 21,
+      "preference_id": "dc95e2872c0bb14bb55d23be7224d365"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 22,
+      "preference_id": "10a5487fef7cc1c84dadf3266f870faf"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 23,
+      "preference_id": "b303959fc5d2478c953a62bef56a4545"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 24,
+      "preference_id": "46cecefe24b399fbdd49ecfaad89419c"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 25,
+      "preference_id": "a270ee9f000c034511416340ac2c97b4"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 26,
+      "preference_id": "cfc236bb353e5ddbab8f8fcf0eaa7aa5"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 27,
+      "preference_id": "f76d34ed57322481b9642dd1271d87b2"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 28,
+      "preference_id": "d25a9c3fc68f396e20ceeed6df1b32af"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 29,
+      "preference_id": "a0a06b428b3735b4ff383e21b18e6f48"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 30,
+      "preference_id": "1013d1072cce36758bcd1f687174b5fb"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 31,
+      "preference_id": "757892d870ba77ad5f23eb67dfb9536e"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 32,
+      "preference_id": "f307e8d8c42c410854730cb7c2fafc23"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 33,
+      "preference_id": "a76321e05e3176d3284d097b9f880dba"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 34,
+      "preference_id": "6c249d8701aa30ff6ab94399d96a7b76"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 35,
+      "preference_id": "3e59b5fd2b4e2c6f0d341332e9843ff5"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 36,
+      "preference_id": "035548f8f1abd4207463697c14194cf8"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 37,
+      "preference_id": "81a690275efe1bc06cfeb32568dd7167"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 38,
+      "preference_id": "44cede9029fc17aef1053457c320dbb4"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 39,
+      "preference_id": "a8231a48164e9c97fc38ac23a846b6a4"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 40,
+      "preference_id": "e01d9596fdd6f14e44a17326a047f3b5"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 41,
+      "preference_id": "dd8a8ee7c8f56fb935bb92a7a2ba64a0"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 42,
+      "preference_id": "2f2b9df697d8cc771bb29aa86003c935"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 43,
+      "preference_id": "86a66843afafc0d7e2fd9c0525619b78"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 44,
+      "preference_id": "22da843680d0bc760e82a83d8335807d"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 45,
+      "preference_id": "e566cfdfd250ed29b97fbaf763a9d494"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 46,
+      "preference_id": "ff9aec35ba272c6a96df25643137af83"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 47,
+      "preference_id": "b347e1bdab74497e107b9e2fb298fbfa"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 48,
+      "preference_id": "957017eca1ad1646888ae6bb6f820459"
+    },
+    {
+      "a_side": "rejected",
+      "b_side": "chosen",
+      "chosen_letter": "B",
+      "item": 49,
+      "preference_id": "599dc165096500a826eeec1638e42147"
+    },
+    {
+      "a_side": "chosen",
+      "b_side": "rejected",
+      "chosen_letter": "A",
+      "item": 50,
+      "preference_id": "c189c6afd824e158cdda9e572b1174e7"
+    }
+  ],
+  "role": "operational_sanity_check_not_panel_9_3",
+  "schema_version": 1,
+  "seed": 20260827,
+  "sources": [
+    "artifacts/task07/handoff_v3_bottom/packaged/preference_train.jsonl",
+    "artifacts/task07/handoff_v3_bottom/packaged/preference_dev.jsonl"
+  ]
+}
