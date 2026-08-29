@@ -102,7 +102,7 @@ warn_unused_configs = true
 # projektu, więc zamiast przepisywać niepełną funkcję beta ręcznie wyciszamy brak
 # stubów wyłącznie dla tego pakietu. Reszta repozytorium pozostaje w strict mode.
 [[tool.mypy.overrides]]
-module = ["scipy.*"]
+module = ["scipy.*", "sklearn.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
