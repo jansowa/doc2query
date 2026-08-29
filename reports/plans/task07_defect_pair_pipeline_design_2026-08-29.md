@@ -111,7 +111,49 @@ na Groq w ramach dziennych okien.
 5. Wpis do rejestru wad znanych: pary syntetyczne uczą odróżniania od wad
    *wstrzykniętych*, które nie muszą mieć rozkładu wad *naturalnych* generatora.
 
-## 7. Czego ten dokument nie robi
+## 7. Wzmocnienia v2 (eksploracja z tego samego dnia, po pytaniu właściciela)
+
+Właściciel spytał, czy ograniczenia z §6.5 (rozkład wad wstrzykniętych ≠
+naturalnych) i z §2 (luka stylu) da się zaadresować od razu. Da się — dwa nowe
+tryby przetestowane na Groq (`scripts/explore_teacher_pipeline_v2.py`,
+`artifacts/task06/teacher_pipeline_explore_v2/`):
+
+**7.1. Kopalnia organicznych negatywów (`classify`).** Bundle turnieju ma
+wszystkich kandydatów studenckich; pomiar na 400 grupach: **82,8%** grup ma ≥1
+ugruntowanego (pokrycie ≥0,5) kandydata poza `chosen` i obecnym `rejected`,
+średnio 2,07/grupę. Teacher klasyfikuje ich do klas wad — negatyw zostaje wtedy
+**organiczny** (rozkład studenta, zero luki stylu), a syntetyczna jest tylko
+etykieta. Przegląd 25 klasyfikacji: kopalnia znajduje właściwe sztuki („kalorie
+w margherita pizza" jako `not_answerable` przy pasażu o pizzy bezglutenowej),
+ale ma dwa zmierzone błędy: (a) nadgorliwe `copy_phrasing` na krótkich frazach
+kluczowych — tę klasę trzeba odebrać LLM i rozstrzygać **wyłącznie mechanicznie**
+(LCS ≥5 słów); (b) przeoczenia literówek i lekkich leaków — stąd etykieta z
+klasyfikacji jest słabsza niż z konstrukcji i wymaga weryfikacji answerability
+judge'em w S3 tak samo jak synteza.
+
+**7.2. Synteza przez mutację, nie wolną generację (`mutate`).** Wadę wstrzykuje
+się **minimalną edycją** `chosen`: „kalorie w bezglutenowej pizzy" →
+„kalorie w pizzy" (`too_general`, usunięte jedno słowo) → „cena bezglutenowej
+pizzy" (`not_answerable`, podmiana jednego słowa). Para różni się wtedy wadą, a
+nie stylem autora — to bezpośrednia, konstrukcyjna obrona przed skrótem „unikaj
+stylu teachera", mocniejsza niż audyt S5 (który zostaje jako kontrola). Przegląd
+15 mutacji: `too_general` i `not_answerable` czyste; `answer_leak` przy formie
+`keyword_query` przeskakuje na pytanie tak/nie — łamie kontrakt formy, więc S2
+musi to łapać regexem, a prompt dostaje wariant frazowy.
+
+**Wynikowa hierarchia populacji negatywów** (zastępuje §2 w roli źródła
+`rejected`; priorytet od najmocniejszej):
+
+1. **organiczne na temat** — z kopalni, klasa z klasyfikacji + weryfikacja;
+2. **syntetyczne mutacyjne** — tam, gdzie kopalnia nie ma danej klasy w grupie;
+   klasa z konstrukcji;
+3. **organiczne `off_topic`** — dotychczasowe bottom/near-miss jako kotwica.
+
+Wolna generacja z v1 wypada z głównej ścieżki (zostaje jako porównanie w
+eksploracji). Metadane każdej pary dostają dodatkowo `negative_population`
+obok `defect_class`.
+
+## 8. Czego ten dokument nie robi
 
 Nie buduje żadnej kohorty, nie zmienia par v3 ani trwających runów ramion, nie
 otwiera zamkniętych kohort v4–v11, nie dotyka zbiorów testowych.
