@@ -1,0 +1,16 @@
+{
+  "adr": "reports/decisions/task06_defect_pair_pipeline_v1.md",
+  "blocked_class_auc": {
+    "answer_leak": 0.8731
+  },
+  "blocked_classes": [
+    "answer_leak"
+  ],
+  "contract": "task06-defect-pairs-trainable-v1",
+  "final_tests_used": [],
+  "pairs_total": 2275,
+  "pairs_trainable": 1794,
+  "schema_version": 1,
+  "task07_training_authorized": false,
+  "threshold_blocking": 0.8
+}

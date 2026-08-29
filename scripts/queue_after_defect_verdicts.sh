@@ -33,8 +33,16 @@ if [ ! -f "$PAIRS_DIR/pairs.jsonl" ]; then
   uv run python scripts/assemble_defect_pairs.py --journal "$VERDICTS" --output-dir "$PAIRS_DIR"
 fi
 
-pairs=$(wc -l < "$PAIRS_DIR/pairs.jsonl")
-echo "[kolejka] par złożonych: $pairs"
+# ADR §7.2: klasa z AUC audytu anty-skrótowego powyżej progu NIE wchodzi do
+# treningu bez amendmentu. Kohortę trenowalną buduje osobny filtr, a pełny
+# zbiór par zostaje nietknięty jako artefakt pomiarowy.
+if [ ! -f "$PAIRS_DIR/pairs_trainable.jsonl" ]; then
+  echo "[kolejka] filtr klas zablokowanych przez audyt ($(date '+%H:%M:%S'))"
+  uv run python scripts/filter_defect_pairs_by_audit.py --pairs-dir "$PAIRS_DIR"
+fi
+
+pairs=$(wc -l < "$PAIRS_DIR/pairs_trainable.jsonl")
+echo "[kolejka] par trenowalnych: $pairs"
 if [ "$pairs" -lt 200 ]; then
   echo "[kolejka] za mało par na sensowny handoff — zatrzymuję się, obejrzyj summary.json" >&2
   exit 0
@@ -43,7 +51,7 @@ fi
 if [ ! -f "$H/packaged/manifest.json" ]; then
   echo "[kolejka] handoff Task 07 ($(date '+%H:%M:%S'))"
   uv run python scripts/build_task07_handoff_v3.py \
-    --pairs "$PAIRS_DIR/pairs.jsonl" --handoff-dir "$H/inputs" --packaged-dir "$H/packaged"
+    --pairs "$PAIRS_DIR/pairs_trainable.jsonl" --handoff-dir "$H/inputs" --packaged-dir "$H/packaged"
 fi
 
 if [ ! -f "$H/token_lengths/token_lengths.manifest.json" ]; then
@@ -85,6 +93,11 @@ if [ ! -f "$PLAN" ]; then
 fi
 
 if [ ! -f "$H/reference_logprobs/run_summary.json" ] && [ -x "$GPU_PY" ]; then
+  # Na 8 GB dwa zadania GPU się nie mieszczą: czekamy, aż zwolni je inna kolejka.
+  while pgrep -f "doc2query.cli (evaluate generator|train dpo)" > /dev/null; do
+    echo "[kolejka] GPU zajęte przez inny run, czekam ($(date '+%H:%M:%S'))"
+    sleep 120
+  done
   echo "[kolejka] precompute logprobów referencji, GPU ($(date '+%H:%M:%S'))"
   PYTHONPATH=scripts:src "$GPU_PY" scripts/precompute_task07_reference_logprobs.py \
     "${dataset_args[@]}" --plan "$PLAN" --output-dir "$H/reference_logprobs"

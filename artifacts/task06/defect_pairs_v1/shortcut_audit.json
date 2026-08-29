@@ -1,0 +1,60 @@
+{
+  "contract": "task06-defect-pairs-shortcut-audit-v1",
+  "final_tests_used": [],
+  "note": "AUC powyżej progu blokuje klasę do czasu amendmentu (ADR §7.2); audyt nie zmienia par.",
+  "overall": {
+    "auc": 0.5923,
+    "features": [
+      "word_count",
+      "char_count",
+      "question_marks",
+      "punctuation",
+      "passage_coverage",
+      "starts_with_question_word"
+    ],
+    "pairs": 2275,
+    "threshold_blocking": 0.8
+  },
+  "per_defect_class": {
+    "answer_leak": {
+      "auc": 0.8731,
+      "features": [
+        "word_count",
+        "char_count",
+        "question_marks",
+        "punctuation",
+        "passage_coverage",
+        "starts_with_question_word"
+      ],
+      "pairs": 481,
+      "threshold_blocking": 0.8
+    },
+    "not_answerable": {
+      "auc": 0.6564,
+      "features": [
+        "word_count",
+        "char_count",
+        "question_marks",
+        "punctuation",
+        "passage_coverage",
+        "starts_with_question_word"
+      ],
+      "pairs": 993,
+      "threshold_blocking": 0.8
+    },
+    "too_general": {
+      "auc": 0.7774,
+      "features": [
+        "word_count",
+        "char_count",
+        "question_marks",
+        "punctuation",
+        "passage_coverage",
+        "starts_with_question_word"
+      ],
+      "pairs": 801,
+      "threshold_blocking": 0.8
+    }
+  },
+  "schema_version": 1
+}

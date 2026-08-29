@@ -1,0 +1,41 @@
+{
+  "adr": "reports/decisions/task06_defect_pair_pipeline_v1.md",
+  "contract": "task06-defect-pairs-v1",
+  "counters": {
+    "group_chosen_not_answerable": 368,
+    "kept_answer_leak": 481,
+    "kept_mined_organic": 1028,
+    "kept_mutated_synthetic": 1247,
+    "kept_not_answerable": 993,
+    "kept_too_general": 801,
+    "reject_answerable_true": 689,
+    "reject_equivalent_to_chosen": 3746,
+    "reject_form_violation": 253,
+    "reject_length": 8,
+    "reject_length_ratio": 18,
+    "reject_no_answerability_verdict": 38,
+    "reject_not_answerable": 29,
+    "reject_not_unanimous": 298,
+    "reject_off_topic": 472,
+    "reject_reclassified_as_copy_phrasing": 81
+  },
+  "final_tests_used": [],
+  "groups_seen": 2730,
+  "groups_with_pairs": 1610,
+  "pairs": 2275,
+  "schema_version": 1,
+  "task07_training_authorized": false,
+  "thresholds": {
+    "entity_anchor_min_length": 5,
+    "equivalence_jaccard": 0.6,
+    "lcs_min": 5,
+    "length_range": [
+      2,
+      24
+    ],
+    "length_ratio": [
+      0.4,
+      2.5
+    ]
+  }
+}
