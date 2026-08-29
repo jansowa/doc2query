@@ -1,0 +1,11 @@
+{
+  "adr": "reports/decisions/task06_defect_pair_pipeline_v1.md",
+  "contract": "task06-defect-pipeline-input-v1",
+  "final_tests_used": [],
+  "groups": 2730,
+  "records": {
+    "path": "groups.jsonl",
+    "sha256": "9122c80a90273bbfe74ef359e7b6c4e17b5411f2bcc9f1d337e2d39c0170d34a"
+  },
+  "schema_version": 1
+}
