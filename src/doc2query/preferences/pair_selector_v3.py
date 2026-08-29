@@ -139,7 +139,9 @@ def http_transport(endpoint: JudgeEndpoint) -> Transport:
     """Minimalny klient OpenAI-compatible; klucz trafia wyłącznie do nagłówka."""
 
     def call(payload: Mapping[str, Any]) -> dict[str, Any]:
-        headers = {"Content-Type": "application/json"}
+        # Jawny User-Agent: Cloudflare przed publicznymi endpointami (np. Groq)
+        # odrzuca domyślną sygnaturę urlliba kodem 1010; lokalnemu vLLM to obojętne.
+        headers = {"Content-Type": "application/json", "User-Agent": "doc2query-judge/1.0"}
         if endpoint.api_key:
             headers["Authorization"] = f"Bearer {endpoint.api_key}"
         request = urllib.request.Request(
