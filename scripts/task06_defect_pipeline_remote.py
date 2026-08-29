@@ -231,7 +231,7 @@ class Journal:
 def make_ask(endpoint: JudgeEndpoint, reasoning_effort: str | None) -> Any:
     transport = http_transport(endpoint)
 
-    def request(system: str, user: str, max_tokens: int) -> dict[str, Any]:
+    def request(system: str, user: str, max_tokens: int, *, guided: bool) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "model": endpoint.model,
             "temperature": 0.0,
@@ -240,8 +240,9 @@ def make_ask(endpoint: JudgeEndpoint, reasoning_effort: str | None) -> Any:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            "response_format": {"type": "json_object"},
         }
+        if guided:
+            payload["response_format"] = {"type": "json_object"}
         if reasoning_effort:
             payload["reasoning_effort"] = reasoning_effort
         else:
@@ -258,25 +259,34 @@ def make_ask(endpoint: JudgeEndpoint, reasoning_effort: str | None) -> Any:
         raise last if last is not None else RuntimeError("transport bez odpowiedzi")
 
     def ask(system: str, user: str) -> dict[str, Any]:
-        """Zapytaj o JSON; odpowiedź bez JSON-a ponawiaj z większym limitem tokenów.
+        """Zapytaj o JSON; przy niesparsowalnej odpowiedzi ponawiaj bez gramatyki.
 
-        Serwer potrafi zwrócić ucięty blok rozumowania — po jego usunięciu nie
-        zostaje nic do sparsowania. To stan przejściowy pojedynczego wywołania,
-        więc ponawiamy z podwojonym budżetem, zamiast wywracać całą grupę.
+        Serwer odpowiada 200 OK, ale część treści bywa pusta albo ucięta.
+        Przyczyna **nie jest rozstrzygnięta** — kandydaci to guided decoding
+        (gramatyka JSON kolidująca z blokiem rozumowania modelu) albo zwykłe
+        wyczerpanie budżetu tokenów. Dlatego ponowienia zmieniają obie rzeczy
+        naraz: druga i trzecia próba idą **bez** `response_format` i z większym
+        limitem, a `errors` zapisuje `finish_reason` i początek treści, żeby log
+        rozstrzygnął, który mechanizm zawinił.
         """
         errors: list[str] = []
         for attempt in range(3):
             max_tokens = endpoint.max_completion_tokens * (2**attempt)
-            response = request(system, user, max_tokens)
+            response = request(system, user, max_tokens, guided=attempt == 0)
+            choice = (response.get("choices") or [{}])[0]
+            finish = str(choice.get("finish_reason", "?"))
             try:
-                content = str(response["choices"][0]["message"]["content"])
-            except (KeyError, IndexError, TypeError) as error:
-                errors.append(f"odpowiedź bez treści: {error}")
+                content = str(choice["message"]["content"])
+            except (KeyError, TypeError) as error:
+                errors.append(f"odpowiedź bez treści ({finish}): {error}")
                 continue
             try:
                 parsed = json.loads(_last_json_object(strip_reasoning(content)))
             except (ValueError, json.JSONDecodeError) as error:
-                errors.append(f"{type(error).__name__}: {error} (limit {max_tokens})")
+                errors.append(
+                    f"{type(error).__name__} (finish={finish}, limit={max_tokens}, "
+                    f"guided={attempt == 0}, treść={content[:120]!r}): {error}"
+                )
                 continue
             if isinstance(parsed, dict):
                 return parsed
