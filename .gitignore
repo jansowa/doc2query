@@ -176,6 +176,9 @@ htmlcov/
 /reports/measurements/task07/pair_contrast_v1/*
 !/reports/measurements/task07/pair_contrast_v1/bottom.json
 !/reports/measurements/task07/pair_contrast_v1/near_miss.json
+!/reports/measurements/task07/lemma_overlap_v1/
+/reports/measurements/task07/lemma_overlap_v1/*
+!/reports/measurements/task07/lemma_overlap_v1/bottom_sample300.json
 !/reports/measurements/task04/shadow_collapse_detector_v1/
 /reports/measurements/task04/shadow_collapse_detector_v1/*
 !/reports/measurements/task04/shadow_collapse_detector_v1/summary.json

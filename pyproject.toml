@@ -55,7 +55,10 @@ retrieval = [
   "ranx>=0.3.20,<1",
   "sentence-transformers>=3.3,<6",
 ]
-nlp = ["spacy>=3.8,<4"]
+nlp = [
+    "spacy>=3.8,<4",
+    "stanza>=1.14.0",
+]
 evaluation = [
   "sacrebleu>=2.5,<3",
   "scipy>=1.14,<2",

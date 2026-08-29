@@ -1,0 +1,46 @@
+{
+  "chosen": {
+    "histogram": {
+      "[0.0;0.25)": 0.03,
+      "[0.25;0.5)": 0.12,
+      "[0.5;0.75)": 0.42,
+      "[0.75;1)": 0.43
+    },
+    "mean": 0.6813,
+    "median": 0.6667
+  },
+  "content_upos": [
+    "ADJ",
+    "ADV",
+    "NOUN",
+    "NUM",
+    "PROPN",
+    "VERB",
+    "X"
+  ],
+  "contract": "task07-lemma-overlap-diagnostic-v1",
+  "final_tests_used": [],
+  "lemmatizer": "stanza-pl",
+  "lexical_trap_natural_supply": {
+    "count": 4,
+    "definition": "chosen<=0.5 i rejected>=0.75 (progi robocze, nie zamrożone)",
+    "share": 0.0133
+  },
+  "pairs": 300,
+  "pairs_modified": 0,
+  "rejected": {
+    "histogram": {
+      "[0.0;0.25)": 0.3333,
+      "[0.25;0.5)": 0.3567,
+      "[0.5;0.75)": 0.24,
+      "[0.75;1)": 0.07
+    },
+    "mean": 0.3387,
+    "median": 0.3333
+  },
+  "schema_version": 1,
+  "sources": [
+    "artifacts/task07/handoff_v3_bottom/packaged/preference_train.jsonl",
+    "artifacts/task07/handoff_v3_bottom/packaged/preference_dev.jsonl"
+  ]
+}

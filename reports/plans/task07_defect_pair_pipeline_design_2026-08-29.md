@@ -153,7 +153,50 @@ Wolna generacja z v1 wypada z głównej ścieżki (zostaje jako porównanie w
 eksploracji). Metadane każdej pary dostają dodatkowo `negative_population`
 obok `defect_class`.
 
-## 8. Czego ten dokument nie robi
+## 8. Klasa pary `lexical_contrast` (propozycja właściciela, 2026-08-29)
+
+Dotychczasowe klasy opisują wadę strony `rejected`. Właściciel zaproponował
+klasę definiowaną na poziomie **całej pary**, celującą w skrót keywordowy:
+
+- `chosen`: pasaż **odpowiada** na zapytanie, a wspólnych słów z pasażem jest
+  **możliwie mało** (parafraza zamiast kopii słownictwa);
+- `rejected`: zapytanie **pełne keywordów** z pasażu, na które pasaż **nie
+  odpowiada**.
+
+Taka para uczy wprost „dopasowanie leksykalne ≠ odpowiedź" — sygnał, którego
+klasy wad same nie gwarantują (mutacja `not_answerable` nie pilnuje, by chosen
+był parafrazą). Docelowy konsument syntetycznych zapytań to embedder, więc
+zapytania odpowiadalne bez kopiowania słownictwa są dokładnie tym, czego
+naturalne dane mają za mało.
+
+**Pomiar na lematach, nie na powierzchni.** Zgodnie z rekomendacją właściciela
+pokrycie liczy się na tekstach zlematyzowanych (stanza pl, dodane jako grupa
+zależności `nlp`), po odrzuceniu stopwordów — jako content words biorę UPOS
+NOUN/PROPN/VERB/ADJ/ADV/NUM. Miara powierzchniowa z §4 zaniża pokrycie przez
+fleksję, więc progi zamrażane w ADR muszą pochodzić z rozkładu lematycznego
+(`scripts/measure_task07_lemma_overlap.py`,
+`reports/measurements/task07/lemma_overlap_v1/`).
+
+**Pozyskiwanie obu stron, spójne z hierarchią z §7:**
+
+1. `rejected`: z kopalni — kandydat `not_answerable` o **maksymalnym** pokryciu
+   lematycznym; gdy grupa nie ma takiego, mutacja `not_answerable` z dodatkowym
+   warunkiem utrzymania keywordów pasażu.
+2. `chosen`: spośród kandydatów studenckich zweryfikowanych jako `ok` +
+   answerability TAK — ten o **minimalnym** pokryciu lematycznym, potwierdzony
+   w S4 jako lepszy od `rejected`. To odstępstwo od reguły „chosen = zwycięzca
+   turnieju v3": zwycięzca optymalizował całościową jakość, nie parafrazę.
+   Chosen pozostaje organiczny (tekst studenta); ADR musi tę regułę selekcji
+   zamrozić jawnie jako właściwość tej klasy pary.
+3. Gdy żaden kandydat `ok` nie schodzi poniżej progu pokrycia — grupa nie
+   wystawia pary tej klasy (fail-closed, bez parafraz teachera po stronie
+   chosen; §6.4 obowiązuje bez wyjątku).
+
+Metadane pary: `pair_class=lexical_contrast`, pokrycia lematyczne obu stron,
+wersja lematyzera. Progi (górny dla chosen, dolny dla rejected) zamraża ADR na
+podstawie rozkładu z pomiaru — przed budową kohorty.
+
+## 9. Czego ten dokument nie robi
 
 Nie buduje żadnej kohorty, nie zmienia par v3 ani trwających runów ramion, nie
 otwiera zamkniętych kohort v4–v11, nie dotyka zbiorów testowych.

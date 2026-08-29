@@ -66,6 +66,7 @@ dataset_args=(
 
 if [ ! -f "$PLAN" ]; then
   echo "[kolejka] plan ($(date '+%H:%M:%S'))"
+  mkdir -p "$H/plan"
   uv run python scripts/plan_dpo_controls.py "${dataset_args[@]}" \
     --config "$PLAN_CFG" \
     --token-length-manifest "$H/token_lengths/token_lengths.manifest.json" \
