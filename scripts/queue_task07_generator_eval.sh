@@ -17,6 +17,35 @@ SUBSET="dev_intrinsic_rank10"
 GPU_PY=".venv-gpu/bin/python"
 OUT="runs/task07_generator_eval_v1"
 
+# --- odporność na jednorazowe potknięcia -------------------------------------
+# `set -e` sam z siebie zabija kolejkę przy pierwszym błędzie, a przy runie bez
+# nadzoru to znaczy: jedno chwilowe OOM i przez dobę nic się nie policzy.
+# `retry` ponawia etap z rosnącą przerwą, `stage` idzie dalej mimo trwałej
+# porażki — kolejne etapy i tak sprawdzają swoje wejścia, a wznowienie
+# dokończy resztę.
+FAILED_STAGES=""
+
+retry() {
+  local label="$1" attempts="${2:-3}"
+  shift 2
+  local attempt=1
+  until "$@"; do
+    if [ "$attempt" -ge "$attempts" ]; then
+      echo "[kolejka] $label: $attempts prób bez powodzenia, idę dalej" >&2
+      FAILED_STAGES="$FAILED_STAGES $label"
+      return 1
+    fi
+    echo "[kolejka] $label: próba $attempt padła, ponawiam za $((attempt * 120)) s" >&2
+    sleep $((attempt * 120))
+    attempt=$((attempt + 1))
+  done
+  return 0
+}
+
+stage() {
+  retry "$@" || true
+}
+
 for path in "$CONFIG" "$MANIFEST" "$GPU_PY"; do
   [ -e "$path" ] || { echo "brak wymaganego wejścia: $path" >&2; exit 2; }
 done
@@ -38,9 +67,13 @@ for name in start bottom_dpo bottom_csft bottom_wsft nearmiss_dpo nearmiss_csft 
     echo "[eval] $name gotowe, pomijam"
     continue
   fi
-  [ -d "$adapter" ] || { echo "[eval] brak adaptera $adapter" >&2; exit 2; }
+  if [ ! -d "$adapter" ]; then
+    echo "[eval] brak adaptera $adapter — pomijam punkt" >&2
+    FAILED_STAGES="$FAILED_STAGES $name(brak-adaptera)"
+    continue
+  fi
   echo "[eval] $name start ($(date '+%H:%M:%S'))"
-  PYTHONPATH=src "$GPU_PY" -m doc2query.cli evaluate generator \
+  stage "$name" 3 env PYTHONPATH=src "$GPU_PY" -m doc2query.cli evaluate generator \
     --config "$CONFIG" \
     --frozen-manifest "$MANIFEST" \
     --subset "$SUBSET" \
@@ -49,4 +82,7 @@ for name in start bottom_dpo bottom_csft bottom_wsft nearmiss_dpo nearmiss_csft 
   echo "[eval] $name koniec ($(date '+%H:%M:%S'))"
 done
 
-echo "[eval] wszystkie punkty policzone"
+if [ -n "$FAILED_STAGES" ]; then
+  echo "[eval] punkty nieudane:$FAILED_STAGES — ponowne uruchomienie je dokończy" >&2
+fi
+echo "[eval] przebieg zakończony"

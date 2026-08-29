@@ -24,13 +24,43 @@ PLAN_CFG="configs/train/task07_dpo_plan_defect_v1.yaml"
 PLAN="$H/plan/dpo_plan.json"
 GPU_PY=".venv-gpu/bin/python"
 
+# --- odporność na jednorazowe potknięcia -------------------------------------
+# `set -e` sam z siebie zabija kolejkę przy pierwszym błędzie, a przy runie bez
+# nadzoru to znaczy: jedno chwilowe OOM i przez dobę nic się nie policzy.
+# `retry` ponawia etap z rosnącą przerwą, `stage` idzie dalej mimo trwałej
+# porażki — kolejne etapy i tak sprawdzają swoje wejścia, a wznowienie
+# dokończy resztę.
+FAILED_STAGES=""
+
+retry() {
+  local label="$1" attempts="${2:-3}"
+  shift 2
+  local attempt=1
+  until "$@"; do
+    if [ "$attempt" -ge "$attempts" ]; then
+      echo "[kolejka] $label: $attempts prób bez powodzenia, idę dalej" >&2
+      FAILED_STAGES="$FAILED_STAGES $label"
+      return 1
+    fi
+    echo "[kolejka] $label: próba $attempt padła, ponawiam za $((attempt * 120)) s" >&2
+    sleep $((attempt * 120))
+    attempt=$((attempt + 1))
+  done
+  return 0
+}
+
+stage() {
+  retry "$@" || true
+}
+
 echo "[kolejka] czekam na $VERDICTS ($(date '+%H:%M:%S'))"
 until [ -f "$VERDICTS" ]; do sleep 60; done
 echo "[kolejka] verdicty są: $(wc -l < "$VERDICTS") wpisów"
 
 if [ ! -f "$PAIRS_DIR/pairs.jsonl" ]; then
   echo "[kolejka] składanie par + audyt anty-skrótowy ($(date '+%H:%M:%S'))"
-  uv run python scripts/assemble_defect_pairs.py --journal "$VERDICTS" --output-dir "$PAIRS_DIR"
+  stage skladanie 2 uv run python scripts/assemble_defect_pairs.py \
+    --journal "$VERDICTS" --output-dir "$PAIRS_DIR"
 fi
 
 # ADR §7.2: klasa z AUC audytu anty-skrótowego powyżej progu NIE wchodzi do
@@ -38,7 +68,7 @@ fi
 # zbiór par zostaje nietknięty jako artefakt pomiarowy.
 if [ ! -f "$PAIRS_DIR/pairs_trainable.jsonl" ]; then
   echo "[kolejka] filtr klas zablokowanych przez audyt ($(date '+%H:%M:%S'))"
-  uv run python scripts/filter_defect_pairs_by_audit.py --pairs-dir "$PAIRS_DIR"
+  stage filtr 2 uv run python scripts/filter_defect_pairs_by_audit.py --pairs-dir "$PAIRS_DIR"
 fi
 
 pairs=$(wc -l < "$PAIRS_DIR/pairs_trainable.jsonl")
@@ -50,13 +80,13 @@ fi
 
 if [ ! -f "$H/packaged/manifest.json" ]; then
   echo "[kolejka] handoff Task 07 ($(date '+%H:%M:%S'))"
-  uv run python scripts/build_task07_handoff_v3.py \
+  stage handoff 2 uv run python scripts/build_task07_handoff_v3.py \
     --pairs "$PAIRS_DIR/pairs_trainable.jsonl" --handoff-dir "$H/inputs" --packaged-dir "$H/packaged"
 fi
 
 if [ ! -f "$H/token_lengths/token_lengths.manifest.json" ]; then
   echo "[kolejka] długości tokenów ($(date '+%H:%M:%S'))"
-  uv run python scripts/measure_task07_token_lengths.py \
+  stage token_lengths 2 uv run python scripts/measure_task07_token_lengths.py \
     --preference-train "$H/inputs/preference_train.jsonl" \
     --preference-dev "$H/inputs/preference_dev.jsonl" \
     --packaged-dir "$H/packaged" --output-dir "$H/token_lengths"
@@ -64,7 +94,7 @@ fi
 
 if [ ! -f "$PLAN_CFG" ]; then
   echo "[kolejka] config planu ($(date '+%H:%M:%S'))"
-  uv run python scripts/build_task07_dpo_plan_config.py \
+  stage plan_config 2 uv run python scripts/build_task07_dpo_plan_config.py \
     --plan-id task07-dpo-plan-defect-v1-s42 \
     --token-length-manifest "$H/token_lengths/token_lengths.manifest.json" \
     --token-length-records "$H/token_lengths/token_lengths.jsonl" \
@@ -85,7 +115,7 @@ dataset_args=(
 if [ ! -f "$PLAN" ]; then
   echo "[kolejka] plan ($(date '+%H:%M:%S'))"
   mkdir -p "$H/plan"
-  uv run python scripts/plan_dpo_controls.py "${dataset_args[@]}" \
+  stage plan 2 uv run python scripts/plan_dpo_controls.py "${dataset_args[@]}" \
     --config "$PLAN_CFG" \
     --token-length-manifest "$H/token_lengths/token_lengths.manifest.json" \
     --token-length-records "$H/token_lengths/token_lengths.jsonl" \
@@ -94,12 +124,19 @@ fi
 
 if [ ! -f "$H/reference_logprobs/run_summary.json" ] && [ -x "$GPU_PY" ]; then
   # Na 8 GB dwa zadania GPU się nie mieszczą: czekamy, aż zwolni je inna kolejka.
+  waited=0
   while pgrep -f "doc2query.cli (evaluate generator|train dpo)" > /dev/null; do
+    if [ "$waited" -ge 21600 ]; then
+      echo "[kolejka] GPU zajęte od 6 h — próbuję mimo to ($(date '+%H:%M:%S'))" >&2
+      break
+    fi
     echo "[kolejka] GPU zajęte przez inny run, czekam ($(date '+%H:%M:%S'))"
     sleep 120
+    waited=$((waited + 120))
   done
   echo "[kolejka] precompute logprobów referencji, GPU ($(date '+%H:%M:%S'))"
-  PYTHONPATH=scripts:src "$GPU_PY" scripts/precompute_task07_reference_logprobs.py \
+  stage precompute 4 env PYTHONPATH=scripts:src "$GPU_PY" \
+    scripts/precompute_task07_reference_logprobs.py \
     "${dataset_args[@]}" --plan "$PLAN" --output-dir "$H/reference_logprobs"
 fi
 
