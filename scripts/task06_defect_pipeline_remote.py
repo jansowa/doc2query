@@ -231,11 +231,11 @@ class Journal:
 def make_ask(endpoint: JudgeEndpoint, reasoning_effort: str | None) -> Any:
     transport = http_transport(endpoint)
 
-    def ask(system: str, user: str) -> dict[str, Any]:
+    def request(system: str, user: str, max_tokens: int) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "model": endpoint.model,
             "temperature": 0.0,
-            "max_completion_tokens": endpoint.max_completion_tokens,
+            "max_completion_tokens": max_tokens,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
@@ -249,20 +249,39 @@ def make_ask(endpoint: JudgeEndpoint, reasoning_effort: str | None) -> Any:
         last: JudgeApiError | None = None
         for attempt in range(6):
             try:
-                response = payload_call(transport, payload)
-                break
+                return payload_call(transport, payload)
             except JudgeApiError as error:
                 if not error.retryable:
                     raise
                 last = error
                 time.sleep(min(60.0, 3.0 * 2**attempt))
-        else:
-            raise last if last is not None else RuntimeError("transport bez odpowiedzi")
-        content = str(response["choices"][0]["message"]["content"])
-        parsed = json.loads(_last_json_object(strip_reasoning(content)))
-        if not isinstance(parsed, dict):
-            raise ValueError(f"oczekiwano obiektu JSON, dostałem {type(parsed)}")
-        return parsed
+        raise last if last is not None else RuntimeError("transport bez odpowiedzi")
+
+    def ask(system: str, user: str) -> dict[str, Any]:
+        """Zapytaj o JSON; odpowiedź bez JSON-a ponawiaj z większym limitem tokenów.
+
+        Serwer potrafi zwrócić ucięty blok rozumowania — po jego usunięciu nie
+        zostaje nic do sparsowania. To stan przejściowy pojedynczego wywołania,
+        więc ponawiamy z podwojonym budżetem, zamiast wywracać całą grupę.
+        """
+        errors: list[str] = []
+        for attempt in range(3):
+            max_tokens = endpoint.max_completion_tokens * (2**attempt)
+            response = request(system, user, max_tokens)
+            try:
+                content = str(response["choices"][0]["message"]["content"])
+            except (KeyError, IndexError, TypeError) as error:
+                errors.append(f"odpowiedź bez treści: {error}")
+                continue
+            try:
+                parsed = json.loads(_last_json_object(strip_reasoning(content)))
+            except (ValueError, json.JSONDecodeError) as error:
+                errors.append(f"{type(error).__name__}: {error} (limit {max_tokens})")
+                continue
+            if isinstance(parsed, dict):
+                return parsed
+            errors.append(f"oczekiwano obiektu JSON, dostałem {type(parsed)}")
+        raise ValueError("; ".join(errors))
 
     return ask
 
@@ -304,14 +323,32 @@ def process_group(group: dict[str, Any], journal: Journal, ask: Any) -> dict[str
     passage = str(group["passage"])
     chosen = str(group["chosen"]["query"])
     form = str(group["form"])
-    stats = {"group_id": gid, "calls": 0, "kept": 0, "dropped_cheap": 0}
+    stats: dict[str, Any] = {
+        "group_id": gid,
+        "calls": 0,
+        "kept": 0,
+        "dropped_cheap": 0,
+        "failed_calls": 0,
+    }
 
-    def cached(key: str, factory: Any) -> dict[str, Any]:
+    def cached(key: str, factory: Any) -> dict[str, Any] | None:
+        """Zwróć werdykt z journala albo policz; `None` = to jedno wywołanie padło.
+
+        Nieudane wywołanie NIE trafia do journala i NIE przerywa grupy: reszta
+        etapów liczy się dalej, a grupa nie dostaje statusu `done`, więc przy
+        następnym uruchomieniu zostanie dokończona (policzone werdykty są już
+        w journalu, więc powtórka jest tania).
+        """
         row = journal.get(key)
         if row is not None:
             return row
-        result = factory()
-        stats["calls"] += 1
+        try:
+            result = factory()
+        except (ValueError, JudgeApiError, json.JSONDecodeError) as error:
+            stats["failed_calls"] = int(stats["failed_calls"]) + 1
+            print(f"[pipeline] {key}: {type(error).__name__}: {error}", flush=True)
+            return None
+        stats["calls"] = int(stats["calls"]) + 1
         journal.put(key, result)
         return result
 
@@ -320,6 +357,8 @@ def process_group(group: dict[str, Any], journal: Journal, ask: Any) -> dict[str
         f"{gid}::answerable::chosen",
         lambda: {"verdict": ask(SYSTEM, ANSWERABLE_TEMPLATE.format(passage=passage, query=chosen))},
     )
+    if chosen_row is None:
+        return stats
     if not bool(chosen_row["verdict"].get("answerable")):
         journal.put(f"{gid}::group_status", {"status": "chosen_not_answerable"})
         return stats
@@ -338,6 +377,8 @@ def process_group(group: dict[str, Any], journal: Journal, ask: Any) -> dict[str
                 "verdict": ask(SYSTEM, CLASSIFY_TEMPLATE.format(passage=passage, query=query))
             },
         )
+        if row is None:
+            continue
         label = str(row["verdict"].get("class", ""))
         if label in LLM_CLASSES:
             organic_by_class.setdefault(label, []).append({**candidate, "cheap_reject": reason})
@@ -366,6 +407,8 @@ def process_group(group: dict[str, Any], journal: Journal, ask: Any) -> dict[str
                 )
             },
         )
+        if row is None:
+            continue
         query = str(row["verdict"].get("query", "")).strip()
         if not query or cheap_reject(query, chosen, form) is not None:
             stats["dropped_cheap"] += 1
@@ -402,12 +445,16 @@ def process_group(group: dict[str, Any], journal: Journal, ask: Any) -> dict[str
             # Kandydat na stronę chosen lexical_contrast; preferencję policzy
             # lokalne składanie, tu wystarcza answerability.
             continue
-        cached(
-            f"{gid}::confirm::{cid}",
-            lambda query=query: confirm_preference(ask, passage, chosen, query),
-        )
-        stats["kept"] += 1
-    journal.put(f"{gid}::group_status", {"status": "done", **stats})
+        if (
+            cached(
+                f"{gid}::confirm::{cid}",
+                lambda query=query: confirm_preference(ask, passage, chosen, query),
+            )
+            is not None
+        ):
+            stats["kept"] = int(stats["kept"]) + 1
+    if int(stats["failed_calls"]) == 0:
+        journal.put(f"{gid}::group_status", {"status": "done", **stats})
     return stats
 
 
