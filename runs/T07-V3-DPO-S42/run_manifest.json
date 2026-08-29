@@ -1,0 +1,59 @@
+{
+  "adapter": {
+    "fingerprint": "70060bd7a7a161904bc4390f5801e57de1b679ff03164ada96a2445134df0798",
+    "path": "adapter"
+  },
+  "arm": "dpo",
+  "artifact_fingerprint": "13f649a235684071e75a1dd6682bef32249f8268adc8f847639d0eb2c9572449",
+  "authorization_decision": "reports/decisions/task07_training_authorization_2026-08-28.md",
+  "batch_size": 1,
+  "beta": 0.1,
+  "cohort_fingerprint": "1e7e2445087ebae5e3b5e50dfb90cc382a9fe573f9ef75c5a0eeb9a76157a8dc",
+  "completed_optimizer_steps": 154,
+  "contract": "task07-dpo-run-v1",
+  "dataset_fingerprint": "6eaf53f109875e251c2e8cea4b6e00f2482368ef75a433fe9e1777a883f25cc9",
+  "dev": {
+    "end": {
+      "examples": 269,
+      "implicit_reward_accuracy": 0.9516728624535316,
+      "mean_chosen_logprob": -12.832364890807513,
+      "mean_chosen_nll_per_token": 1.4708784196916747,
+      "mean_implicit_reward_margin": 2.473447789452611,
+      "mean_policy_margin": 45.328742918762686,
+      "policy_margin_accuracy": 0.9851301115241635
+    },
+    "start": {
+      "examples": 269,
+      "implicit_reward_accuracy": 0.0,
+      "mean_chosen_logprob": -5.729002239757311,
+      "mean_chosen_nll_per_token": 0.60561773772792,
+      "mean_implicit_reward_margin": 0.0,
+      "mean_policy_margin": 20.594265024236588,
+      "policy_margin_accuracy": 0.9368029739776952
+    }
+  },
+  "epochs_started": 1,
+  "final_tests_used": [],
+  "gradient_accumulation_steps": 16,
+  "history": {
+    "path": "history.jsonl",
+    "record_count": 154,
+    "sha256": "4f27a999b7470f8435d07c9d909fc24fe6f63d89e96ad66ff16365f5060db837"
+  },
+  "learning_rate": 1e-05,
+  "loss_type": "sigmoid",
+  "max_length": 768,
+  "peak_vram_bytes": 4210673152,
+  "plan_fingerprint": "b1ab25b7071624cf60fb6ea1facd99a0e1eb207598fd35aa591b5c82e2e55c42",
+  "plan_id": "task07-dpo-plan-v3-bottom-s42",
+  "resumed_from_step": 0,
+  "seconds_total": 3492.9,
+  "seed": 42,
+  "target_optimizer_steps": 154,
+  "target_token_budget": 1087057,
+  "task07_training_authorized": true,
+  "tokens_consumed": 1091979,
+  "train_example_count": 2461,
+  "training_started": true,
+  "weight_policy_id": null
+}

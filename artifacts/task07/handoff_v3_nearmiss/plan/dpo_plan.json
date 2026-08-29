@@ -1,0 +1,110 @@
+{
+  "arms": {
+    "continued_sft": {
+      "arm": "continued_sft",
+      "cohort_fingerprint": "ec3ed3a919524d15fa7192b0acb3c38078916f3d0cf39a3a8456e7ba038a22f8",
+      "dpo_pair_tokens_per_cohort": null,
+      "prompt_chosen_tokens_per_cohort": 484121,
+      "seeds": [
+        42
+      ],
+      "target_optimizer_steps": 138,
+      "target_token_budget": 968337,
+      "train_example_count": 2198,
+      "weight_policy_fingerprint": null,
+      "weight_policy_id": null
+    },
+    "dpo": {
+      "arm": "dpo",
+      "cohort_fingerprint": "ec3ed3a919524d15fa7192b0acb3c38078916f3d0cf39a3a8456e7ba038a22f8",
+      "dpo_pair_tokens_per_cohort": 968337,
+      "prompt_chosen_tokens_per_cohort": 484121,
+      "seeds": [
+        42
+      ],
+      "target_optimizer_steps": 138,
+      "target_token_budget": 968337,
+      "train_example_count": 2198,
+      "weight_policy_fingerprint": null,
+      "weight_policy_id": null
+    },
+    "score_weighted_continued_sft": {
+      "arm": "score_weighted_continued_sft",
+      "cohort_fingerprint": "ec3ed3a919524d15fa7192b0acb3c38078916f3d0cf39a3a8456e7ba038a22f8",
+      "dpo_pair_tokens_per_cohort": null,
+      "prompt_chosen_tokens_per_cohort": 484121,
+      "seeds": [
+        42
+      ],
+      "target_optimizer_steps": 138,
+      "target_token_budget": 968337,
+      "train_example_count": 2198,
+      "weight_policy_fingerprint": "95b7d6997102149f117085ea282dbddea2eaebac5529b60cbb5582ad84c7ae70",
+      "weight_policy_id": "task07-chosen-primary-margin-percentile-v1"
+    }
+  },
+  "beta": 0.1,
+  "cohort_fingerprint": "ec3ed3a919524d15fa7192b0acb3c38078916f3d0cf39a3a8456e7ba038a22f8",
+  "contract": "task07-dpo-plan-v1",
+  "dataset_fingerprint": "1a4f6b71658e2d2a0a6260aaced414bab697fbf9b11b1616dc425bd6a90b46ec",
+  "final_tests_used": [],
+  "input_hashes": {
+    "config": "df4052e23ed8d5537700154e95b1631860fbc8260659e101f108922e58358ddf",
+    "continued_sft_dev": "435338872eeb84e8ee9198fe9bf1fb6426657683068fe894cde2c750d0dcbfa2",
+    "continued_sft_train": "f0abef049079849363820075099db3a2f55e255769a0f4937eda9a7a6f87a508",
+    "preference_dev": "c2e9d0c80087be610e47e50a5af5e6016116cf3eec5af795527d97cf656aad5e",
+    "preference_train": "ba2f9da77d968a0a3873e376a732d357305381393637bec6d4560ac6a7203dcf",
+    "task06_manifest": "efa1fe6f640180c889c8d6893f96038353112acab6551690a5d3de8400b9d3c4",
+    "token_length_manifest": "e889da8775702c30f9c6c2eeb857b129059a3545c97217dbe864f217dd5f932b",
+    "token_length_records": "a8f49e8bf7245bd3f1cb71a931162518fb775582f471380e11327bdba196f11b",
+    "weighted_sft_dev": "13c06c866a152a8f2e5079064c679d2f09df44904ea86b8e82c952c9988fdf62",
+    "weighted_sft_train": "ad79c4ee4eabe244d082f83a902c41d459d88cd1360d7c8c8a3a70c01303f1bc"
+  },
+  "learning_rate": 1e-05,
+  "loss_type": "sigmoid",
+  "max_length": 768,
+  "max_prompt_length": 704,
+  "model_loading_performed": false,
+  "plan_fingerprint": "5515a56fde0814cbd3095757a439e7be5f86a225a1c6a81fb22d8aae0cb3f597",
+  "plan_id": "task07-dpo-plan-v3-nearmiss-s42",
+  "reference_logprobs_computed": false,
+  "reference_model": {
+    "base_model": {
+      "artifact_fingerprint": "8de58e412bb4393f86ef9eafaf0aa96363d26490c22e1f65174f216799dbf84a",
+      "model_id": "speakleash/Bielik-4.5B-v3.0-Instruct",
+      "revision": "4b1220a9d745bdd874c44347075ef25484ef322b"
+    },
+    "sft_adapter": {
+      "adapter_fingerprint": "da862dd31af9cb7ca817c85fba43ecc86e298f211870645fdc9f5034163d2df5",
+      "adapter_id": "D01-4.5B-STYLE-50K-S42",
+      "adapter_revision": "runs/D01-4.5B-STYLE-50K-S42/adapter",
+      "base_model_fingerprint": "8de58e412bb4393f86ef9eafaf0aa96363d26490c22e1f65174f216799dbf84a"
+    },
+    "tokenizer": {
+      "revision": "4b1220a9d745bdd874c44347075ef25484ef322b",
+      "tokenizer_fingerprint": "e7be77fbc82690d74ad81e43ed2d05a854a32161a340190b66122db112b8911e",
+      "tokenizer_id": "speakleash/Bielik-4.5B-v3.0-Instruct"
+    }
+  },
+  "start_model": {
+    "base_model": {
+      "artifact_fingerprint": "8de58e412bb4393f86ef9eafaf0aa96363d26490c22e1f65174f216799dbf84a",
+      "model_id": "speakleash/Bielik-4.5B-v3.0-Instruct",
+      "revision": "4b1220a9d745bdd874c44347075ef25484ef322b"
+    },
+    "sft_adapter": {
+      "adapter_fingerprint": "da862dd31af9cb7ca817c85fba43ecc86e298f211870645fdc9f5034163d2df5",
+      "adapter_id": "D01-4.5B-STYLE-50K-S42",
+      "adapter_revision": "runs/D01-4.5B-STYLE-50K-S42/adapter",
+      "base_model_fingerprint": "8de58e412bb4393f86ef9eafaf0aa96363d26490c22e1f65174f216799dbf84a"
+    },
+    "tokenizer": {
+      "revision": "4b1220a9d745bdd874c44347075ef25484ef322b",
+      "tokenizer_fingerprint": "e7be77fbc82690d74ad81e43ed2d05a854a32161a340190b66122db112b8911e",
+      "tokenizer_id": "speakleash/Bielik-4.5B-v3.0-Instruct"
+    }
+  },
+  "status": "planned_not_trained",
+  "token_length_artifact_fingerprint": "fcf34ad911d34fc1cd290d886a7d67dc5fa765c6a1b98b9d25cbfd7cfb4c27f1",
+  "training_started": false
+}

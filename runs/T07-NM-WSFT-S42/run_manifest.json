@@ -1,0 +1,52 @@
+{
+  "adapter": {
+    "fingerprint": "f3ce3d65c99984b005ef3427163c8437becafa10ac16b37a30a05470b0054a30",
+    "path": "adapter"
+  },
+  "arm": "score_weighted_continued_sft",
+  "artifact_fingerprint": "902db23e18dfc3fb20997e83fc6554d1f37e08c4f0c527aeefd491171556395d",
+  "authorization_decision": "reports/decisions/task07_training_authorization_2026-08-28.md",
+  "batch_size": 1,
+  "beta": 0.1,
+  "cohort_fingerprint": "ec3ed3a919524d15fa7192b0acb3c38078916f3d0cf39a3a8456e7ba038a22f8",
+  "completed_optimizer_steps": 138,
+  "contract": "task07-dpo-run-v1",
+  "dataset_fingerprint": "1a4f6b71658e2d2a0a6260aaced414bab697fbf9b11b1616dc425bd6a90b46ec",
+  "dev": {
+    "end": {
+      "examples": 230,
+      "mean_chosen_logprob": -4.961498696778132,
+      "mean_chosen_nll_per_token": 0.5241503951494686
+    },
+    "start": {
+      "examples": 230,
+      "mean_chosen_logprob": -5.75387914362161,
+      "mean_chosen_nll_per_token": 0.6083911626439864
+    }
+  },
+  "epochs_started": 1,
+  "final_tests_used": [],
+  "gradient_accumulation_steps": 16,
+  "history": {
+    "path": "history.jsonl",
+    "record_count": 138,
+    "sha256": "587ee3f0b95080b710fc66579619beabe7461240996745ad98d3711dcba02af7",
+    "steps_this_process": 138
+  },
+  "learning_rate": 1e-05,
+  "loss_type": "sigmoid",
+  "max_length": 768,
+  "peak_vram_bytes": 3865308160,
+  "plan_fingerprint": "5515a56fde0814cbd3095757a439e7be5f86a225a1c6a81fb22d8aae0cb3f597",
+  "plan_id": "task07-dpo-plan-v3-nearmiss-s42",
+  "resumed_from_step": 0,
+  "seconds_total": 1525.1,
+  "seed": 42,
+  "target_optimizer_steps": 138,
+  "target_token_budget": 968337,
+  "task07_training_authorized": true,
+  "tokens_consumed": 486319,
+  "train_example_count": 2198,
+  "training_started": true,
+  "weight_policy_id": "task07-chosen-primary-margin-percentile-v1"
+}

@@ -1,0 +1,32 @@
+{
+  "artifact_fingerprint": "207960ab11f218def953367289039b14357fd635f0b5a00cf6f7ab00f0193149",
+  "contract": "task07-precomputed-reference-logprobs-v1",
+  "dataset_fingerprint": "1a4f6b71658e2d2a0a6260aaced414bab697fbf9b11b1616dc425bd6a90b46ec",
+  "final_tests_used": [],
+  "ordered_preference_ids_fingerprint": "ec3ed3a919524d15fa7192b0acb3c38078916f3d0cf39a3a8456e7ba038a22f8",
+  "plan_fingerprint": "5515a56fde0814cbd3095757a439e7be5f86a225a1c6a81fb22d8aae0cb3f597",
+  "records": {
+    "path": "reference_logprobs.jsonl",
+    "record_count": 2198,
+    "sha256": "05e9efe2ef8a27882b63f2d3239441595eb9a7f82a257b393d8963b2a4237c51"
+  },
+  "reference_model": {
+    "base_model": {
+      "artifact_fingerprint": "8de58e412bb4393f86ef9eafaf0aa96363d26490c22e1f65174f216799dbf84a",
+      "model_id": "speakleash/Bielik-4.5B-v3.0-Instruct",
+      "revision": "4b1220a9d745bdd874c44347075ef25484ef322b"
+    },
+    "sft_adapter": {
+      "adapter_fingerprint": "da862dd31af9cb7ca817c85fba43ecc86e298f211870645fdc9f5034163d2df5",
+      "adapter_id": "D01-4.5B-STYLE-50K-S42",
+      "adapter_revision": "runs/D01-4.5B-STYLE-50K-S42/adapter",
+      "base_model_fingerprint": "8de58e412bb4393f86ef9eafaf0aa96363d26490c22e1f65174f216799dbf84a"
+    },
+    "tokenizer": {
+      "revision": "4b1220a9d745bdd874c44347075ef25484ef322b",
+      "tokenizer_fingerprint": "e7be77fbc82690d74ad81e43ed2d05a854a32161a340190b66122db112b8911e",
+      "tokenizer_id": "speakleash/Bielik-4.5B-v3.0-Instruct"
+    }
+  },
+  "tokenizer_fingerprint": "e7be77fbc82690d74ad81e43ed2d05a854a32161a340190b66122db112b8911e"
+}

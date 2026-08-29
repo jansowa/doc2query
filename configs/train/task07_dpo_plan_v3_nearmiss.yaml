@@ -1,0 +1,31 @@
+arms:
+- dpo
+- continued_sft
+- score_weighted_continued_sft
+beta: 0.1
+learning_rate: 1.0e-05
+loss_type: sigmoid
+max_length: 768
+max_prompt_length: 704
+plan_id: task07-dpo-plan-v3-nearmiss-s42
+reference_model: &id001
+  base_model:
+    artifact_fingerprint: 8de58e412bb4393f86ef9eafaf0aa96363d26490c22e1f65174f216799dbf84a
+    model_id: speakleash/Bielik-4.5B-v3.0-Instruct
+    revision: 4b1220a9d745bdd874c44347075ef25484ef322b
+  sft_adapter:
+    adapter_fingerprint: da862dd31af9cb7ca817c85fba43ecc86e298f211870645fdc9f5034163d2df5
+    adapter_id: D01-4.5B-STYLE-50K-S42
+    adapter_revision: runs/D01-4.5B-STYLE-50K-S42/adapter
+    base_model_fingerprint: 8de58e412bb4393f86ef9eafaf0aa96363d26490c22e1f65174f216799dbf84a
+  tokenizer:
+    revision: 4b1220a9d745bdd874c44347075ef25484ef322b
+    tokenizer_fingerprint: e7be77fbc82690d74ad81e43ed2d05a854a32161a340190b66122db112b8911e
+    tokenizer_id: speakleash/Bielik-4.5B-v3.0-Instruct
+seeds:
+- 42
+start_model: *id001
+target_optimizer_steps: 138
+target_token_budget: 968337
+weight_policy_fingerprint: 95b7d6997102149f117085ea282dbddea2eaebac5529b60cbb5582ad84c7ae70
+weight_policy_id: task07-chosen-primary-margin-percentile-v1

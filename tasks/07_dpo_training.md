@@ -6,6 +6,24 @@
 
 `IN PROGRESS`
 
+Aktualizacja 2026-08-29 (**sześć ramion wytrenowanych**; raport
+[`task07_arms_dev_result_2026-08-29.md`](../reports/measurements/task07_arms_dev_result_2026-08-29.md)):
+trzy ramiona × dwa warianty par (`bottom` 2 461 par / 154 kroki i zarejestrowana
+ablacja `near_miss` 2 198 par / 138 kroków, plan `5515a56f…`), wszystkie na
+zamrożonych planach, peak ≤3,92 GiB, dwa runy wznowione z checkpointu po
+restarcie maszyny. Na dev (pomocniczo, nie wynik): DPO podnosi trafność
+marginesu (bottom 0,937→0,985; near_miss 0,770→0,952, czyli +18,3 pp przy
+trudniejszych parach) kosztem 2,2–2,4× wzrostu NLL/token na `chosen`; continued
+SFT obniża NLL (0,61→0,53); weighted SFT nieodróżnialne od continued SFT.
+**Wynikiem Task 07 będzie dopiero probe embedder** na naturalnych zamrożonych
+zapytaniach — ewaluacja sześciu adapterów + startu pozostaje niewykonana.
+Równolegle: diagnostyka kontrastu par (75,3% `rejected` nie na temat), ślepy
+spot-check właściciela (95,45% zgodności z selektorem), projekt pipeline'u par
+z wadami nazwanymi z konstrukcji
+([plan](../reports/plans/task07_defect_pair_pipeline_design_2026-08-29.md),
+z kopalnią organicznych negatywów, mutacjami i klasą `lexical_contrast`).
+`final_tests_used=[]`.
+
 Aktualizacja 2026-08-28 (**autoryzacja treningu**): właściciel autoryzował trening
 DPO na parach v3, więc `task07_training_authorized=true` w zakresie zapisanym w
 [decyzji](../reports/decisions/task07_training_authorization_2026-08-28.md): trzy
