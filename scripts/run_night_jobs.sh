@@ -26,7 +26,7 @@ if [ "${FRESH:-0}" = "1" ] && [ -d "$OUT" ]; then
 fi
 
 exec uv run python scripts/task06_night_jobs_remote.py \
-  --jobs lexical_mutation,answer_leak_v2,label_purity,chosen_recheck \
+  --jobs class_backfill,answer_leak_v2,teacher_probe_queries,label_purity,chosen_recheck,lexical_mutation \
   --input-dir "$IN" --output-dir "$OUT" \
   --base-url "$BASE_URL" --model "$MODEL" --api-key "$API_KEY" \
   --concurrency "$CONCURRENCY"

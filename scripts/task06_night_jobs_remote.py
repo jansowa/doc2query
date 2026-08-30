@@ -17,6 +17,13 @@ Każde zadanie ma jasno zapisane, po co jest i czego NIE wolno z niego wnioskowa
 4. `chosen_recheck` — druga opinia o answerability `chosen` dla 368 grup, które
    wypadły w całości. Grupa wraca do gry tylko przy **zgodnej** odpowiedzi TAK
    obu wywołań (pierwotnego i tego), nigdy przy samej zmianie zdania.
+5. `class_backfill` — mutacja klasy wady tam, gdzie grupa jeszcze jej nie ma.
+   Limit ADR §3 (≤1 para na grupę i klasę) zostaje; rośnie tylko pokrycie klas,
+   bo dziś 1 035 grup wystawia jedną klasę, a mogłyby trzy.
+6. `teacher_probe_queries` — zapytania teachera dla 1 984 pasaży kohorty probe
+   (rozłącznej z obiema kohortami treningowymi). To **ramię odniesienia** dla
+   probe embeddera: mierzy sufit, do którego w ogóle może dobić generator po
+   DPO. Nie jest kandydatem na finalistę i nie wchodzi do żadnej kohorty par.
 
 Wznawialne po journalu, równoległość na elementach, fail-fast po serii błędów.
 """
@@ -105,6 +112,54 @@ Twardy wymóg formy — najważniejszy w tym zadaniu:
 Forma oryginału: {form}
 
 Zwróć wyłącznie JSON: {{"query": "<zapytanie>", "wbudowany_fakt": "<fakt z pasażu>"}}"""
+
+BACKFILL_TEMPLATE = """Pasaż:
+{passage}
+
+Poprawne zapytanie wyszukiwawcze do tego pasażu:
+{chosen}
+
+Zadanie: przekształć je w gorsze przez MINIMALNĄ edycję — zmień, usuń lub dodaj
+możliwie najmniej słów, zachowując styl, rejestr, formę i przybliżoną długość.
+Wprowadź dokładnie jedną wadę `{defect}`: {cel}
+Warunek zachowania: {wymog}
+Forma oryginału: {form} — musi zostać zachowana.
+
+Zwróć wyłącznie JSON: {{"query": "<zapytanie>", "edycja": "<co zmieniono>"}}"""
+
+PROBE_TEMPLATE = """Pasaż:
+{passage}
+
+Kontrakt zapytania:
+{controls}
+
+Napisz jedno polskie zapytanie wyszukiwawcze, na które można odpowiedzieć
+wyłącznie na podstawie tego pasażu. Nie kopiuj długich fragmentów pasażu,
+zachowaj konieczne nazwy własne, liczby i terminy, nie zdradzaj odpowiedzi.
+
+Zwróć wyłącznie JSON: {{"query": "<zapytanie>"}}"""
+
+BACKFILL_DEFECTS = {
+    "too_general": (
+        "usuń albo uogólnij element, który czyni potrzebę informacyjną konkretną",
+        "zostań w temacie pasażu",
+    ),
+    "not_answerable": (
+        "przesuń pytanie na atrybut tego samego obiektu, którego pasaż nie podaje",
+        "obiekt i terminologia zostają z pasażu, znika wyłącznie odpowiedź",
+    ),
+    "copy_phrasing": (
+        "wstaw do zapytania dosłowny, ciągły fragment co najmniej pięciu słów z pasażu",
+        "zapytanie ma dalej dać się odpowiedzieć na podstawie pasażu",
+    ),
+}
+
+PROBE_CONTROLS = (
+    "Forma: full_question\nIntencja: fact_lookup\nDocelowy fragment: beginning",
+    "Forma: keyword_query\nIntencja: definition\nDocelowy fragment: middle",
+    "Forma: full_question\nIntencja: procedure\nDocelowy fragment: end",
+    "Forma: keyword_query\nIntencja: entity_lookup\nDocelowy fragment: middle",
+)
 
 ANSWERABLE_TEMPLATE = """Pasaż:
 {passage}
@@ -215,6 +270,10 @@ def _items(job: str, root: Path) -> list[dict[str, Any]]:
         return rows(root / "answer_leak_groups.jsonl")
     if job == "chosen_recheck":
         return rows(root / "dropped_groups.jsonl")
+    if job == "class_backfill":
+        return rows(root / "class_backfill.jsonl")
+    if job == "teacher_probe_queries":
+        return rows(root / "probe_passages.jsonl")
     raise SystemExit(f"nieznane zadanie: {job}")
 
 
@@ -253,6 +312,38 @@ def _run_item(job: str, item: dict[str, Any], journal: Journal, ask: Any) -> Non
         query = str(verdict.get("query", "")).strip()
         check = ask(ANSWERABLE_TEMPLATE.format(passage=passage, query=query)) if query else {}
         journal.put(key_base, {"verdict": verdict, "answerable_check": check})
+        return
+    if job == "class_backfill":
+        defect = str(item["defect_class"])
+        cel, wymog = BACKFILL_DEFECTS[defect]
+        verdict = ask(
+            BACKFILL_TEMPLATE.format(
+                passage=passage,
+                chosen=str(item["chosen"]),
+                defect=defect,
+                cel=cel,
+                wymog=wymog,
+                form=str(item["form"]),
+            )
+        )
+        query = str(verdict.get("query", "")).strip()
+        check = ask(ANSWERABLE_TEMPLATE.format(passage=passage, query=query)) if query else {}
+        journal.put(
+            key_base, {"verdict": verdict, "answerable_check": check, "defect_class": defect}
+        )
+        return
+    if job == "teacher_probe_queries":
+        queries: list[dict[str, Any]] = []
+        for index, controls in enumerate(PROBE_CONTROLS):
+            verdict = ask(PROBE_TEMPLATE.format(passage=passage, controls=controls))
+            queries.append(
+                {
+                    "control_index": index,
+                    "controls": controls,
+                    "query": str(verdict.get("query", "")),
+                }
+            )
+        journal.put(key_base, {"queries": queries})
         return
     verdict = ask(ANSWERABLE_TEMPLATE.format(passage=passage, query=str(item["chosen"])))
     journal.put(key_base, {"verdict": verdict})

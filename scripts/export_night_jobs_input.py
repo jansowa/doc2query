@@ -40,6 +40,11 @@ def main() -> None:
         default=Path("artifacts/task06/defect_pairs_v1/pairs_trainable.jsonl"),
     )
     parser.add_argument(
+        "--probe-inputs",
+        type=Path,
+        default=Path("artifacts/task05/d01b_prospective_1_5b_v3/probe_inputs/w05_baseline.jsonl"),
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("artifacts/task06/night_jobs_v1/input"),
@@ -110,6 +115,48 @@ def main() -> None:
                 dropped.write(payload)
                 counts["chosen_recheck"] = counts.get("chosen_recheck", 0) + 1
 
+    # 5. class_backfill — brakujące klasy wad w grupach, które już mają jakąś parę.
+    existing: dict[str, set[str]] = {}
+    for row in read_records(args.pairs.parent / "pairs.jsonl"):
+        existing.setdefault(str(row["group_id"]), set()).add(str(row["defect_class"]))
+    with JsonlWriter(args.output_dir / "class_backfill.jsonl") as writer:
+        for gid, group in sorted(groups.items()):
+            verdict = journal.get(f"{gid}::answerable::chosen")
+            if verdict is None or not bool(verdict.get("verdict", {}).get("answerable")):
+                continue
+            have = existing.get(gid, set())
+            for defect in ("too_general", "not_answerable", "copy_phrasing"):
+                if defect in have:
+                    continue
+                writer.write(
+                    {
+                        "id": f"{gid}::{defect}",
+                        "group_id": gid,
+                        "passage": str(group["passage"]),
+                        "chosen": str(group["chosen"]["query"]),
+                        "form": str(group["form"]),
+                        "defect_class": defect,
+                        "preference_id": str(group["preference_id"]),
+                    }
+                )
+                counts["class_backfill"] = counts.get("class_backfill", 0) + 1
+
+    # 6. teacher_probe_queries — pasaże kohorty probe (rozłącznej z treningiem).
+    with JsonlWriter(args.output_dir / "probe_passages.jsonl") as writer:
+        seen: set[str] = set()
+        for row in read_records(args.probe_inputs):
+            passage_id = str(row["source_passage_id"])
+            if passage_id in seen:
+                continue
+            seen.add(passage_id)
+            writer.write(
+                {
+                    "id": passage_id,
+                    "passage": str(row["positive"]["text"]),
+                }
+            )
+            counts["teacher_probe_queries"] = counts.get("teacher_probe_queries", 0) + 1
+
     summary = {
         "schema_version": 1,
         "contract": "task06-night-jobs-input-v1",
@@ -120,6 +167,8 @@ def main() -> None:
             + counts.get("label_purity", 0)
             + counts.get("answer_leak_v2", 0) * 2
             + counts.get("chosen_recheck", 0)
+            + counts.get("class_backfill", 0) * 2
+            + counts.get("teacher_probe_queries", 0) * 4
         ),
         "pairs_built": 0,
         "final_tests_used": [],
