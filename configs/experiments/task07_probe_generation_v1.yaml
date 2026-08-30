@@ -1,0 +1,28 @@
+# @package _global_
+# Generacja zapytań probe dla ramion Task 07: ta sama receptura co D01, inna pula
+# pasaży. Kohorta probe (1 984 pasaże z Task 05) jest zmierzona jako rozłączna z
+# obiema kohortami treningowymi, więc porównanie ramion nie ma leakage'u.
+defaults:
+  - w06_4_5b_50k_8gb_bs8
+  - _self_
+
+run:
+  experiment_id: TASK07-PROBE-GEN-V1
+  seed: 42
+  output_dir: runs/task07_probe_gen_v1
+
+data:
+  input_path: data/processed/task07/probe_cohort_v1/passages.jsonl
+  # Budżet ekranowy z precedensu Task 05 (budget_fraction 0.25, 496 pasaży
+  # = 1 984 pary treningowe probe). Pełna kohorta kosztuje 6 h na punkt i
+  # 60 h na dziesięć — zmierzone tempem 22 zapytań/min, nie szacowane.
+  # Potwierdzenie na pełnym budżecie dotyczy dopiero zwycięzców ekranu.
+  max_eval_examples: 496
+
+generation:
+  controlled: true
+  target_query_count: 4
+  forms: [full_question, keyword_query]
+  intents: [fact_lookup, definition, entity_lookup, procedure, comparison]
+  focus_modes: [none]
+  max_attempts_per_query: 3
