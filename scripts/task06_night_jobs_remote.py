@@ -20,7 +20,12 @@ Każde zadanie ma jasno zapisane, po co jest i czego NIE wolno z niego wnioskowa
 5. `class_backfill` — mutacja klasy wady tam, gdzie grupa jeszcze jej nie ma.
    Limit ADR §3 (≤1 para na grupę i klasę) zostaje; rośnie tylko pokrycie klas,
    bo dziś 1 035 grup wystawia jedną klasę, a mogłyby trzy.
-6. `teacher_probe_queries` — zapytania teachera dla 1 984 pasaży kohorty probe
+6. `sft_data_audit` — audyt losowej próbki danych SFT na osiach, których dzisiejsze
+   filtry nie sprawdzają (odpowiadalność z pasażu, jakość tłumaczenia, sensowność
+   zapytania). To **pomiar wad w istniejącej puli**, nie filtr: żadna para nie
+   jest tym zadaniem usuwana, a przefiltrowanie puli oznaczałoby nową kohortę
+   SFT i nowy punkt startowy, czyli osobną decyzję właściciela.
+7. `teacher_probe_queries` — zapytania teachera dla 1 984 pasaży kohorty probe
    (rozłącznej z obiema kohortami treningowymi). To **ramię odniesienia** dla
    probe embeddera: mierzy sufit, do którego w ogóle może dobić generator po
    DPO. Nie jest kandydatem na finalistę i nie wchodzi do żadnej kohorty par.
@@ -161,6 +166,30 @@ PROBE_CONTROLS = (
     "Forma: keyword_query\nIntencja: entity_lookup\nDocelowy fragment: middle",
 )
 
+SFT_AUDIT_TEMPLATE = """Pasaż:
+{passage}
+
+Zapytanie (z danych treningowych, tłumaczone maszynowo z angielskiego):
+{query}
+
+Oceń tę parę na czterech osiach, niezależnie od siebie:
+
+1. `odpowiadalne` — czy na to zapytanie da się odpowiedzieć WYŁĄCZNIE na podstawie
+   tego pasażu? false, gdy pasaż jest tylko w temacie albo odpowiada częściowo.
+2. `polszczyzna` — czy zapytanie jest poprawnym, naturalnym polskim zdaniem lub
+   frazą? false przy kalkach z angielskiego, resztkach angielskich słów,
+   przekręconych nazwach własnych, bezsensownej składni.
+3. `sensowne_zapytanie` — czy to wygląda na realną potrzebę informacyjną
+   użytkownika wyszukiwarki? false dla fragmentów zdań, śmieci, zapytań
+   nawigacyjnych bez treści.
+4. `zbyt_ogolne` — czy zapytanie jest tak ogólne, że pasowałoby do tysięcy
+   różnych pasaży?
+
+Zwróć wyłącznie JSON:
+{{"odpowiadalne": <true|false>, "polszczyzna": <true|false>,
+ "sensowne_zapytanie": <true|false>, "zbyt_ogolne": <true|false>,
+ "glowny_problem": "<brak|nieodpowiadalne|tlumaczenie|niesensowne|zbyt_ogolne>"}}"""
+
 ANSWERABLE_TEMPLATE = """Pasaż:
 {passage}
 
@@ -274,6 +303,8 @@ def _items(job: str, root: Path) -> list[dict[str, Any]]:
         return rows(root / "class_backfill.jsonl")
     if job == "teacher_probe_queries":
         return rows(root / "probe_passages.jsonl")
+    if job == "sft_data_audit":
+        return rows(root / "sft_sample.jsonl")
     raise SystemExit(f"nieznane zadanie: {job}")
 
 
@@ -331,6 +362,10 @@ def _run_item(job: str, item: dict[str, Any], journal: Journal, ask: Any) -> Non
         journal.put(
             key_base, {"verdict": verdict, "answerable_check": check, "defect_class": defect}
         )
+        return
+    if job == "sft_data_audit":
+        verdict = ask(SFT_AUDIT_TEMPLATE.format(passage=passage, query=str(item["query"])))
+        journal.put(key_base, {"verdict": verdict})
         return
     if job == "teacher_probe_queries":
         queries: list[dict[str, Any]] = []

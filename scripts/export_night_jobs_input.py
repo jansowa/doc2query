@@ -45,6 +45,13 @@ def main() -> None:
         default=Path("artifacts/task05/d01b_prospective_1_5b_v3/probe_inputs/w05_baseline.jsonl"),
     )
     parser.add_argument(
+        "--sft-pool",
+        type=Path,
+        default=Path("data/processed/v1/doc2query_train.parquet"),
+    )
+    parser.add_argument("--sft-sample", type=int, default=12000)
+    parser.add_argument("--sft-seed", type=int, default=20260830)
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("artifacts/task06/night_jobs_v1/input"),
@@ -157,9 +164,36 @@ def main() -> None:
             )
             counts["teacher_probe_queries"] = counts.get("teacher_probe_queries", 0) + 1
 
+    # 7. sft_data_audit — losowa próbka puli treningowej SFT, zamrożonym seedem.
+    import random
+
+    import pandas as pd
+
+    frame = pd.read_parquet(args.sft_pool)
+    records = [json.loads(value) for value in frame["record_json"]]
+    sample = random.Random(args.sft_seed).sample(records, min(args.sft_sample, len(records)))
+    with JsonlWriter(args.output_dir / "sft_sample.jsonl") as writer:
+        for record in sample:
+            writer.write(
+                {
+                    "id": str(record["pair_id"]),
+                    "passage": str(record["passage"]),
+                    "query": str(record["query"]),
+                    "content_lemma_overlap": record.get("content_lemma_overlap"),
+                    "query_language_confidence": record.get("query_language_confidence"),
+                }
+            )
+            counts["sft_data_audit"] = counts.get("sft_data_audit", 0) + 1
+
     summary = {
         "schema_version": 1,
         "contract": "task06-night-jobs-input-v1",
+        "sft_sample": {
+            "pool": str(args.sft_pool),
+            "pool_size": len(records),
+            "sample_size": len(sample),
+            "seed": args.sft_seed,
+        },
         "adr": "reports/decisions/task06_defect_pair_pipeline_v1.md",
         "items_per_job": dict(sorted(counts.items())),
         "estimated_calls": (
@@ -169,6 +203,7 @@ def main() -> None:
             + counts.get("chosen_recheck", 0)
             + counts.get("class_backfill", 0) * 2
             + counts.get("teacher_probe_queries", 0) * 4
+            + counts.get("sft_data_audit", 0)
         ),
         "pairs_built": 0,
         "final_tests_used": [],
