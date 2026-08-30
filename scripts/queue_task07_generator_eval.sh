@@ -14,6 +14,11 @@ cd "$(dirname "$0")/.."
 CONFIG="configs/experiments/d01_4_5b_style_50k_s42.yaml"
 MANIFEST="data/processed/v1/evaluation/task04-v1/manifest.json"
 SUBSET="dev_intrinsic_rank10"
+# Bez configów zamrożonych sędziów `evaluate generator` policzy generacje i padnie
+# na scoringu — a wtedy punkt nigdy nie dostaje result.json i strażnik wskrzesza
+# go w nieskończoność. Sędziowie są tu wyłącznie oceniający, nigdy trenowani.
+PRIMARY_JUDGE="configs/reranker/primary_polish_roberta_v3_cuda.yaml"
+SHADOW_JUDGE="configs/reranker/shadow_bge_v2_m3.yaml"
 GPU_PY=".venv-gpu/bin/python"
 OUT="runs/task07_generator_eval_v1"
 
@@ -46,7 +51,7 @@ stage() {
   retry "$@" || true
 }
 
-for path in "$CONFIG" "$MANIFEST" "$GPU_PY"; do
+for path in "$CONFIG" "$MANIFEST" "$GPU_PY" "$PRIMARY_JUDGE" "$SHADOW_JUDGE"; do
   [ -e "$path" ] || { echo "brak wymaganego wejścia: $path" >&2; exit 2; }
 done
 
@@ -78,6 +83,8 @@ for name in start bottom_dpo bottom_csft bottom_wsft nearmiss_dpo nearmiss_csft 
     --frozen-manifest "$MANIFEST" \
     --subset "$SUBSET" \
     --adapter "$adapter" \
+    --primary-judge "$PRIMARY_JUDGE" \
+    --shadow-judge "$SHADOW_JUDGE" \
     --output-dir "$out"
   echo "[eval] $name koniec ($(date '+%H:%M:%S'))"
 done

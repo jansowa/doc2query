@@ -19,6 +19,12 @@ EVAL_POINTS="start bottom_dpo bottom_csft bottom_wsft nearmiss_dpo nearmiss_csft
 DEFECT_DONE="artifacts/task07/handoff_defect_v1/reference_logprobs/run_summary.json"
 
 started=$(date +%s)
+# Bezpiecznik: wskrzeszanie ma ratować przerwany run, a nie kręcić w kółko runem,
+# który pada zawsze w tym samym miejscu. Po MAX_REVIVES nieudanych wskrzeszeniach
+# bez postępu strażnik odpuszcza dany cel i mówi o tym wprost.
+MAX_REVIVES="${MAX_REVIVES:-3}"
+eval_revives=0
+defect_revives=0
 
 eval_complete() {
   for name in $EVAL_POINTS; do
@@ -51,13 +57,25 @@ while true; do
   fi
 
   if [ "$eval_ok" = 0 ] && ! running "queue_task07_generator_eval.sh"; then
-    echo "[strażnik] kolejka intrinsics nie żyje, wskrzeszam $(date '+%H:%M:%S')"
+    if [ "$eval_revives" -ge "$MAX_REVIVES" ]; then
+      echo "[strażnik] intrinsics padły $eval_revives razy bez postępu — odpuszczam ten cel" >&2
+      eval_ok=1
+      continue
+    fi
+    eval_revives=$((eval_revives + 1))
+    echo "[strażnik] kolejka intrinsics nie żyje, wskrzeszam ($eval_revives/$MAX_REVIVES) $(date '+%H:%M:%S')"
     nohup scripts/queue_task07_generator_eval.sh >> logs/task07_generator_eval.log 2>&1 &
     sleep 30
   fi
 
   if [ "$defect_ok" = 0 ] && ! running "queue_after_defect_verdicts.sh"; then
-    echo "[strażnik] kolejka pipeline'u wad nie żyje, wskrzeszam $(date '+%H:%M:%S')"
+    if [ "$defect_revives" -ge "$MAX_REVIVES" ]; then
+      echo "[strażnik] pipeline wad padł $defect_revives razy bez postępu — odpuszczam" >&2
+      defect_ok=1
+      continue
+    fi
+    defect_revives=$((defect_revives + 1))
+    echo "[strażnik] kolejka pipeline'u wad nie żyje, wskrzeszam ($defect_revives/$MAX_REVIVES) $(date '+%H:%M:%S')"
     nohup scripts/queue_after_defect_verdicts.sh >> logs/defect_after.log 2>&1 &
     sleep 30
   fi
