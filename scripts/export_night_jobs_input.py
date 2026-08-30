@@ -54,8 +54,13 @@ def main() -> None:
     counts: dict[str, int] = {}
 
     # 1. lexical_contrast — grupy bez organicznego negatywu o wysokim pokryciu.
+    # Lista pracy powstaje lokalnie (stanza) i bywa gotowa później niż reszta;
+    # jej brak nie blokuje paczki, tylko wypisuje puste zadanie.
+    lexical_rows = (
+        list(read_records(args.lexical_worklist)) if args.lexical_worklist.is_file() else []
+    )
     with JsonlWriter(args.output_dir / "lexical_worklist.jsonl") as writer:
-        for row in read_records(args.lexical_worklist):
+        for row in lexical_rows:
             writer.write(
                 {
                     "id": str(row["group_id"]),
