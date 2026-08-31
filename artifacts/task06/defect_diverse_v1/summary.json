@@ -2,7 +2,8 @@
   "adr": "reports/decisions/task07_anti_collapse_v1.md",
   "contract": "task06-defect-diverse-chosen-v1",
   "counters": {
-    "chosen_substituted": 276,
+    "chosen_substituted": 275,
+    "collision_fallback": 0,
     "groups": 1449,
     "pairs": 1794
   },
