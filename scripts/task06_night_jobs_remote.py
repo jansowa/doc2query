@@ -66,6 +66,12 @@ from doc2query.preferences.pair_selector_v3 import (
 )
 
 PROMPT_VERSION = "task06-night-jobs-pl-v1"
+# Układ "statyczna instrukcja w system, dane na końcu user" włącza prefix caching
+# vLLM na ~350 tokenach instrukcji. Trwający pomiar sft_full_audit ZOSTAJE na
+# starym układzie do zakończenia — jeden pomiar, jeden prompt; stąd wersja per
+# zadanie, a nie globalna.
+PREFIX_FIRST_VERSION = "task06-night-jobs-pl-v2-prefix-first"
+LEGACY_JOBS = frozenset({"sft_full_audit", "sft_data_audit"})
 FAIL_FAST_AFTER = 10
 
 SYSTEM = (
@@ -73,13 +79,12 @@ SYSTEM = (
     "systemu wyszukiwania. Piszesz WYŁĄCZNIE po polsku i zwracasz wyłącznie JSON."
 )
 
-LEXICAL_TEMPLATE = """Pasaż:
-{passage}
+SYS_LEXICAL = (
+    SYSTEM
+    + """
 
-Poprawne zapytanie do tego pasażu:
-{chosen}
-
-Zadanie: napisz zapytanie wyszukiwawcze, które jest **pułapką leksykalną**:
+Zadanie: dostaniesz pasaż i poprawne zapytanie. Napisz zapytanie wyszukiwawcze,
+które jest **pułapką leksykalną**:
 - ma zawierać jak najwięcej słów kluczowych, nazw własnych i liczb Z TEGO pasażu;
 - ale pasaż NIE MOŻE zawierać odpowiedzi na nie — pytaj o atrybut tego samego
   obiektu, którego pasaż nie podaje (inna wielkość, data, cena, przyczyna, skutek).
@@ -88,20 +93,28 @@ Twarde wymagania:
 1. maksymalnie dużo słownictwa pasażu, minimum słów spoza niego;
 2. zapytanie musi brzmieć naturalnie, jak realne pytanie użytkownika;
 3. jedno zapytanie, jedna linia, bez komentarza;
-4. zachowaj formę: {form} (fraza kluczowa bez znaku zapytania albo pytanie pełne).
+4. zachowaj podaną formę (fraza kluczowa bez znaku zapytania albo pytanie pełne).
 
 Zwróć wyłącznie JSON:
 {{"query": "<zapytanie>", "uzyte_slowa_z_pasazu": ["<slowo>", "..."],
  "czego_pasaz_nie_podaje": "<jedno zdanie>"}}"""
+)
 
-PURITY_TEMPLATE = """Pasaż:
+DATA_LEXICAL = """Forma: {form}
+
+Pasaż:
 {passage}
 
-Zapytanie A: {chosen}
-Zapytanie B: {rejected}
+Poprawne zapytanie do tego pasażu:
+{chosen}"""
 
-Twierdzenie do sprawdzenia: zapytanie B jest gorsze od A dokładnie dlatego, że
-ma wadę `{defect}`, gdzie:
+SYS_PURITY = (
+    SYSTEM
+    + """
+
+Dostaniesz pasaż i dwa zapytania A i B oraz nazwę wady. Twierdzenie do
+sprawdzenia: zapytanie B jest gorsze od A dokładnie dlatego, że ma podaną wadę,
+gdzie:
 - `not_answerable` = pasaż nie zawiera odpowiedzi na B, choć B jest w temacie;
 - `too_general` = B jest tak ogólne, że pasuje do tysięcy innych pasaży;
 - `answer_leak` = B zawiera w sobie odpowiedź, której szuka;
@@ -111,51 +124,82 @@ Oceń niezależnie, bez zakładania, że twierdzenie jest prawdziwe.
 
 Zwróć wyłącznie JSON:
 {{"wada_potwierdzona": <true|false>, "b_gorsze_od_a": <true|false>,
- "faktyczna_klasa": "<{defect}|inna_wada|brak_wady>", "uzasadnienie": "<jedno zdanie>"}}"""
+ "faktyczna_klasa": "<nazwa_wady|inna_wada|brak_wady>", "uzasadnienie": "<jedno zdanie>"}}"""
+)
 
-LEAK_TEMPLATE = """Pasaż:
+DATA_PURITY = """Wada do sprawdzenia: {defect}
+
+Pasaż:
 {passage}
 
-Poprawne zapytanie wyszukiwawcze do tego pasażu:
-{chosen}
+Zapytanie A: {chosen}
+Zapytanie B: {rejected}"""
 
-Zadanie: przekształć je w gorsze przez MINIMALNĄ edycję tak, by **zawierało w
-sobie odpowiedź**, której szuka (fakt wprost z pasażu).
+SYS_LEAK = (
+    SYSTEM
+    + """
+
+Dostaniesz pasaż, poprawne zapytanie i jego formę. Przekształć zapytanie w
+gorsze przez MINIMALNĄ edycję tak, by **zawierało w sobie odpowiedź**, której
+szuka (fakt wprost z pasażu).
 
 Twardy wymóg formy — najważniejszy w tym zadaniu:
 - jeśli oryginał jest frazą kluczową, wynik też musi być frazą kluczową: BEZ
   znaku zapytania i BEZ zaczynania od słowa pytajnego (czy, jak, co, ile...);
 - jeśli oryginał jest pytaniem pełnym, wynik zostaje pytaniem pełnym;
 - zachowaj przybliżoną długość oryginału (±3 słowa).
-Forma oryginału: {form}
 
 Zwróć wyłącznie JSON: {{"query": "<zapytanie>", "wbudowany_fakt": "<fakt z pasażu>"}}"""
+)
 
-BACKFILL_TEMPLATE = """Pasaż:
+DATA_LEAK = """Forma oryginału: {form}
+
+Pasaż:
 {passage}
 
 Poprawne zapytanie wyszukiwawcze do tego pasażu:
-{chosen}
+{chosen}"""
 
-Zadanie: przekształć je w gorsze przez MINIMALNĄ edycję — zmień, usuń lub dodaj
-możliwie najmniej słów, zachowując styl, rejestr, formę i przybliżoną długość.
-Wprowadź dokładnie jedną wadę `{defect}`: {cel}
-Warunek zachowania: {wymog}
-Forma oryginału: {form} — musi zostać zachowana.
+SYS_BACKFILL = (
+    SYSTEM
+    + """
+
+Dostaniesz pasaż, poprawne zapytanie, jego formę i opis wady. Przekształć
+zapytanie w gorsze przez MINIMALNĄ edycję — zmień, usuń lub dodaj możliwie
+najmniej słów, zachowując styl, rejestr, formę i przybliżoną długość. Wprowadź
+dokładnie jedną podaną wadę, respektując warunek zachowania. Forma oryginału
+musi zostać zachowana.
 
 Zwróć wyłącznie JSON: {{"query": "<zapytanie>", "edycja": "<co zmieniono>"}}"""
+)
 
-PROBE_TEMPLATE = """Pasaż:
+DATA_BACKFILL = """Wada `{defect}`: {cel}
+Warunek zachowania: {wymog}
+Forma oryginału: {form}
+
+Pasaż:
 {passage}
 
-Kontrakt zapytania:
-{controls}
+Poprawne zapytanie wyszukiwawcze do tego pasażu:
+{chosen}"""
+
+SYS_PROBE = (
+    SYSTEM
+    + """
 
 Napisz jedno polskie zapytanie wyszukiwawcze, na które można odpowiedzieć
-wyłącznie na podstawie tego pasażu. Nie kopiuj długich fragmentów pasażu,
+wyłącznie na podstawie podanego pasażu. Nie kopiuj długich fragmentów pasażu,
 zachowaj konieczne nazwy własne, liczby i terminy, nie zdradzaj odpowiedzi.
+Respektuj podany kontrakt zapytania.
 
 Zwróć wyłącznie JSON: {{"query": "<zapytanie>"}}"""
+)
+
+DATA_PROBE = """Kontrakt zapytania:
+{controls}
+
+Pasaż:
+{passage}"""
 
 BACKFILL_DEFECTS = {
     "too_general": (
@@ -179,12 +223,12 @@ PROBE_CONTROLS = (
     "Forma: keyword_query\nIntencja: entity_lookup\nDocelowy fragment: middle",
 )
 
-WRONG_FORM_TEMPLATE = """Poprawne zapytanie wyszukiwawcze:
-{chosen}
+SYS_WRONG_FORM = (
+    SYSTEM
+    + """
 
-Jego forma: {form}
-
-Zadanie: przepisz je na PRZECIWNĄ formę, zachowując dokładnie tę samą treść i
+Dostaniesz zapytanie i jego formę. Przepisz je na PRZECIWNĄ formę, zachowując
+dokładnie tę samą treść i
 potrzebę informacyjną:
 - jeśli to pytanie pełne — zrób frazę kluczową: bez znaku zapytania, bez słowa
   pytajnego na początku (czy, jak, co, ile...), styl telegraficzny;
@@ -193,6 +237,12 @@ potrzebę informacyjną:
 Zachowaj wszystkie nazwy własne, liczby i terminy. Jedna linia, bez komentarza.
 
 Zwróć wyłącznie JSON: {{"query": "<zapytanie w przeciwnej formie>"}}"""
+)
+
+DATA_WRONG_FORM = """Forma: {form}
+
+Poprawne zapytanie wyszukiwawcze:
+{chosen}"""
 
 PAIRWISE_TEMPLATE = """Pasaż:
 {passage}
@@ -205,10 +255,12 @@ Zapytanie B:
 
 Które zapytanie jest lepsze?"""
 
-POLISH_RECHECK_TEMPLATE = """Zapytanie wyszukiwawcze (tłumaczone maszynowo z angielskiego):
-{query}
+SYS_POLISH = (
+    SYSTEM
+    + """
 
-Oceń WYŁĄCZNIE jakość języka, według ścisłej definicji:
+Dostaniesz zapytanie wyszukiwawcze tłumaczone maszynowo z angielskiego. Oceń
+WYŁĄCZNIE jakość języka, według ścisłej definicji:
 - WADĄ SĄ: uszkodzone znaki (â, Ã), przekręcone lub sklejone nazwy własne,
   kalki składniowe dające bezsens po polsku, urwane zdania, słowa z innego
   języka niż polski i angielski;
@@ -220,6 +272,10 @@ Zwróć wyłącznie JSON:
 {{"jezyk_zepsuty": <true|false>,
  "kategoria": "<brak|mojibake|nazwa_wlasna|kalka|urwane|inny_jezyk>",
  "uzasadnienie": "<jedno zdanie>"}}"""
+)
+
+DATA_POLISH = """Zapytanie:
+{query}"""
 
 # Prompt v2: identyczne osie co v1, ale oś językowa ma ostrą definicję z
 # przeglądu 40 pozycji — pilotaż wykazał, że v1 liczy anglicyzmy jako wadę.
@@ -275,17 +331,23 @@ Zwróć wyłącznie JSON:
  "sensowne_zapytanie": <true|false>, "zbyt_ogolne": <true|false>,
  "glowny_problem": "<brak|nieodpowiadalne|tlumaczenie|niesensowne|zbyt_ogolne>"}}"""
 
-ANSWERABLE_TEMPLATE = """Pasaż:
-{passage}
+SYS_ANSWERABLE = (
+    SYSTEM
+    + """
 
-Zapytanie:
-{query}
-
-Czy ten pasaż ZAWIERA odpowiedź na to zapytanie? true tylko wtedy, gdy odpowiedź
+Dostaniesz pasaż i zapytanie. Czy pasaż ZAWIERA odpowiedź na zapytanie? true
+tylko wtedy, gdy odpowiedź
 da się wskazać w treści pasażu; false, gdy pasaż jest w temacie, ale odpowiedzi
 nie podaje.
 
 Zwróć wyłącznie JSON: {{"answerable": <true|false>, "dowod": "<fragment pasażu albo pusty>"}}"""
+)
+
+DATA_ANSWERABLE = """Pasaż:
+{passage}
+
+Zapytanie:
+{query}"""
 
 
 class Journal:
@@ -305,7 +367,9 @@ class Journal:
         return self.done.get(key)
 
     def put(self, key: str, row: dict[str, Any]) -> None:
-        record = {"key": key, "prompt_version": PROMPT_VERSION, **row}
+        job = key.split("::", 1)[0]
+        version = PROMPT_VERSION if job in LEGACY_JOBS else PREFIX_FIRST_VERSION
+        record = {"key": key, "prompt_version": version, **row}
         with self.lock:
             self.done[key] = record
             with self.path.open("a", encoding="utf-8") as handle:
@@ -317,13 +381,13 @@ class Journal:
 def make_ask(endpoint: JudgeEndpoint, reasoning_effort: str | None) -> Any:
     transport = http_transport(endpoint)
 
-    def request(user: str, max_tokens: int, *, guided: bool) -> dict[str, Any]:
+    def request(user: str, system: str, max_tokens: int, *, guided: bool) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "model": endpoint.model,
             "temperature": 0.0,
             "max_completion_tokens": max_tokens,
             "messages": [
-                {"role": "system", "content": SYSTEM},
+                {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
         }
@@ -344,11 +408,11 @@ def make_ask(endpoint: JudgeEndpoint, reasoning_effort: str | None) -> Any:
                 time.sleep(min(60.0, 3.0 * 2**attempt))
         raise last if last is not None else RuntimeError("transport bez odpowiedzi")
 
-    def ask(user: str) -> dict[str, Any]:
+    def ask(user: str, system: str = SYSTEM) -> dict[str, Any]:
         errors: list[str] = []
         for attempt in range(3):
             response = request(
-                user, endpoint.max_completion_tokens * (2**attempt), guided=attempt == 0
+                user, system, endpoint.max_completion_tokens * (2**attempt), guided=attempt == 0
             )
             choice = (response.get("choices") or [{}])[0]
             finish = str(choice.get("finish_reason", "?"))
@@ -408,50 +472,64 @@ def _run_item(job: str, item: dict[str, Any], journal: Journal, ask: Any) -> Non
     passage = str(item.get("passage", ""))
     if job == "lexical_mutation":
         verdict = ask(
-            LEXICAL_TEMPLATE.format(
+            DATA_LEXICAL.format(
                 passage=passage, chosen=str(item["chosen"]), form=str(item["form"])
-            )
+            ),
+            system=SYS_LEXICAL,
         )
         query = str(verdict.get("query", "")).strip()
-        check = ask(ANSWERABLE_TEMPLATE.format(passage=passage, query=query)) if query else {}
+        check = (
+            ask(DATA_ANSWERABLE.format(passage=passage, query=query), system=SYS_ANSWERABLE)
+            if query
+            else {}
+        )
         journal.put(key_base, {"verdict": verdict, "answerable_check": check})
         return
     if job == "label_purity":
         verdict = ask(
-            PURITY_TEMPLATE.format(
+            DATA_PURITY.format(
                 passage=passage,
                 chosen=str(item["chosen"]),
                 rejected=str(item["rejected"]),
                 defect=str(item["defect_class"]),
-            )
+            ),
+            system=SYS_PURITY,
         )
         journal.put(key_base, {"verdict": verdict, "defect_class": str(item["defect_class"])})
         return
     if job == "answer_leak_v2":
         verdict = ask(
-            LEAK_TEMPLATE.format(
-                passage=passage, chosen=str(item["chosen"]), form=str(item["form"])
-            )
+            DATA_LEAK.format(passage=passage, chosen=str(item["chosen"]), form=str(item["form"])),
+            system=SYS_LEAK,
         )
         query = str(verdict.get("query", "")).strip()
-        check = ask(ANSWERABLE_TEMPLATE.format(passage=passage, query=query)) if query else {}
+        check = (
+            ask(DATA_ANSWERABLE.format(passage=passage, query=query), system=SYS_ANSWERABLE)
+            if query
+            else {}
+        )
         journal.put(key_base, {"verdict": verdict, "answerable_check": check})
         return
     if job == "class_backfill":
         defect = str(item["defect_class"])
         cel, wymog = BACKFILL_DEFECTS[defect]
         verdict = ask(
-            BACKFILL_TEMPLATE.format(
+            DATA_BACKFILL.format(
                 passage=passage,
                 chosen=str(item["chosen"]),
                 defect=defect,
                 cel=cel,
                 wymog=wymog,
                 form=str(item["form"]),
-            )
+            ),
+            system=SYS_BACKFILL,
         )
         query = str(verdict.get("query", "")).strip()
-        check = ask(ANSWERABLE_TEMPLATE.format(passage=passage, query=query)) if query else {}
+        check = (
+            ask(DATA_ANSWERABLE.format(passage=passage, query=query), system=SYS_ANSWERABLE)
+            if query
+            else {}
+        )
         journal.put(
             key_base, {"verdict": verdict, "answerable_check": check, "defect_class": defect}
         )
@@ -467,9 +545,8 @@ def _run_item(job: str, item: dict[str, Any], journal: Journal, ask: Any) -> Non
             from doc2query.preferences.pair_selector_v3 import RUBRICS
 
             verdict = ask(
-                RUBRICS["R3_holistic"]
-                + "\n\n"
-                + PAIRWISE_TEMPLATE.format(passage=passage, first=first, second=second)
+                PAIRWISE_TEMPLATE.format(passage=passage, first=first, second=second),
+                system=RUBRICS["R3_holistic"],
             )
             better = str(verdict.get("better", "")).strip().upper()
             chosen_letter = "A" if order == "ab" else "B"
@@ -477,12 +554,13 @@ def _run_item(job: str, item: dict[str, Any], journal: Journal, ask: Any) -> Non
         journal.put(key_base, {"votes": votes, "unanimous_chosen": votes == ["chosen", "chosen"]})
         return
     if job == "polish_recheck":
-        verdict = ask(POLISH_RECHECK_TEMPLATE.format(query=str(item["query"])))
+        verdict = ask(DATA_POLISH.format(query=str(item["query"])), system=SYS_POLISH)
         journal.put(key_base, {"verdict": verdict})
         return
     if job == "wrong_form":
         verdict = ask(
-            WRONG_FORM_TEMPLATE.format(chosen=str(item["chosen"]), form=str(item["form"]))
+            DATA_WRONG_FORM.format(chosen=str(item["chosen"]), form=str(item["form"])),
+            system=SYS_WRONG_FORM,
         )
         journal.put(key_base, {"verdict": verdict, "source_form": str(item["form"])})
         return
@@ -497,7 +575,7 @@ def _run_item(job: str, item: dict[str, Any], journal: Journal, ask: Any) -> Non
     if job == "teacher_probe_queries":
         queries: list[dict[str, Any]] = []
         for index, controls in enumerate(PROBE_CONTROLS):
-            verdict = ask(PROBE_TEMPLATE.format(passage=passage, controls=controls))
+            verdict = ask(DATA_PROBE.format(passage=passage, controls=controls), system=SYS_PROBE)
             queries.append(
                 {
                     "control_index": index,
@@ -507,7 +585,10 @@ def _run_item(job: str, item: dict[str, Any], journal: Journal, ask: Any) -> Non
             )
         journal.put(key_base, {"queries": queries})
         return
-    verdict = ask(ANSWERABLE_TEMPLATE.format(passage=passage, query=str(item["chosen"])))
+    verdict = ask(
+        DATA_ANSWERABLE.format(passage=passage, query=str(item["chosen"])),
+        system=SYS_ANSWERABLE,
+    )
     journal.put(key_base, {"verdict": verdict})
 
 
