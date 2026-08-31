@@ -332,3 +332,21 @@ werdykt sędziego dla wszystkich czterech osi.
 **Pasaż:** Ponadto Ebbe to zwierzę domowe o imieniu Asbjoern (AsbjÃ¸rn). Skandynawski ebbe jest również wariantem Imienia (Eben, angielski, hebrajski I). Walijski ebbe jest również ulubioną formą imienia (Eberhard) niemieckim, a także niemieckim wariantem imienia (Everard dutch And). Wymowa englishts to EH-Bah w języku niemieckim â. Ebbe jest w dużej mierze używany w językach skandynawskich i niemieckich i wywodzi się ze staronordyckiego i germańskiego pochodzenia. Pochodzenie germańskie, zastosowanie w języku niemieckim: nazwa powstała jako krótka forma różnych germańskich nazw złożonych rozpoczynający…
 
 *Werdykt:* odpowiadalne=nie, polszczyzna=nie, sensowne=nie, zbyt_ogólne=nie; główny problem: `tlumaczenie`
+
+## Ocena trafności oznaczeń (przegląd asystenta, 40/40 pozycji)
+
+| oś | trafne | błędne | graniczne | ocena |
+|---|---|---|---|---|
+| niesensowne | 10 | 0 | 0 | **wzorowa** — każda pozycja to realny artefakt („koszykowy przypadek" = Basket Case, „czy żyrafa urodziła się w przygodzie" = Great Adventure, „ebbe wat is") |
+| nieodpowiadalne | 7 | 1 | 2 | dobra; błąd #5: pasaż wprost podaje przyczyny („uraz klatki piersiowej, główna przyczyna rozedmy podskórnej"), sędzia potknął się na synonimii odma/rozedma; graniczne #1 i #9 to odpowiedzi częściowe |
+| zbyt ogólne | 8 | 0 | 2 | dobra; graniczne #1 („czy DNA jest widoczne" — krótkie, ale konkretne) i #10 |
+| zła polszczyzna | 6 | 1 | 3 | **najsłabsza** — błąd #2: „w jakim hrabstwie znajduje się McComb w stanie Missisipi" to poprawna polszczyzna; graniczne #6/#7/#8 to nieprzetłumaczone terminy i styl wyszukiwarkowy („gdzie kręcony jest walking dead"), które sędzia myli z zepsutym językiem |
+
+**Konsekwencja dla liczb z audytu:** przy tej precyzji per oś realne udziały to
+w przybliżeniu ~13% nieodpowiadalnych (zamiast 15,3%) i ~7–8% złej polszczyzny
+(zamiast 11,6%) — sędzia zawyża oś językową, licząc naturalne w wyszukiwaniu
+anglicyzmy jako wadę. Łączny udział twardych wad po korekcie to ~18–20%
+zamiast 24,8%. **Kierunek wniosku się nie zmienia** (wady są liczne i
+ortogonalne do progu rerankera), zmienia się skala. Oś `niesensowne` i
+`nieodpowiadalne` nadają się na filtr; oś językowa wymaga ostrzejszego promptu
+odróżniającego anglicyzmy od zepsutego języka, zanim cokolwiek na niej zawiśnie.
