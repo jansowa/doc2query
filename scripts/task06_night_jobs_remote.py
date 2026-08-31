@@ -96,8 +96,8 @@ Twarde wymagania:
 4. zachowaj podaną formę (fraza kluczowa bez znaku zapytania albo pytanie pełne).
 
 Zwróć wyłącznie JSON:
-{{"query": "<zapytanie>", "uzyte_slowa_z_pasazu": ["<slowo>", "..."],
- "czego_pasaz_nie_podaje": "<jedno zdanie>"}}"""
+{"query": "<zapytanie>", "uzyte_slowa_z_pasazu": ["<slowo>", "..."],
+ "czego_pasaz_nie_podaje": "<jedno zdanie>"}"""
 )
 
 DATA_LEXICAL = """Forma: {form}
@@ -123,8 +123,8 @@ gdzie:
 Oceń niezależnie, bez zakładania, że twierdzenie jest prawdziwe.
 
 Zwróć wyłącznie JSON:
-{{"wada_potwierdzona": <true|false>, "b_gorsze_od_a": <true|false>,
- "faktyczna_klasa": "<nazwa_wady|inna_wada|brak_wady>", "uzasadnienie": "<jedno zdanie>"}}"""
+{"wada_potwierdzona": <true|false>, "b_gorsze_od_a": <true|false>,
+ "faktyczna_klasa": "<nazwa_wady|inna_wada|brak_wady>", "uzasadnienie": "<jedno zdanie>"}"""
 )
 
 DATA_PURITY = """Wada do sprawdzenia: {defect}
@@ -149,7 +149,7 @@ Twardy wymóg formy — najważniejszy w tym zadaniu:
 - jeśli oryginał jest pytaniem pełnym, wynik zostaje pytaniem pełnym;
 - zachowaj przybliżoną długość oryginału (±3 słowa).
 
-Zwróć wyłącznie JSON: {{"query": "<zapytanie>", "wbudowany_fakt": "<fakt z pasażu>"}}"""
+Zwróć wyłącznie JSON: {"query": "<zapytanie>", "wbudowany_fakt": "<fakt z pasażu>"}"""
 )
 
 DATA_LEAK = """Forma oryginału: {form}
@@ -170,7 +170,7 @@ najmniej słów, zachowując styl, rejestr, formę i przybliżoną długość. W
 dokładnie jedną podaną wadę, respektując warunek zachowania. Forma oryginału
 musi zostać zachowana.
 
-Zwróć wyłącznie JSON: {{"query": "<zapytanie>", "edycja": "<co zmieniono>"}}"""
+Zwróć wyłącznie JSON: {"query": "<zapytanie>", "edycja": "<co zmieniono>"}"""
 )
 
 DATA_BACKFILL = """Wada `{defect}`: {cel}
@@ -192,7 +192,7 @@ wyłącznie na podstawie podanego pasażu. Nie kopiuj długich fragmentów pasa�
 zachowaj konieczne nazwy własne, liczby i terminy, nie zdradzaj odpowiedzi.
 Respektuj podany kontrakt zapytania.
 
-Zwróć wyłącznie JSON: {{"query": "<zapytanie>"}}"""
+Zwróć wyłącznie JSON: {"query": "<zapytanie>"}"""
 )
 
 DATA_PROBE = """Kontrakt zapytania:
@@ -236,7 +236,7 @@ potrzebę informacyjną:
 
 Zachowaj wszystkie nazwy własne, liczby i terminy. Jedna linia, bez komentarza.
 
-Zwróć wyłącznie JSON: {{"query": "<zapytanie w przeciwnej formie>"}}"""
+Zwróć wyłącznie JSON: {"query": "<zapytanie w przeciwnej formie>"}"""
 )
 
 DATA_WRONG_FORM = """Forma: {form}
@@ -269,9 +269,9 @@ WYŁĄCZNIE jakość języka, według ścisłej definicji:
   typowy dla zapytań wyszukiwarkowych, brak znaków zapytania.
 
 Zwróć wyłącznie JSON:
-{{"jezyk_zepsuty": <true|false>,
+{"jezyk_zepsuty": <true|false>,
  "kategoria": "<brak|mojibake|nazwa_wlasna|kalka|urwane|inny_jezyk>",
- "uzasadnienie": "<jedno zdanie>"}}"""
+ "uzasadnienie": "<jedno zdanie>"}"""
 )
 
 DATA_POLISH = """Zapytanie:
@@ -304,9 +304,9 @@ z angielskiego). Oceń tę parę na czterech osiach, niezależnie od siebie:
    Krótkie nie znaczy ogólne: „czy DNA jest widoczne" jest konkretne.
 
 Zwróć wyłącznie JSON:
-{{"odpowiadalne": <true|false>, "polszczyzna": <true|false>,
+{"odpowiadalne": <true|false>, "polszczyzna": <true|false>,
  "sensowne_zapytanie": <true|false>, "zbyt_ogolne": <true|false>,
- "glowny_problem": "<brak|nieodpowiadalne|tlumaczenie|niesensowne|zbyt_ogolne>"}}"""
+ "glowny_problem": "<brak|nieodpowiadalne|tlumaczenie|niesensowne|zbyt_ogolne>"}"""
 )
 
 DATA_SFT_AUDIT = """Pasaż:
@@ -348,7 +348,7 @@ tylko wtedy, gdy odpowiedź
 da się wskazać w treści pasażu; false, gdy pasaż jest w temacie, ale odpowiedzi
 nie podaje.
 
-Zwróć wyłącznie JSON: {{"answerable": <true|false>, "dowod": "<fragment pasażu albo pusty>"}}"""
+Zwróć wyłącznie JSON: {"answerable": <true|false>, "dowod": "<fragment pasażu albo pusty>"}"""
 )
 
 DATA_ANSWERABLE = """Pasaż:
