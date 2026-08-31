@@ -29,7 +29,16 @@ Każde zadanie ma jasno zapisane, po co jest i czego NIE wolno z niego wnioskowa
    zachowanej treści. Etykieta z konstrukcji, weryfikacja lokalna regexem, bez
    sędziego. Buduje klasę par uczącą zależności wyjścia od kontrolek — trzecia
    przyczyna kolapsu z ADR task07_anti_collapse_v1.
-8. `teacher_probe_queries` — zapytania teachera dla 1 984 pasaży kohorty probe
+8. `confirm_pairs` — potwierdzenie preferencji (R3, obie kolejności, wymóg
+   jednomyślności liczony lokalnie) dla par, które powstały bez S4:
+   class_backfill, mutacje leksykalne i wrong_form. ADR §5 wymaga potwierdzenia
+   zanim para wejdzie do jakiejkolwiek kohorty.
+9. `polish_recheck` — powtórna ocena par oflagowanych na osi językowej
+   ostrzejszym promptem: anglicyzmy naturalne w wyszukiwaniu (walking dead,
+   selenium) NIE są wadą; wadą jest zepsuty język (mojibake, przekręcone nazwy,
+   kalki składniowe). Powód: przegląd 40 pozycji wykazał, że pierwszy prompt
+   zawyża tę oś.
+10. `teacher_probe_queries` — zapytania teachera dla 1 984 pasaży kohorty probe
    (rozłącznej z obiema kohortami treningowymi). To **ramię odniesienia** dla
    probe embeddera: mierzy sufit, do którego w ogóle może dobić generator po
    DPO. Nie jest kandydatem na finalistę i nie wchodzi do żadnej kohorty par.
@@ -185,6 +194,33 @@ Zachowaj wszystkie nazwy własne, liczby i terminy. Jedna linia, bez komentarza.
 
 Zwróć wyłącznie JSON: {{"query": "<zapytanie w przeciwnej formie>"}}"""
 
+PAIRWISE_TEMPLATE = """Pasaż:
+{passage}
+
+Zapytanie A:
+{first}
+
+Zapytanie B:
+{second}
+
+Które zapytanie jest lepsze?"""
+
+POLISH_RECHECK_TEMPLATE = """Zapytanie wyszukiwawcze (tłumaczone maszynowo z angielskiego):
+{query}
+
+Oceń WYŁĄCZNIE jakość języka, według ścisłej definicji:
+- WADĄ SĄ: uszkodzone znaki (â, Ã), przekręcone lub sklejone nazwy własne,
+  kalki składniowe dające bezsens po polsku, urwane zdania, słowa z innego
+  języka niż polski i angielski;
+- WADĄ NIE SĄ: angielskie nazwy własne i terminy (walking dead, selenium,
+  paracord), skróty stanów/miast (nj, ca, de), mała litera, styl telegraficzny
+  typowy dla zapytań wyszukiwarkowych, brak znaków zapytania.
+
+Zwróć wyłącznie JSON:
+{{"jezyk_zepsuty": <true|false>,
+ "kategoria": "<brak|mojibake|nazwa_wlasna|kalka|urwane|inny_jezyk>",
+ "uzasadnienie": "<jedno zdanie>"}}"""
+
 SFT_AUDIT_TEMPLATE = """Pasaż:
 {passage}
 
@@ -326,6 +362,10 @@ def _items(job: str, root: Path) -> list[dict[str, Any]]:
         return rows(root / "sft_sample.jsonl")
     if job == "wrong_form":
         return rows(root / "answer_leak_groups.jsonl")
+    if job == "confirm_pairs":
+        return rows(root / "pairs_to_confirm.jsonl")
+    if job == "polish_recheck":
+        return rows(root / "polish_flagged.jsonl")
     raise SystemExit(f"nieznane zadanie: {job}")
 
 
@@ -383,6 +423,30 @@ def _run_item(job: str, item: dict[str, Any], journal: Journal, ask: Any) -> Non
         journal.put(
             key_base, {"verdict": verdict, "answerable_check": check, "defect_class": defect}
         )
+        return
+    if job == "confirm_pairs":
+        votes = []
+        for order in ("ab", "ba"):
+            first, second = (
+                (str(item["chosen"]), str(item["rejected"]))
+                if order == "ab"
+                else (str(item["rejected"]), str(item["chosen"]))
+            )
+            from doc2query.preferences.pair_selector_v3 import RUBRICS
+
+            verdict = ask(
+                RUBRICS["R3_holistic"]
+                + "\n\n"
+                + PAIRWISE_TEMPLATE.format(passage=passage, first=first, second=second)
+            )
+            better = str(verdict.get("better", "")).strip().upper()
+            chosen_letter = "A" if order == "ab" else "B"
+            votes.append("chosen" if better == chosen_letter else better.lower() or "invalid")
+        journal.put(key_base, {"votes": votes, "unanimous_chosen": votes == ["chosen", "chosen"]})
+        return
+    if job == "polish_recheck":
+        verdict = ask(POLISH_RECHECK_TEMPLATE.format(query=str(item["query"])))
+        journal.put(key_base, {"verdict": verdict})
         return
     if job == "wrong_form":
         verdict = ask(

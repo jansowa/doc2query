@@ -1,0 +1,18 @@
+{
+  "contract": "task06-night-jobs-v3-input-v1",
+  "estimated_calls": 6392,
+  "final_tests_used": [],
+  "items_per_job": {
+    "backfill_class_reject": 1007,
+    "backfill_filtered": 3238,
+    "backfill_no_verdict": 3,
+    "confirm_backfill": 1044,
+    "confirm_lexical": 222,
+    "confirm_wrongform": 1236,
+    "polish_recheck": 1388,
+    "wrongform_content_lost": 975,
+    "wrongform_no_violation": 151
+  },
+  "pairs_built": 0,
+  "schema_version": 1
+}
