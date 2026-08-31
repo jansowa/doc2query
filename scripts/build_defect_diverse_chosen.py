@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from doc2query.preferences.defect_pairs_v1 import load_journal
+from doc2query.training.dpo import normalize_task06_query
 from doc2query.utils.records import JsonlWriter, read_records, write_json
 
 
@@ -62,7 +63,12 @@ def main() -> None:
     for row in read_records(args.pairs):
         by_group[str(row["group_id"])].append(dict(row))
 
-    counters: dict[str, int] = {"groups": 0, "pairs": 0, "chosen_substituted": 0}
+    counters: dict[str, int] = {
+        "groups": 0,
+        "pairs": 0,
+        "chosen_substituted": 0,
+        "collision_fallback": 0,
+    }
     args.output_dir.mkdir(parents=True)
     with JsonlWriter(args.output_dir / "pairs_trainable.jsonl") as writer:
         for gid in sorted(by_group):
@@ -90,7 +96,23 @@ def main() -> None:
                     pool.append({"candidate_id": cid, "query": str(candidate["query"])})
 
             for index, pair in enumerate(pairs):
-                assigned = pool[index % len(pool)]
+                # Kandydat nie może być identyczny z rejected TEJ pary po
+                # normalizacji Task 06 (walidator handoffu to odrzuca); przy
+                # kolizji bierzemy następnego z puli, a gdy wszyscy kolidują —
+                # oryginalny chosen pary, który przeszedł walidację kohorty defect.
+                rejected_norm = normalize_task06_query(str(pair["rejected"]))
+                assigned = None
+                for offset in range(len(pool)):
+                    candidate = pool[(index + offset) % len(pool)]
+                    if normalize_task06_query(candidate["query"]) != rejected_norm:
+                        assigned = candidate
+                        break
+                if assigned is None:
+                    assigned = {
+                        "candidate_id": str(pair["chosen_candidate_id"]),
+                        "query": str(pair["chosen"]),
+                    }
+                    counters["collision_fallback"] += 1
                 substituted = assigned["query"] != str(pair["chosen"])
                 counters["pairs"] += 1
                 counters["chosen_substituted"] += int(substituted)

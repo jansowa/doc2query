@@ -169,13 +169,15 @@ def test_supervisor_refuses_forbidden_commands_but_keeps_going(tmp_path: Path) -
 
 def test_supervisor_kills_a_job_that_exceeds_its_time_limit(tmp_path: Path) -> None:
     started = time.monotonic()
-    result = _run_supervisor(tmp_path, [("hung", 1, 1, "sleep 120")])
+    # Unikalny czas snu: `pgrep -f "sleep 120"` łapał cudze procesy (np. retry
+    # `sleep 120` w skryptach kolejek uruchomionych obok testów).
+    result = _run_supervisor(tmp_path, [("hung", 1, 1, "sleep 1207")])
     assert result.returncode == 0
     assert time.monotonic() - started < 60
     assert _done(tmp_path) == set()
     events = _events(tmp_path)
     assert [row["exit_code"] for row in events] == [TIMEOUT_EXIT_CODE]
-    assert subprocess.run(["pgrep", "-f", "sleep 120"], check=False).returncode != 0
+    assert subprocess.run(["pgrep", "-f", "sleep 1207"], check=False).returncode != 0
 
 
 def test_supervisor_skips_completed_jobs_and_malformed_rows(tmp_path: Path) -> None:
