@@ -131,6 +131,7 @@ def launch_arm(
     checkpoint_every: int = 25,
     progress_every: int = 10,
     resume: bool = True,
+    nll_coefficient: float = 0.0,
 ) -> dict[str, Any]:
     """Zwaliduj wejścia, załaduj stos startowy jako trenowalny i wytrenuj ramię."""
     dataset, plan, reference = validate_arm_inputs(arm=arm, inputs=inputs)
@@ -165,6 +166,7 @@ def launch_arm(
         progress_every=progress_every,
         resume=resume,
         authorization_decision=AUTHORIZATION_DECISION,
+        nll_coefficient=nll_coefficient,
     )
 
 

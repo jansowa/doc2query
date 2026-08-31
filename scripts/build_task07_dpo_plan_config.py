@@ -65,6 +65,12 @@ def _directory_fingerprint(directory: Path, kind: str) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan-id", default="task07-dpo-plan-v3-bottom-s42")
+    parser.add_argument(
+        "--beta",
+        type=float,
+        default=BETA,
+        help="beta z prerejestrowanej listy ablacji zadania (0.05/0.1/0.2)",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
         "--base-snapshot",
@@ -131,7 +137,7 @@ def main() -> None:
     config: dict[str, Any] = {
         "plan_id": args.plan_id,
         "seeds": [args.seed],
-        "beta": BETA,
+        "beta": args.beta,
         "loss_type": "sigmoid",
         "learning_rate": LEARNING_RATE,
         "max_length": MAX_LENGTH,

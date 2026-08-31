@@ -170,6 +170,14 @@ def train_dpo(
     checkpoint_every: Annotated[int, typer.Option("--checkpoint-every")] = 25,
     gradient_accumulation_steps: Annotated[int, typer.Option("--grad-accum")] = 16,
     resume: Annotated[bool, typer.Option("--resume/--no-resume")] = True,
+    nll_coefficient: Annotated[
+        float,
+        typer.Option(
+            "--nll-coefficient",
+            min=0.0,
+            help="RPO regularizer weight on chosen NLL (DPO arm only); frozen by ADR.",
+        ),
+    ] = 0.0,
 ) -> None:
     """Train one Task 07 arm from a frozen plan; hyperparameters come from the plan."""
     from doc2query.training.dpo import DPOArm
@@ -196,6 +204,7 @@ def train_dpo(
             checkpoint_every=checkpoint_every,
             gradient_accumulation_steps=gradient_accumulation_steps,
             resume=resume,
+            nll_coefficient=nll_coefficient,
         )
     except (ValueError, ValidationError) as exc:
         console.print(f"[red]Refused:[/red] {exc}", highlight=False)

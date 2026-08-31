@@ -1,0 +1,13 @@
+{
+  "adr": "reports/decisions/task07_anti_collapse_v1.md",
+  "contract": "task06-defect-diverse-chosen-v1",
+  "counters": {
+    "chosen_substituted": 276,
+    "groups": 1449,
+    "pairs": 1794
+  },
+  "final_tests_used": [],
+  "schema_version": 1,
+  "task07_training_authorized": false,
+  "weighted_sft_forbidden": true
+}

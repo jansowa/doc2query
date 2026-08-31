@@ -273,12 +273,14 @@ def _arm_loss(
     reference: Mapping[str, tuple[float, float]],
     beta: float,
     max_length: int,
+    nll_coefficient: float = 0.0,
 ) -> tuple[torch.Tensor, dict[str, float], int]:
     """Strata mikro-batcha wraz z metrykami i liczbą zużytych tokenów."""
     tokens = 0
     if arm == DPOArm.DPO:
         policy_chosen: list[torch.Tensor] = []
         policy_rejected: list[torch.Tensor] = []
+        chosen_counts: list[int] = []
         ref_chosen: list[float] = []
         ref_rejected: list[float] = []
         for row in batch:
@@ -292,6 +294,7 @@ def _arm_loss(
             chosen, chosen_tokens, prompt_tokens = _completion_logprob(
                 model, tokenizer, row.prompt, row.chosen, max_length
             )
+            chosen_counts.append(chosen_tokens)
             rejected, rejected_tokens, _ = _completion_logprob(
                 model, tokenizer, row.prompt, row.rejected, max_length
             )
@@ -309,6 +312,20 @@ def _arm_loss(
             torch.tensor(ref_rejected, device=device),
             beta,
         )
+        if nll_coefficient > 0.0:
+            # Regularyzator RPO (ADR task07_anti_collapse_v1 §2): sama różnica
+            # logprobów pozwala wygrywać spychaniem chosen razem z rejected, co
+            # zawęża rozkład wyjścia i kolapsuje generację. Człon NLL trzyma
+            # bezwzględne prawdopodobieństwo chosen, nie zmieniając kierunku
+            # sygnału preferencji.
+            nll = torch.stack(
+                [
+                    -logprob / max(1, count)
+                    for logprob, count in zip(policy_chosen, chosen_counts, strict=True)
+                ]
+            ).mean()
+            loss = loss + nll_coefficient * nll
+            metrics = {**metrics, "chosen_nll_per_token": float(nll.item())}
         return loss, metrics, tokens
 
     losses: list[torch.Tensor] = []
@@ -350,8 +367,13 @@ def train_arm(
     progress_every: int = 10,
     resume: bool = True,
     authorization_decision: str | None = None,
+    nll_coefficient: float = 0.0,
 ) -> dict[str, Any]:
     """Wytrenuj jedno ramię planu, wznawialnie, i zamroź manifest runu."""
+    if nll_coefficient < 0.0:
+        raise ValueError("nll_coefficient nie może być ujemny")
+    if nll_coefficient > 0.0 and arm != DPOArm.DPO:
+        raise ValueError("regularyzator NLL dotyczy wyłącznie ramienia DPO")
     if arm not in plan.arms:
         raise ValueError(f"plan nie zawiera ramienia {arm.value}")
     budget = plan.arms[arm]
@@ -454,6 +476,7 @@ def train_arm(
                 reference=reference,
                 beta=plan.beta,
                 max_length=plan.max_length,
+                nll_coefficient=nll_coefficient,
             )
             tokens_consumed += tokens
             scaled = loss / max(1, len(window) // batch_size)
@@ -522,7 +545,8 @@ def train_arm(
         "seed": run_seed,
         "beta": plan.beta,
         "learning_rate": plan.learning_rate,
-        "loss_type": plan.loss_type,
+        "loss_type": plan.loss_type if nll_coefficient == 0.0 else "sigmoid_plus_nll",
+        "nll_coefficient": nll_coefficient,
         "max_length": plan.max_length,
         "batch_size": batch_size,
         "gradient_accumulation_steps": gradient_accumulation_steps,

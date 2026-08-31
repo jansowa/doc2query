@@ -384,3 +384,66 @@ def test_dev_metrics_report_reference_free_and_reference_based_numbers() -> None
         reference=reference,
     )
     assert with_reference["implicit_reward_accuracy"] == plain["policy_margin_accuracy"]
+
+
+def test_nll_regularizer_raises_loss_and_is_recorded(tmp_path: Path) -> None:
+    """RPO: człon NLL ma podnosić stratę i trafiać do manifestu, nie zmieniając planu."""
+    data = _dataset()
+    plan = _plan(data, steps=2)
+    plain = train_arm(
+        arm=DPOArm.DPO,
+        dataset=data,
+        plan=plan,
+        reference=_reference(data),
+        model=ToyModel(),
+        tokenizer=ToyTokenizer(),
+        output_dir=tmp_path / "plain",
+        gradient_accumulation_steps=2,
+        checkpoint_every=0,
+        progress_every=0,
+    )
+    regularized = train_arm(
+        arm=DPOArm.DPO,
+        dataset=data,
+        plan=plan,
+        reference=_reference(data),
+        model=ToyModel(),
+        tokenizer=ToyTokenizer(),
+        output_dir=tmp_path / "rpo",
+        gradient_accumulation_steps=2,
+        checkpoint_every=0,
+        progress_every=0,
+        nll_coefficient=1.0,
+    )
+    assert regularized["nll_coefficient"] == 1.0
+    assert regularized["loss_type"] == "sigmoid_plus_nll"
+    assert plain["loss_type"] == "sigmoid"
+    history = [
+        json.loads(line)
+        for line in (tmp_path / "rpo" / "history.jsonl").read_text(encoding="utf-8").split("\n")
+        if line.strip()
+    ]
+    assert all("chosen_nll_per_token" in row for row in history)
+    # Ten sam model startowy i seed: strata z regularyzatorem musi być większa.
+    plain_history = [
+        json.loads(line)
+        for line in (tmp_path / "plain" / "history.jsonl").read_text(encoding="utf-8").split("\n")
+        if line.strip()
+    ]
+    assert history[0]["loss"] > plain_history[0]["loss"]
+
+
+def test_nll_regularizer_is_dpo_only(tmp_path: Path) -> None:
+    data = _dataset()
+    with pytest.raises(ValueError, match="wyłącznie ramienia DPO"):
+        train_arm(
+            arm=DPOArm.CONTINUED_SFT,
+            dataset=data,
+            plan=_plan(data),
+            reference={},
+            model=ToyModel(),
+            tokenizer=ToyTokenizer(),
+            output_dir=tmp_path / "bad",
+            progress_every=0,
+            nll_coefficient=0.5,
+        )
