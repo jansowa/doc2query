@@ -1,0 +1,9 @@
+{
+  "contract": "task06-sft-full-audit-input-v1",
+  "final_tests_used": [],
+  "note": "audyt pomiarowy pelnej puli; zadna para nie jest usuwana tym runem",
+  "pairs": 384576,
+  "prompt_version": "sft-audit-v2 (ostra os jezykowa)",
+  "schema_version": 1,
+  "source": "data/processed/v1/doc2query_train.parquet"
+}

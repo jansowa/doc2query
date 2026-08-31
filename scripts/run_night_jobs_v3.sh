@@ -30,7 +30,7 @@ OUT="artifacts/task06/night_jobs_v3/verdicts"
 [ -d "$IN" ] || { echo "brak $IN — rozpakuj night_jobs_v3_input.tar.gz w katalogu repo" >&2; exit 2; }
 
 exec uv run python scripts/task06_night_jobs_remote.py \
-  --jobs confirm_pairs,polish_recheck \
+  --jobs confirm_pairs,polish_recheck,sft_full_audit \
   --input-dir "$IN" --output-dir "$OUT" \
   --base-url "$BASE_URL" --model "$MODEL" --api-key "$API_KEY" \
   --concurrency "$CONCURRENCY"

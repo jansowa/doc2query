@@ -221,6 +221,36 @@ Zwróć wyłącznie JSON:
  "kategoria": "<brak|mojibake|nazwa_wlasna|kalka|urwane|inny_jezyk>",
  "uzasadnienie": "<jedno zdanie>"}}"""
 
+# Prompt v2: identyczne osie co v1, ale oś językowa ma ostrą definicję z
+# przeglądu 40 pozycji — pilotaż wykazał, że v1 liczy anglicyzmy jako wadę.
+SFT_AUDIT_V2_TEMPLATE = """Pasaż:
+{passage}
+
+Zapytanie (z danych treningowych, tłumaczone maszynowo z angielskiego):
+{query}
+
+Oceń tę parę na czterech osiach, niezależnie od siebie:
+
+1. `odpowiadalne` — czy na to zapytanie da się odpowiedzieć WYŁĄCZNIE na
+   podstawie tego pasażu? false, gdy pasaż jest tylko w temacie albo odpowiada
+   częściowo. Uwaga na synonimy i warianty terminów (np. odma/rozedma) — licz
+   treść, nie dosłowne dopasowanie słów.
+2. `polszczyzna` — ścisła definicja. WADĄ SĄ: uszkodzone znaki (â, Ã),
+   przekręcone lub sklejone nazwy własne, kalki składniowe dające bezsens,
+   urwane zdania, słowa z języka innego niż polski i angielski. WADĄ NIE SĄ:
+   angielskie nazwy własne i terminy (walking dead, selenium, paracord),
+   skróty stanów i miast (nj, ca, de), mała litera, styl telegraficzny
+   zapytań, brak znaku zapytania.
+3. `sensowne_zapytanie` — czy to realna potrzeba informacyjna użytkownika
+   wyszukiwarki? false dla fragmentów zdań, testów z lukami, bełkotu.
+4. `zbyt_ogolne` — czy zapytanie pasowałoby do tysięcy różnych pasaży?
+   Krótkie nie znaczy ogólne: „czy DNA jest widoczne" jest konkretne.
+
+Zwróć wyłącznie JSON:
+{{"odpowiadalne": <true|false>, "polszczyzna": <true|false>,
+ "sensowne_zapytanie": <true|false>, "zbyt_ogolne": <true|false>,
+ "glowny_problem": "<brak|nieodpowiadalne|tlumaczenie|niesensowne|zbyt_ogolne>"}}"""
+
 SFT_AUDIT_TEMPLATE = """Pasaż:
 {passage}
 
@@ -366,6 +396,8 @@ def _items(job: str, root: Path) -> list[dict[str, Any]]:
         return rows(root / "pairs_to_confirm.jsonl")
     if job == "polish_recheck":
         return rows(root / "polish_flagged.jsonl")
+    if job == "sft_full_audit":
+        return rows(root / "sft_full_pool.jsonl")
     raise SystemExit(f"nieznane zadanie: {job}")
 
 
@@ -453,6 +485,10 @@ def _run_item(job: str, item: dict[str, Any], journal: Journal, ask: Any) -> Non
             WRONG_FORM_TEMPLATE.format(chosen=str(item["chosen"]), form=str(item["form"]))
         )
         journal.put(key_base, {"verdict": verdict, "source_form": str(item["form"])})
+        return
+    if job == "sft_full_audit":
+        verdict = ask(SFT_AUDIT_V2_TEMPLATE.format(passage=passage, query=str(item["query"])))
+        journal.put(key_base, {"verdict": verdict})
         return
     if job == "sft_data_audit":
         verdict = ask(SFT_AUDIT_TEMPLATE.format(passage=passage, query=str(item["query"])))
