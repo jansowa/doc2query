@@ -1,0 +1,18 @@
+{
+  "adapter_path": "runs/T07-V3-CSFT-S42/adapter",
+  "attempts": 2082,
+  "code": {
+    "git_commit": "6148b66e025db6dc42e397e9f06de997eb70d0ba",
+    "git_dirty": true,
+    "package_version": "0.1.0"
+  },
+  "duplicate_outputs": 147,
+  "exhausted_groups": 49,
+  "experiment_id": "TASK07-PROBE-GEN-V1",
+  "generated": 1935,
+  "invalid_outputs": 0,
+  "output_path": "runs/task07_probe_gen_v1/bottom_csft/generated.jsonl",
+  "precision": "bf16",
+  "records": 496,
+  "seconds": 3137.7895648919803
+}

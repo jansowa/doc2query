@@ -1,0 +1,18 @@
+{
+  "adapter_path": "runs/T07-V3-DPO-S42/adapter",
+  "attempts": 2722,
+  "code": {
+    "git_commit": "6148b66e025db6dc42e397e9f06de997eb70d0ba",
+    "git_dirty": true,
+    "package_version": "0.1.0"
+  },
+  "duplicate_outputs": 1107,
+  "exhausted_groups": 278,
+  "experiment_id": "TASK07-PROBE-GEN-V1",
+  "generated": 1615,
+  "invalid_outputs": 0,
+  "output_path": "runs/task07_probe_gen_v1/bottom_dpo/generated.jsonl",
+  "precision": "bf16",
+  "records": 496,
+  "seconds": 5079.751423625014
+}
