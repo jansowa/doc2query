@@ -178,6 +178,7 @@ htmlcov/
 !/reports/measurements/task07_owner_spot_check_2026-08-28.md
 !/reports/measurements/task07_arms_dev_result_2026-08-29.md
 !/reports/measurements/task07_generation_collapse_2026-08-31.md
+!/reports/measurements/task06_sft_data_audit_2026-08-31.md
 !/reports/measurements/task07/
 /reports/measurements/task07/*
 !/reports/measurements/task07/pair_contrast_v1/
