@@ -405,7 +405,7 @@ def _run_item(job: str, item: dict[str, Any], journal: Journal, ask: Any) -> Non
     key_base = f"{job}::{item['id']}"
     if journal.get(key_base) is not None:
         return
-    passage = str(item["passage"])
+    passage = str(item.get("passage", ""))
     if job == "lexical_mutation":
         verdict = ask(
             LEXICAL_TEMPLATE.format(
