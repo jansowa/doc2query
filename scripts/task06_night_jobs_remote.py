@@ -71,7 +71,7 @@ PROMPT_VERSION = "task06-night-jobs-pl-v1"
 # starym układzie do zakończenia — jeden pomiar, jeden prompt; stąd wersja per
 # zadanie, a nie globalna.
 PREFIX_FIRST_VERSION = "task06-night-jobs-pl-v2-prefix-first"
-LEGACY_JOBS = frozenset({"sft_full_audit", "sft_data_audit"})
+LEGACY_JOBS = frozenset({"sft_data_audit"})
 FAIL_FAST_AFTER = 10
 
 SYSTEM = (
@@ -279,13 +279,14 @@ DATA_POLISH = """Zapytanie:
 
 # Prompt v2: identyczne osie co v1, ale oś językowa ma ostrą definicję z
 # przeglądu 40 pozycji — pilotaż wykazał, że v1 liczy anglicyzmy jako wadę.
-SFT_AUDIT_V2_TEMPLATE = """Pasaż:
-{passage}
+# Od wersji prefix-first instrukcja jest w prompcie systemowym, dane w user;
+# treść osi bajt w bajt jak w układzie v2 (zmienione tylko zdanie wprowadzające).
+SYS_SFT_AUDIT_V2 = (
+    SYSTEM
+    + """
 
-Zapytanie (z danych treningowych, tłumaczone maszynowo z angielskiego):
-{query}
-
-Oceń tę parę na czterech osiach, niezależnie od siebie:
+Dostaniesz pasaż i zapytanie z danych treningowych (tłumaczone maszynowo
+z angielskiego). Oceń tę parę na czterech osiach, niezależnie od siebie:
 
 1. `odpowiadalne` — czy na to zapytanie da się odpowiedzieć WYŁĄCZNIE na
    podstawie tego pasażu? false, gdy pasaż jest tylko w temacie albo odpowiada
@@ -306,6 +307,13 @@ Zwróć wyłącznie JSON:
 {{"odpowiadalne": <true|false>, "polszczyzna": <true|false>,
  "sensowne_zapytanie": <true|false>, "zbyt_ogolne": <true|false>,
  "glowny_problem": "<brak|nieodpowiadalne|tlumaczenie|niesensowne|zbyt_ogolne>"}}"""
+)
+
+DATA_SFT_AUDIT = """Pasaż:
+{passage}
+
+Zapytanie (z danych treningowych, tłumaczone maszynowo z angielskiego):
+{query}"""
 
 SFT_AUDIT_TEMPLATE = """Pasaż:
 {passage}
@@ -565,7 +573,10 @@ def _run_item(job: str, item: dict[str, Any], journal: Journal, ask: Any) -> Non
         journal.put(key_base, {"verdict": verdict, "source_form": str(item["form"])})
         return
     if job == "sft_full_audit":
-        verdict = ask(SFT_AUDIT_V2_TEMPLATE.format(passage=passage, query=str(item["query"])))
+        verdict = ask(
+            DATA_SFT_AUDIT.format(passage=passage, query=str(item["query"])),
+            system=SYS_SFT_AUDIT_V2,
+        )
         journal.put(key_base, {"verdict": verdict})
         return
     if job == "sft_data_audit":
