@@ -1,13 +1,14 @@
 {
   "adr": "reports/decisions/task06_defect_pair_pipeline_v1.md",
   "contract": "task06-night-jobs-input-v1",
-  "estimated_calls": 37406,
+  "estimated_calls": 39312,
   "final_tests_used": [],
   "items_per_job": {
     "answer_leak_v2": 2362,
     "chosen_recheck": 368,
     "class_backfill": 5292,
     "label_purity": 1794,
+    "lexical_mutation": 953,
     "sft_data_audit": 12000,
     "teacher_probe_queries": 1984
   },

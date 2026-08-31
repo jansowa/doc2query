@@ -25,7 +25,11 @@ Każde zadanie ma jasno zapisane, po co jest i czego NIE wolno z niego wnioskowa
    zapytania). To **pomiar wad w istniejącej puli**, nie filtr: żadna para nie
    jest tym zadaniem usuwana, a przefiltrowanie puli oznaczałoby nową kohortę
    SFT i nowy punkt startowy, czyli osobną decyzję właściciela.
-7. `teacher_probe_queries` — zapytania teachera dla 1 984 pasaży kohorty probe
+7. `wrong_form` — mutacja formy `chosen` (pytanie pełne ↔ fraza kluczowa) przy
+   zachowanej treści. Etykieta z konstrukcji, weryfikacja lokalna regexem, bez
+   sędziego. Buduje klasę par uczącą zależności wyjścia od kontrolek — trzecia
+   przyczyna kolapsu z ADR task07_anti_collapse_v1.
+8. `teacher_probe_queries` — zapytania teachera dla 1 984 pasaży kohorty probe
    (rozłącznej z obiema kohortami treningowymi). To **ramię odniesienia** dla
    probe embeddera: mierzy sufit, do którego w ogóle może dobić generator po
    DPO. Nie jest kandydatem na finalistę i nie wchodzi do żadnej kohorty par.
@@ -166,6 +170,21 @@ PROBE_CONTROLS = (
     "Forma: keyword_query\nIntencja: entity_lookup\nDocelowy fragment: middle",
 )
 
+WRONG_FORM_TEMPLATE = """Poprawne zapytanie wyszukiwawcze:
+{chosen}
+
+Jego forma: {form}
+
+Zadanie: przepisz je na PRZECIWNĄ formę, zachowując dokładnie tę samą treść i
+potrzebę informacyjną:
+- jeśli to pytanie pełne — zrób frazę kluczową: bez znaku zapytania, bez słowa
+  pytajnego na początku (czy, jak, co, ile...), styl telegraficzny;
+- jeśli to fraza kluczowa — zrób naturalne pytanie pełne ze znakiem zapytania.
+
+Zachowaj wszystkie nazwy własne, liczby i terminy. Jedna linia, bez komentarza.
+
+Zwróć wyłącznie JSON: {{"query": "<zapytanie w przeciwnej formie>"}}"""
+
 SFT_AUDIT_TEMPLATE = """Pasaż:
 {passage}
 
@@ -305,6 +324,8 @@ def _items(job: str, root: Path) -> list[dict[str, Any]]:
         return rows(root / "probe_passages.jsonl")
     if job == "sft_data_audit":
         return rows(root / "sft_sample.jsonl")
+    if job == "wrong_form":
+        return rows(root / "answer_leak_groups.jsonl")
     raise SystemExit(f"nieznane zadanie: {job}")
 
 
@@ -362,6 +383,12 @@ def _run_item(job: str, item: dict[str, Any], journal: Journal, ask: Any) -> Non
         journal.put(
             key_base, {"verdict": verdict, "answerable_check": check, "defect_class": defect}
         )
+        return
+    if job == "wrong_form":
+        verdict = ask(
+            WRONG_FORM_TEMPLATE.format(chosen=str(item["chosen"]), form=str(item["form"]))
+        )
+        journal.put(key_base, {"verdict": verdict, "source_form": str(item["form"])})
         return
     if job == "sft_data_audit":
         verdict = ask(SFT_AUDIT_TEMPLATE.format(passage=passage, query=str(item["query"])))
