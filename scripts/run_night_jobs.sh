@@ -17,6 +17,25 @@ MODEL="${2:?podaj nazwę modelu}"
 API_KEY="${3:?podaj API key}"
 CONCURRENCY="${4:-12}"
 
+# --- certyfikat intranetowy ----------------------------------------------------
+# Serwer inferencji za firmowym CA: Python nie zna wystawcy i pada na
+# CERTIFICATE_VERIFY_FAILED. Sklejamy systemowe CA z firmowym w jeden plik,
+# żeby uv nadal dochodził do PyPI, a urllib do serwera. Jawnie ustawiony
+# SSL_CERT_FILE ma pierwszeństwo i nie jest nadpisywany.
+INSERT_CA="${INSERT_CA:-/mnt/c/Users/Public/insert-ca.pem}"
+if [ -z "${SSL_CERT_FILE:-}" ] && [ -f "$INSERT_CA" ]; then
+  SYSTEM_CA=""
+  for candidate in /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt; do
+    [ -f "$candidate" ] && SYSTEM_CA="$candidate" && break
+  done
+  if [ -n "$SYSTEM_CA" ]; then
+    COMBINED="$(pwd)/artifacts/combined-ca.pem"
+    cat "$SYSTEM_CA" "$INSERT_CA" > "$COMBINED"
+    export SSL_CERT_FILE="$COMBINED"
+    echo "[ssl] używam połączonego bundle CA: $COMBINED"
+  fi
+fi
+
 IN="artifacts/task06/night_jobs_v1/input"
 OUT="artifacts/task06/night_jobs_v1/verdicts"
 [ -d "$IN" ] || { echo "brak $IN — rozpakuj night_jobs_input.tar.gz w katalogu repo" >&2; exit 2; }
