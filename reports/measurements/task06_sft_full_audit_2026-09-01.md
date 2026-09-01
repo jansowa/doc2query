@@ -1,0 +1,59 @@
+# Pełny audyt puli SFT: 384 576 par, cztery osie (2026-09-01)
+
+## Status
+
+Pomiar wykonany w całości na serwerze inferencji właściciela (Qwen3.8-27B,
+temperature 0), zadanie `sft_full_audit` z paczki v3. Journal kompletny:
+**388 466 unikalnych kluczy = 384 576 (audyt) + 2 502 (confirm_pairs) +
+1 388 (polish_recheck)**, zero duplikatów, 118 werdyktów audytu ze złamanym
+schematem (0,03%, pominięte w agregacji). To pomiar wad w istniejącej puli,
+nie filtr — żadna para nie została usunięta. `final_tests_used=[]`.
+
+**Zmiana promptu w trakcie pomiaru (na życzenie właściciela, z zapisem w
+metadanych):** pierwsze 36 089 werdyktów policzono układem v1 (instrukcja za
+danymi), pozostałe 348 487 układem prefix-first (instrukcja w prompcie
+systemowym, dane w user; `prompt_version` per rekord). Treść czterech osi
+bajt w bajt identyczna w obu układach.
+
+## 1. Wynik (całość, n = 384 458 poprawnych werdyktów)
+
+| oś | v1 (n=36 082) | v2 prefix-first (n=348 376) |
+|---|---|---|
+| `nieodpowiadalne` | 13,4% | 11,9% |
+| `zła polszczyzna` | 4,6% | 8,4% |
+| `niesensowne` | 0,5% | 0,7% |
+| `zbyt ogólne` | 0,8% | 0,8% |
+| **≥1 wada twarda** | **17,8%** | **19,7%** |
+
+## 2. Granica promptu jest widoczna — i dotyczy głównie osi językowej
+
+Rate osi w kolejności przetwarzania (20 kubełków po ~19 tys.): skok
+`zła polszczyzna` 4,7→8,7% następuje dokładnie na granicy wersji promptu
+(kubełek 1→2) i dalej jest płaski (8,1–8,8%). `nieodpowiadalne` przesuwa się
+nieznacznie (13,4→11,9%) i też jest płaskie. Pula była w losowej kolejności,
+więc to efekt promptu, nie danych.
+
+**Przegląd próbek (po 12 losowych flag językowych z każdego segmentu):**
+precyzja osi `zła polszczyzna` jest niska w OBU segmentach — większość flag to
+poprawne polskie zapytania („dlaczego fitness jest ważny", „różne rodzaje
+husky", „jaki jest wiek pełnoletności w New Hampshire?") albo słownikowe
+zapytania o angielskie terminy („co oznacza dispensation", „definicja plait"),
+których ścisła definicja wprost każe nie liczyć jako wadę. Szacunkowa precyzja
+z próbki: ~10–25%. Segment v2 flaguje ~2× więcej, ale nie lepiej.
+
+**Wniosek: oś `zła polszczyzna` z tego pomiaru NIE nadaje się na filtr** bez
+osobnej, dokładniejszej procedury (sędzia konsekwentnie ignoruje ścisłą
+definicję). Nośna jest oś `nieodpowiadalne`: 11,9–13,4% spójne z pilotażem
+12 tys. (15,3%, prompt v1 nieostry) i z odrzutami answerability `chosen`
+w Task 06 (13,5%).
+
+## 3. Co dalej (decyzje właściciela, bez zmian względem raportu pilotażowego)
+
+Opcje z `task06_sft_data_audit_2026-08-31.md` §3 pozostają aktualne; ten pomiar
+daje mapę wad **per para** dla całej puli (klucz `sft_full_audit::<id>`
+w journalu), więc ewentualny filtr nie wymaga już żadnych obliczeń — tylko
+decyzji. Dla osi językowej rekomendacja: nie filtrować tym sygnałem;
+ewentualnie użyć wyłącznie podzbioru `glowny_problem=tlumaczenie` z dodatkową
+weryfikacją mechaniczną (mojibake/regex), która ma wysoką precyzję.
+
+`final_tests_used=[]`

@@ -1,0 +1,69 @@
+# Preregistracja: screen probe embedderów dla ramion Task 07 (v1)
+
+## Status
+
+Preregistracja spisana PRZED uruchomieniem jakiegokolwiek treningu probe dla
+Task 07 (2026-09-01). Realizuje zapowiedzianą w
+`reports/measurements/task07_generation_collapse_2026-08-31.md` §3 konsekwencję
+kolapsu generacji. `final_tests_used=[]` — całość na dev; żaden finalista nie
+jest tu zamrażany.
+
+## Cel i rola wyniku
+
+Ranking przesiewowy 13 ramion Task 07 na **prymarnej** metryce kampanii
+(probe embedder, naturalne zamrożone zapytania dev), po screen-budżecie
+generacji (496 pasaży). To screen: służy wyborowi ramion do pełnego pomiaru
+(pełna kohorta probe + protokół confirm z wieloma seedami), NIE do ogłoszenia
+zwycięzcy Task 07 ani decyzji o finalistach.
+
+## Ramiona (13)
+
+`start` (adapter SFT bez DPO — punkt odniesienia), kohorta bottom-v3
+(`bottom_csft`, `bottom_wsft`, `bottom_dpo`), kohorta near-miss
+(`nearmiss_csft`, `nearmiss_wsft`, `nearmiss_dpo`), kohorta defect
+(`defect_csft`, `defect_wsft`, `defect_dpo`) oraz ramiona antykolapsowe ADR
+`task07_anti_collapse_v1` (`beta02`, `rpo`, `divch`). Zapytania: gotowe
+`runs/task07_probe_gen_v1/<ramię>/generated.jsonl` (nic nie jest dogenerowywane).
+
+## Protokół (zamrożony przed startem)
+
+1. **Budżet równany przecięciem slotów** (slot = `doc_id × form × intent`):
+   do treningu wchodzą wyłącznie sloty wypełnione przez WSZYSTKIE ramiona
+   i mające ≥1 negatyw po filtrze HN0 w KAŻDYM ramieniu — uogólnienie polityki
+   Task 05 `dual_arm_group_intersection_hn0_filter_drop` na 13 ramion.
+   Duplikaty tekstu zapytania NIE wykluczają slotu (są prawdziwym wyjściem
+   ramienia); kolaps raportujemy osobno metrykami różnorodności.
+   Implementacja: `scripts/build_task07_probe_inputs.py` →
+   `artifacts/task07/probe_inputs_v1/` (manifest z licznościami i sha256).
+2. **Negatywy**: surowe `hard_negatives` dziedziczone z zamrożonego dev
+   (`dev_intrinsic`, manifest `data/processed/v1/evaluation/task04-v1`),
+   filtr HN0 prymarnym sędzią (`sdadas/polish-reranker-roberta-v3`) z pinowaną
+   kalibracją `artifacts/task02/pfn_dev_v1/calibration.json`, polityka `drop` —
+   przepis identyczny z Task 05, bez żadnej nowej decyzji.
+3. **Trening probe**: protokół screen Task 05 bez modyfikacji —
+   `configs/evaluation/probe_v1.yaml` (`sdadas/polish-reranker-base-ranknet`),
+   `--max-steps 500 --batch-size 4 --seed 42 --train-prefix-limit <N_wspólne>`,
+   `--query-source synthetic`. Jeden seed na ramię (to screen; wariancja
+   within-arm zmierzona w Task 05).
+4. **Ewaluacja**: corpus retrieval na pełnym korpusie (2 404 263 dokumentów),
+   zapytania `dev_intrinsic_rank10` (6 598 naturalnych zapytań dev).
+   **Metryka pierwotna: `corpus_recall_at_10`**; `corpus_ndcg_at_10` i
+   `corpus_mrr_at_10` raportowane pomocniczo. Zbiory testowe nietykane.
+5. **Wykonanie**: `scripts/queue_task07_probe_embedders.sh` →
+   `runs/task07_probe/<ramię>/` (kolejność ramion wg wartości informacyjnej,
+   wznawialna po `result.json`).
+
+## Reguły interpretacji (spisane przed wynikiem)
+
+- Porównania czytamy WZGLĘDEM `start`: ramię „pomaga", jeśli przewyższa start
+  na metryce pierwotnej; ranking między ramionami traktujemy jako przesiewowy
+  (jeden seed, screen-budżet) — różnice rzędu wariancji within-arm z Task 05
+  nie są rozstrzygające.
+- Wynik probe NIE jest unieważniany ani „korygowany" metrykami powierzchniowymi
+  (score sędziego, overlap, duplikaty). Metryki różnorodności raportujemy obok,
+  jako kontekst kolapsu.
+- Decyzje otwierane tym pomiarem: wybór ramion do pełnego pomiaru probe
+  (decyzja właściciela). Pomiar NIE otwiera treningu nowych kohort ani zmian
+  w danych.
+
+`final_tests_used=[]`

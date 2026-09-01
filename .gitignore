@@ -179,6 +179,8 @@ htmlcov/
 !/reports/measurements/task07_arms_dev_result_2026-08-29.md
 !/reports/measurements/task07_generation_collapse_2026-08-31.md
 !/reports/measurements/task06_sft_data_audit_2026-08-31.md
+!/reports/measurements/task06_sft_full_audit_2026-09-01.md
+!/reports/preregistrations/task07_probe_screen_v1.md
 !/reports/measurements/task06_sft_audit_review_sample_2026-08-31.md
 !/reports/measurements/task07/
 /reports/measurements/task07/*
