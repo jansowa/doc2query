@@ -76,4 +76,28 @@ zwycięzcy Task 07 ani decyzji o finalistach.
   (decyzja właściciela). Pomiar NIE otwiera treningu nowych kohort ani zmian
   w danych.
 
+## Poprawka 2 (2026-09-01, przed pierwszym wynikiem probe): analiza parowana
+
+Spisana, zanim jakiekolwiek ramię doszło do metryki retrieval (w chwili zapisu
+ramię `start` jest w trakcie kodowania korpusu). Powód: rzadkie etykiety
+MS MARCO (jeden oznaczony pozytyw na zapytanie przy 2,4 mln pasaży z
+niemal-duplikatami) karzą embedder za znalezienie relewantnego, ale
+nieoznaczonego dokumentu. Kara jest wspólna dla ramion, więc parowanie per
+zapytanie w dużej mierze ją kasuje.
+
+1. Obok średnich raportujemy **parowane porównanie per zapytanie** każdego
+   ramienia względem `start`: win/tie/loss oraz parowany bootstrap CI 95%
+   różnicy `corpus_recall_at_10` (10 000 resamplingów, seed 42);
+   implementacja `scripts/compare_task07_probe_paired.py` (czysty
+   postprocessing istniejących `corpus_retrieval_per_query.jsonl`, bez GPU).
+2. Reguła interpretacji: ramię „pomaga", gdy CI 95% różnicy parowanej vs
+   `start` leży w całości powyżej zera; średnie bez CI pozostają opisowe.
+3. Sanity-check metody na zamkniętych danych Task 05 (hybrid vs W05):
+   delta +0,0259, CI95 [0,0191; 0,0330] — metoda odtwarza znaną decyzję.
+4. Dla finalistów (etap confirm) dokładamy drugą oś: natywny holdout P-02
+   (`test_native_pl`), odporny na zarzut premiowania translationese —
+   wymaga GPU i osobnej preregistracji przy confirm.
+5. Bez zmian pozostaje zakaz „naprawiania" etykiet lokalnymi rerankerami
+   (żadnego doznaczania pozytywów bez nowego prospektywnego ADR).
+
 `final_tests_used=[]`
