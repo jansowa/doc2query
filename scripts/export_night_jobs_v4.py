@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """Paczka v4 dla serwera: niezależny recheck answerability flag pełnego audytu.
 
-Pełny audyt SFT oznaczył pary `nieodpowiadalne`, ale przegląd próbek dał
-precyzję ~60-80% — za mało, by na samych flagach oprzeć filtr puli (usunięcie
-fałszywej flagi wyrzuca dobrą parę). Ten pakiet buduje wejście do zadania
-`chosen_recheck` (niezależny prompt answerability, inna instrukcja niż audyt):
+Decyzja właściciela (2026-09-01): przy nadmiarze danych filtr optymalizuje
+RECALL, nie precyzję — lepiej wyciąć trochę dobrych par, niż zostawić złe,
+bo pula (384 576) jest 7x większa od próbki treningowej SFT, a zła para
+aktywnie uczy wady. Ten pakiet buduje wejście do `chosen_recheck`
+(niezależny prompt answerability) w dwóch rolach POMIAROWYCH, nie bramki:
 
-1. wszystkie pary z flagą `odpowiadalne=false` — para trafia na listę filtra
-   tylko przy ZGODNYM werdykcie obu promptów (flaga ∧ recheck=false);
-2. kontrolna losowa próbka par czystych (seed 20260901) — do oszacowania,
-   ile wad audyt przepuszcza (FN rate), zanim zapadnie decyzja o filtrze.
+1. wszystkie pary z flagą `odpowiadalne=false` — pomiar kosztu filtra
+   (ile dobrych par poświęcamy) i skrzywienia wycinanego podzbioru;
+2. kontrolna losowa próbka par czystych (seed 20260901) — oszacowanie, ile
+   wad audyt przepuszcza (FN); wysoki FN otwiera nocny skan całej reszty
+   puli drugim promptem i filtr na SUMIE flag obu promptów.
 
 To pomiar; żadna para nie jest usuwana. `final_tests_used=[]`.
 """
