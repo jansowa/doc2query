@@ -47,6 +47,36 @@ definicję). Nośna jest oś `nieodpowiadalne`: 11,9–13,4% spójne z pilotaże
 12 tys. (15,3%, prompt v1 nieostry) i z odrzutami answerability `chosen`
 w Task 06 (13,5%).
 
+## 2a. Przegląd jakości ocen per oś (po 10 losowych flag z segmentu v2 + 10 par czystych, seed 20260901)
+
+- **`nieodpowiadalne` — precyzja ~60–80%, oś nośna.** Sędzia łapie subtelne,
+  prawdziwe wady: pasaż z numerem telefonu *innej organizacji* niż pytany
+  senator; pytanie o socjologa łączącego stratyfikację z technologią (Lenski)
+  przy pasażu o Weberze; brak lokalizacji czujnika w pasażu o jego
+  właściwościach. Błądzi w dwóch trybach: (a) surowość przy odpowiedziach
+  częściowych (małe hipopotamy vs hipopotamy w ogóle), (b) artefakty
+  tłumaczenia — „ile furlongów w mili" oflagowane, bo pasaż mówi
+  „stadiów/stajnia" (tłumaczenie rozjechało termin, semantycznie odpowiada).
+- **`niesensowne` — precyzja ~85–90%, najlepsza oś.** Niemal same prawdziwe
+  wady: testy z lukami („_______ teoria jest nazywana trzecią siłą"), urwane
+  zapytania („jak długo smażyć hamburgery na"), nieprzetłumaczone zdania
+  angielskie, zmielone skróty („oddział Wells Fargo w Monument, co" — CO to
+  stan Kolorado).
+- **`zbyt ogólne` — precyzja ~70%.** Trafne flagi to zapytania bez kluczowego
+  wyróżnika pasażu („o której godzinie można kupić piwo" przy pasażu o Missouri,
+  „różnica czasu z Koreą" bez drugiego kraju); fałszywe to zapytania zwyczajnie
+  krótkie, ale specyficzne („rodzaje drzew w południowej szwecji").
+- **`zła polszczyzna` — precyzja ~10–25%, NIE nadaje się na filtr** (szczegóły
+  w §2): sędzia ignoruje ścisłą definicję i flaguje poprawne polskie zapytania
+  oraz słownikowe zapytania o angielskie terminy.
+- **Pary czyste** — w próbce 10/10 faktycznie czystych (zapytanie sensowne,
+  odpowiedź w pasażu); brak sygnału, by audyt masowo przepuszczał wady.
+
+**Wniosek praktyczny:** ewentualny filtr puli powinien opierać się na
+`nieodpowiadalne` + `niesensowne` (razem ~12,6% puli), traktować `zbyt ogólne`
+jako sygnał miękki, a oś językową zastąpić wąską regułą mechaniczną
+(mojibake/regex) o wysokiej precyzji.
+
 ## 3. Co dalej (decyzje właściciela, bez zmian względem raportu pilotażowego)
 
 Opcje z `task06_sft_data_audit_2026-08-31.md` §3 pozostają aktualne; ten pomiar
