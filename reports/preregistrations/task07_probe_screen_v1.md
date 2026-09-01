@@ -94,9 +94,14 @@ zapytanie w dużej mierze ją kasuje.
    `start` leży w całości powyżej zera; średnie bez CI pozostają opisowe.
 3. Sanity-check metody na zamkniętych danych Task 05 (hybrid vs W05):
    delta +0,0259, CI95 [0,0191; 0,0330] — metoda odtwarza znaną decyzję.
-4. Dla finalistów (etap confirm) dokładamy drugą oś: natywny holdout P-02
-   (`test_native_pl`), odporny na zarzut premiowania translationese —
-   wymaga GPU i osobnej preregistracji przy confirm.
+4. ~~Dla finalistów (etap confirm) dokładamy natywny holdout P-02~~ —
+   **WYCOFANE (2026-09-01, przed pierwszym wynikiem):** `test_native_pl` ma
+   `usage_policy: final_test_only_never_for_tuning` i wg kontraktu P-04 nie
+   wolno go użyć do selekcji finalistów; jego rola jest w JEDNYM finalnym
+   otwarciu (M-04, Task 10). Kontrola translationese na etapie confirm, jeśli
+   właściciel jej zechce, wymaga NOWEGO natywnego zbioru dev (np. z danych
+   retrieval właściciela) i osobnej prospektywnej preregistracji — nigdy
+   zamrożonych testów.
 5. Bez zmian pozostaje zakaz „naprawiania" etykiet lokalnymi rerankerami
    (żadnego doznaczania pozytywów bez nowego prospektywnego ADR).
 
