@@ -35,6 +35,16 @@ zwycięzcy Task 07 ani decyzji o finalistach.
    ramienia); kolaps raportujemy osobno metrykami różnorodności.
    Implementacja: `scripts/build_task07_probe_inputs.py` →
    `artifacts/task07/probe_inputs_v1/` (manifest z licznościami i sha256).
+
+   **Poprawka przed pierwszym wynikiem (2026-09-01):** kontrakt P-04 w
+   `train_probe` wymaga jednolitego K zapytań na pasaż, a surowe przecięcie
+   slotów daje zmienne K (rozkład 1:13, 2:137, 3:177, 4:169 na 496 pasażach).
+   Dokładamy deterministyczny, ślepy na ramiona krok
+   (`scripts/uniformize_task07_probe_inputs.py`): K wybrane maksymalizacją
+   budżetu par → **K=3, 346 pasaży, 1 038 par na ramię**; pasaże z 4 slotami
+   tracą ostatni slot w porządku leksykalnym identyfikatorów. Poprawka spisana
+   po awarii kontraktowej treningu, PRZED policzeniem jakiejkolwiek ewaluacji
+   (żadne ramię nie doszło do metryki).
 2. **Negatywy**: surowe `hard_negatives` dziedziczone z zamrożonego dev
    (`dev_intrinsic`, manifest `data/processed/v1/evaluation/task04-v1`),
    filtr HN0 prymarnym sędzią (`sdadas/polish-reranker-roberta-v3`) z pinowaną

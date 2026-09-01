@@ -12,7 +12,8 @@ cd "$(dirname "$0")/.."
 [ -f pyproject.toml ] || { echo "nie jestem w katalogu repozytorium" >&2; exit 2; }
 
 GPU_PY=".venv-gpu/bin/python"
-INPUTS="artifacts/task07/probe_inputs_v1"
+INPUTS_RAW="artifacts/task07/probe_inputs_v1"
+INPUTS="artifacts/task07/probe_inputs_v1_uniform_k"
 RUN_ROOT="runs/task07_probe"
 # Kolejność wg wartości informacyjnej: baza, ramiona DPO/antykolapsowe, potem SFT.
 ARMS="start defect_dpo rpo beta02 divch bottom_dpo nearmiss_dpo defect_csft defect_wsft nearmiss_csft nearmiss_wsft bottom_csft bottom_wsft"
@@ -33,12 +34,19 @@ while pgrep -f "doc2query.cli (train|generate|evaluate)" >/dev/null 2>&1; do
   sleep 120
 done
 
-if [ ! -f "$INPUTS/manifest.json" ]; then
+if [ ! -f "$INPUTS_RAW/manifest.json" ]; then
   echo "[probe] materializacja wejść ($(date '+%H:%M:%S'))"
-  rm -rf "${INPUTS}.czesciowe" 2>/dev/null || true
-  [ -d "$INPUTS" ] && mv "$INPUTS" "${INPUTS}.czesciowe"
-  PYTHONPATH=src "$GPU_PY" scripts/build_task07_probe_inputs.py --output-dir "$INPUTS" \
+  rm -rf "${INPUTS_RAW}.czesciowe" 2>/dev/null || true
+  [ -d "$INPUTS_RAW" ] && mv "$INPUTS_RAW" "${INPUTS_RAW}.czesciowe"
+  PYTHONPATH=src "$GPU_PY" scripts/build_task07_probe_inputs.py --output-dir "$INPUTS_RAW" \
     || { echo "[probe] materializacja padła" >&2; exit 1; }
+fi
+if [ ! -f "$INPUTS/manifest.json" ]; then
+  echo "[probe] ujednolicenie K (kontrakt P-04) ($(date '+%H:%M:%S'))"
+  rm -rf "$INPUTS"
+  uv run python scripts/uniformize_task07_probe_inputs.py \
+    --inputs "$INPUTS_RAW" --output-dir "$INPUTS" \
+    || { echo "[probe] ujednolicenie K padło" >&2; exit 1; }
 fi
 
 PAIRS=$("$GPU_PY" -c "import json;print(json.load(open('$INPUTS/manifest.json'))['pairs_per_arm'])")
@@ -51,6 +59,12 @@ for arm in $ARMS; do
   if [ -f "$out/result.json" ]; then
     echo "[probe] $arm gotowe, pomijam"
     continue
+  fi
+  # Katalog bez result.json i bez train_summary.json nie jest wznawialny
+  # (trening padł między zapisem modelu a podsumowaniem) — zaczynamy od zera.
+  if [ -d "$out" ] && [ ! -f "$out/train_summary.json" ]; then
+    echo "[probe] $arm: sprzątam niewznawialne artefakty"
+    rm -rf "$out"
   fi
   attempt=1
   while [ "$attempt" -le 3 ]; do
