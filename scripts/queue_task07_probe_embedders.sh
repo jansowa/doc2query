@@ -90,6 +90,9 @@ for arm in $ARMS; do
       --retrieval-device cuda \
       --output-dir "$out"; then
       echo "[probe] $arm koniec ($(date '+%H:%M:%S'))"
+      # Kesz embeddingów korpusu to ~7 GB na ramię i po zapisaniu result.json
+      # nie jest już potrzebny — pełny dysk zabił defect_wsft przy 8. ramieniu.
+      [ -f "$out/result.json" ] && rm -rf "$out/corpus_embedding_cache"
       break
     fi
     echo "[probe] $arm padło, wznowię za 120 s" >&2

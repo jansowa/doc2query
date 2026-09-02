@@ -199,3 +199,4 @@ htmlcov/
 .idea/
 .vscode/
 .DS_Store
+!/reports/measurements/task07_probe_screen_2026-09-02.md
